@@ -12,6 +12,40 @@ to).
 
 ---
 
+## ADR-0006 — Provenance enforced by type, not convention
+
+**Date:** 2026-07-23 · **Ticket:** RC1-183 (P1.2) · **Status:** Accepted
+
+**Context.** The epic's differentiator is that every agent-produced entity
+carries an audit trail (`reasoning`, verbatim `source_quote`, `source_section`,
+`confidence`, `agent`, `model`, `timestamp`). The acceptance criterion is
+strong: *a `Plan` cannot be constructed with an agent-generated entity missing
+provenance.* We needed a mechanism that makes that structurally impossible
+rather than relying on reviewers to notice a missing block.
+
+**Explanation.** All agent-produced entities (`Epic`, `Task`, `Dependency`,
+`Milestone`, `Constraint`) inherit a `ProvenancedModel` base whose sole job is a
+required, defaultless `provenance: Provenance` field. Pydantic then rejects any
+construction that omits it — including the nested-dict form used when
+deserializing a `Plan` — so the guarantee holds end to end. `TeamMember` is the
+one deliberate exception: it is human roster input, not an agent extraction, so
+it does not inherit the base. Entities reference each other by string id (flat
+lists on `Plan`) rather than by nesting, keeping the serialized document
+diff-friendly and letting `planner-core` rebuild the graph deterministically in
+a later ticket. `plan_json_schema()` publishes `Plan.model_json_schema()` as the
+single source of truth agents schema-force against. `extra="forbid"` on every
+model keeps schema-forced output honest. Estimates are a `ThreePointEstimate`
+value object (ordered `optimistic <= likely <= pessimistic`, exposing PERT
+`expected`/`std_dev`) so the CPM engine consumes a computed duration directly.
+
+**Consequences.** Provenance is unforgeable at the type level — the differentiator
+can't silently rot. Adding a future agent-produced entity means inheriting
+`ProvenancedModel`, which is the intended default. If we ever need a
+human-authored task, it must either carry provenance or get its own non-provenanced
+base — an explicit decision, not an accident.
+
+---
+
 ## ADR-0005 — Vite (vanilla) for `apps/web`
 
 **Date:** 2026-07-22 · **Ticket:** RC1-182 (P1.1) · **Status:** Accepted (placeholder)
