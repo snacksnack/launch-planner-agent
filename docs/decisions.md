@@ -12,6 +12,43 @@ to).
 
 ---
 
+## ADR-0007 — Golden fixtures are self-contained Plans, verified by a loader test
+
+**Date:** 2026-07-23 · **Ticket:** RC1-184 (P1.3) · **Status:** Accepted
+
+**Context.** P1.3 needs the evaluation corpus the whole project demos against: a
+messy PRD, a team roster, a constraints file, and a hand-reviewed "golden"
+extraction the P1.4/P1.5 agents will be scored against. Two questions had to be
+settled: (1) how to relate the input sidecars (`team.json`, `constraints.json`)
+to the golden file, and (2) how to keep a hand-authored 24-task/28-dependency
+JSON from silently rotting — dangling id references, a stray cycle, or a
+provenance quote that doesn't actually appear in the PRD.
+
+**Explanation.** The golden `expected-plan.json` is a **complete, self-contained
+`Plan`**: the extracted epics/tasks/dependencies/milestones *plus* the same team
+and constraints as the input files. One file loads to the full expected plan,
+which is what later tickets want, and a loader test asserts `plan.team` /
+`plan.constraints` equal the sidecars so the duplication can't drift. Rather than
+trust hand-authoring, `test_fixtures.py` auto-discovers every corpus and enforces
+the invariants: model round-trip, all id references resolve, the dependency graph
+is acyclic (via `networkx`), and — the important one — every provenance
+`source_quote` appears **verbatim** in that corpus's `prd.md` (whitespace-
+normalized). Two conventions make the hand-authored provenance honest:
+extracted entities use `model="golden-baseline"` (not a real LLM run), and
+`confidence` is graded down for genuinely inferred work (rehearsal, closeout,
+unnamed tooling). A second, smaller product-launch corpus guards against
+overfitting to the migration doc.
+
+**Consequences.** The golden files are trustworthy as a regression baseline: a
+typo'd id or a fabricated quote fails CI. The `source_quote`-verbatim test also
+back-pressures the model design — provenance is only meaningful if quotes are
+real, and now that's machine-checked. One known gap is recorded in the fixtures
+README: the P1.2 `Constraint` has a single `hard_date`, so the Q4 freeze
+*window* is modeled as a gate; a first-class blackout-window constraint is left
+for a later scheduling ticket.
+
+---
+
 ## ADR-0006 — Provenance enforced by type, not convention
 
 **Date:** 2026-07-23 · **Ticket:** RC1-183 (P1.2) · **Status:** Accepted

@@ -1,0 +1,443 @@
+{
+  "id": "plan-aurora-launch",
+  "name": "Aurora Mobile App v1.0 Public Launch",
+  "description": "Hand-authored golden baseline for the smaller product-launch fixture (anti-overfit companion to jira-cloud-migration). Extracted epics/tasks/dependencies/milestones plus the input roster and constraints. Extracted provenance uses model='golden-baseline'.",
+  "created_at": "2026-07-21T15:00:00Z",
+  "source_document": "fixtures/product-launch/prd.md",
+  "team": [
+    { "id": "tm-pm", "name": "Jordan Access", "role": "Product Manager", "email": "jordan.access@aurora.example" },
+    { "id": "tm-ios", "name": "Riya Patel", "role": "iOS/Mobile Engineer", "email": "riya.patel@aurora.example" },
+    { "id": "tm-backend", "name": "Diego Santos", "role": "Backend Engineer", "email": "diego.santos@aurora.example" },
+    { "id": "tm-qa", "name": "Mina Haddad", "role": "QA Engineer", "email": "mina.haddad@aurora.example" },
+    { "id": "tm-legal", "name": "Paul Nguyen", "role": "Privacy & Legal Counsel", "email": "paul.nguyen@aurora.example" },
+    { "id": "tm-marketing", "name": "Sofia Rossi", "role": "Marketing Lead", "email": "sofia.rossi@aurora.example" }
+  ],
+  "epics": [
+    {
+      "id": "epic-build",
+      "name": "Build & Harden",
+      "description": "Finish the v1.0 feature set, scale the backend, and pass privacy and load/perf gates.",
+      "provenance": {
+        "reasoning": "The PRD's build phase: complete the feature set and scale the backend for launch load.",
+        "source_quote": "complete the v1.0 feature set and stabilize the build",
+        "source_section": "What we're shipping",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "epic-beta",
+      "name": "Beta & Validation",
+      "description": "Closed beta and feedback triage to shake out real-world bugs.",
+      "provenance": {
+        "reasoning": "The PRD calls for a closed beta with ~500 users followed by triaging feedback.",
+        "source_quote": "Run a closed beta with ~500 users to shake out real-world bugs.",
+        "source_section": "Rough plan",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "epic-launch",
+      "name": "Launch",
+      "description": "App Store submission, marketing prep, and the public GA launch.",
+      "provenance": {
+        "reasoning": "Final phase: submit to the App Store, prep marketing, and launch on the date.",
+        "source_quote": "Submit to the App Store, prep marketing, and launch on the date.",
+        "source_section": "Rough plan",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    }
+  ],
+  "tasks": [
+    {
+      "id": "task-feature-complete",
+      "name": "Complete v1.0 feature set and stabilize the build",
+      "description": "Finish the remaining screens and stabilize.",
+      "epic_id": "epic-build",
+      "owner_id": "tm-ios",
+      "estimate": { "optimistic": 5, "likely": 8, "pessimistic": 13 },
+      "provenance": {
+        "reasoning": "A couple of screens remain, so the feature set must be completed and stabilized first.",
+        "source_quote": "complete the v1.0 feature set and stabilize the build",
+        "source_section": "What we're shipping",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "task-backend-scale",
+      "name": "Scale backend for launch load",
+      "description": "Current capacity is sized for the internal beta, not a public launch.",
+      "epic_id": "epic-build",
+      "owner_id": "tm-backend",
+      "estimate": { "optimistic": 3, "likely": 5, "pessimistic": 8 },
+      "provenance": {
+        "reasoning": "Backend capacity is sized for the internal beta and must be scaled for public launch load.",
+        "source_quote": "the backend has\nto be scaled for launch load",
+        "source_section": "What we're shipping",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "task-privacy-review",
+      "name": "Privacy & legal review of data collection",
+      "description": "Sign-off gate required before the closed beta starts.",
+      "epic_id": "epic-build",
+      "owner_id": "tm-legal",
+      "estimate": { "optimistic": 3, "likely": 5, "pessimistic": 10 },
+      "provenance": {
+        "reasoning": "Aurora collects sensitive usage data; the privacy/legal review must be signed off before beta.",
+        "source_quote": "the privacy and legal review of our\ndata collection has to be signed off before the closed beta starts",
+        "source_section": "Quality gates",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "task-loadtest",
+      "name": "Load & performance testing at production scale",
+      "description": "No launching on untested capacity; test against production-scale traffic.",
+      "epic_id": "epic-build",
+      "owner_id": "tm-qa",
+      "estimate": { "optimistic": 2, "likely": 4, "pessimistic": 7 },
+      "provenance": {
+        "reasoning": "Explicitly required before shipping: real load and performance testing at production scale.",
+        "source_quote": "real load and performance testing against production-scale traffic before\nwe ship",
+        "source_section": "Quality gates",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "task-beta",
+      "name": "Run closed beta with ~500 users",
+      "description": "Shake out real-world bugs; gated on privacy sign-off.",
+      "epic_id": "epic-beta",
+      "owner_id": "tm-pm",
+      "estimate": { "optimistic": 5, "likely": 10, "pessimistic": 15 },
+      "provenance": {
+        "reasoning": "First step of the plan: a closed beta with ~500 users.",
+        "source_quote": "Run a closed beta with ~500 users to shake out real-world bugs.",
+        "source_section": "Rough plan",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "task-beta-feedback",
+      "name": "Triage beta feedback and fix P1 issues",
+      "description": "Address the P1 issues surfaced by the beta.",
+      "epic_id": "epic-beta",
+      "owner_id": "tm-ios",
+      "estimate": { "optimistic": 3, "likely": 6, "pessimistic": 10 },
+      "provenance": {
+        "reasoning": "Second step of the plan: triage beta feedback and fix the P1 issues.",
+        "source_quote": "Triage beta feedback and fix the P1 issues.",
+        "source_section": "Rough plan",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "task-appstore-submit",
+      "name": "Submit to App Store for review",
+      "description": "Submit with buffer since Apple's review timing is not fully in our control.",
+      "epic_id": "epic-launch",
+      "owner_id": "tm-ios",
+      "estimate": { "optimistic": 1, "likely": 2, "pessimistic": 5 },
+      "provenance": {
+        "reasoning": "App Store approval is required before launch and review timing is uncertain, so submission is its own buffered task.",
+        "source_quote": "submit with buffer",
+        "source_section": "Quality gates",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "task-marketing",
+      "name": "Prepare launch marketing and press",
+      "description": "Ready the press embargo / launch-event materials.",
+      "epic_id": "epic-launch",
+      "owner_id": "tm-marketing",
+      "estimate": { "optimistic": 4, "likely": 6, "pessimistic": 10 },
+      "provenance": {
+        "reasoning": "Marketing has booked a launch moment with a press embargo, implying marketing/press prep work.",
+        "source_quote": "the press embargo lifts and the\nlaunch event runs that day",
+        "source_section": "Summary",
+        "confidence": "medium",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "task-launch",
+      "name": "Public launch (GA)",
+      "description": "Go live on the fixed launch date; gated on App Store approval.",
+      "epic_id": "epic-launch",
+      "owner_id": "tm-pm",
+      "estimate": { "optimistic": 1, "likely": 1, "pessimistic": 2 },
+      "provenance": {
+        "reasoning": "The public launch itself, locked to the fixed date.",
+        "source_quote": "the public launch is locked to 2026-10-01",
+        "source_section": "Summary",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    }
+  ],
+  "dependencies": [
+    {
+      "id": "dep-feature-loadtest",
+      "predecessor_id": "task-feature-complete",
+      "successor_id": "task-loadtest",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "Load testing needs the completed, stabilized build.",
+        "source_quote": "real load and performance testing against production-scale traffic before\nwe ship",
+        "source_section": "Quality gates",
+        "confidence": "medium",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-backend-loadtest",
+      "predecessor_id": "task-backend-scale",
+      "successor_id": "task-loadtest",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "Load testing is against the scaled backend, so scaling comes first.",
+        "source_quote": "the backend has\nto be scaled for launch load",
+        "source_section": "What we're shipping",
+        "confidence": "high",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-feature-beta",
+      "predecessor_id": "task-feature-complete",
+      "successor_id": "task-beta",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "The closed beta needs the completed v1.0 build.",
+        "source_quote": "complete the v1.0 feature set and stabilize the build",
+        "source_section": "What we're shipping",
+        "confidence": "high",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-privacy-beta",
+      "predecessor_id": "task-privacy-review",
+      "successor_id": "task-beta",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "Privacy sign-off is an explicit gate that must clear before the beta starts.",
+        "source_quote": "signed off before the closed beta starts",
+        "source_section": "Quality gates",
+        "confidence": "high",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-beta-feedback",
+      "predecessor_id": "task-beta",
+      "successor_id": "task-beta-feedback",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "Feedback triage follows the beta that produced it.",
+        "source_quote": "Triage beta feedback and fix the P1 issues.",
+        "source_section": "Rough plan",
+        "confidence": "high",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-feedback-submit",
+      "predecessor_id": "task-beta-feedback",
+      "successor_id": "task-appstore-submit",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "Submit to the App Store after the P1 fixes from beta are in.",
+        "source_quote": "Submit to the App Store, prep marketing, and launch on the date.",
+        "source_section": "Rough plan",
+        "confidence": "medium",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-loadtest-submit",
+      "predecessor_id": "task-loadtest",
+      "successor_id": "task-appstore-submit",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "Do not submit for launch on untested capacity; load testing precedes submission.",
+        "source_quote": "no launching on untested capacity",
+        "source_section": "Quality gates",
+        "confidence": "medium",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-submit-launch",
+      "predecessor_id": "task-appstore-submit",
+      "successor_id": "task-launch",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "App Store review approval is required before the public launch.",
+        "source_quote": "App Store review approval is required\nbefore the public launch",
+        "source_section": "Quality gates",
+        "confidence": "high",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-marketing-launch",
+      "predecessor_id": "task-marketing",
+      "successor_id": "task-launch",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "Marketing/press must be ready for the launch moment.",
+        "source_quote": "the press embargo lifts and the\nlaunch event runs that day",
+        "source_section": "Summary",
+        "confidence": "medium",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    }
+  ],
+  "milestones": [
+    {
+      "id": "ms-beta",
+      "name": "Closed beta live",
+      "target_date": "2026-08-15",
+      "provenance": {
+        "reasoning": "Explicit milestone: closed beta live around 2026-08-15.",
+        "source_quote": "Closed beta live** — around 2026-08-15",
+        "source_section": "Milestones",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "ms-ga",
+      "name": "Public launch (GA)",
+      "target_date": "2026-10-01",
+      "provenance": {
+        "reasoning": "Explicit milestone: public launch (GA) on 2026-10-01.",
+        "source_quote": "Public launch (GA)** — 2026-10-01",
+        "source_section": "Milestones",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "con-launch-date",
+      "type": "hard_date",
+      "description": "Public launch is locked to the booked press/launch-event date; fixed and works backwards from there.",
+      "hard_date": "2026-10-01",
+      "gate": null,
+      "applies_to": ["task-launch", "ms-ga"],
+      "provenance": {
+        "reasoning": "Stated as a locked, fixed date tied to a booked marketing moment and press embargo.",
+        "source_quote": "the public launch is locked to 2026-10-01",
+        "source_section": "Summary",
+        "confidence": "high",
+        "agent": "human",
+        "model": "human",
+        "timestamp": "2026-07-20T09:00:00Z"
+      }
+    },
+    {
+      "id": "con-appstore",
+      "type": "gate",
+      "description": "App Store review approval required before the public launch; Apple's review timing is not fully in our control.",
+      "hard_date": null,
+      "gate": "App Store review approval before public launch",
+      "applies_to": ["task-launch"],
+      "provenance": {
+        "reasoning": "Explicit gate on launch: the app cannot go public without App Store approval, and review timing is outside our control.",
+        "source_quote": "App Store review approval is required\nbefore the public launch",
+        "source_section": "Quality gates",
+        "confidence": "high",
+        "agent": "human",
+        "model": "human",
+        "timestamp": "2026-07-20T09:00:00Z"
+      }
+    },
+    {
+      "id": "con-privacy",
+      "type": "gate",
+      "description": "Privacy and legal review of data collection must be signed off before the closed beta starts.",
+      "hard_date": null,
+      "gate": "Privacy/legal sign-off before closed beta",
+      "applies_to": ["task-beta"],
+      "provenance": {
+        "reasoning": "Explicit gate before exposing the app to external users: privacy/legal review must be signed off before the beta.",
+        "source_quote": "the privacy and legal review of our\ndata collection has to be signed off before the closed beta starts",
+        "source_section": "Quality gates",
+        "confidence": "high",
+        "agent": "human",
+        "model": "human",
+        "timestamp": "2026-07-20T09:00:00Z"
+      }
+    }
+  ]
+}
