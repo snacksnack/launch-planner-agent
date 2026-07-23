@@ -1,0 +1,19 @@
+[project]
+name = "launch-planner-api"
+version = "0.1.0"
+description = "FastAPI app: PRD ingestion, agent orchestration, persistence. Owns the DB connection."
+requires-python = ">=3.12"
+dependencies = [
+    "planner-core",
+    "agents",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic-settings>=2.3",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]

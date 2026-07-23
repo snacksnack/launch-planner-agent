@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.import_linter_cache/
+
+# uv
+# (uv.lock IS committed — it pins the whole workspace)
+
+# Env / secrets
+.env
+*.db
+
+# Node / Vite (apps/web)
+node_modules/
+dist/
+.vite/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

@@ -1,0 +1,65 @@
+[project]
+name = "launch-planner-agent"
+version = "0.1.0"
+description = "Agentic migration/launch planner: PRD -> Gantt, critical path, RAID & status agents."
+requires-python = ">=3.12"
+# The root is a workspace aggregator; it depends on every member so `uv sync`
+# installs the full monorepo into one venv (needed for import-linter + tests).
+dependencies = [
+    "launch-planner-api",
+    "planner-core",
+    "agents",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["apps/api", "packages/planner-core", "packages/agents"]
+
+[tool.uv.sources]
+launch-planner-api = { workspace = true }
+planner-core = { workspace = true }
+agents = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "ruff>=0.6",
+    "pytest>=8",
+    "import-linter>=2",
+    "httpx>=0.27",
+]
+
+# ---------------------------------------------------------------------------
+# Tooling config (shared across the whole workspace)
+# ---------------------------------------------------------------------------
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["apps/web"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["apps", "packages"]
+addopts = "-q"
+
+# import-linter: enforce the architectural rule that the deterministic core
+# can never depend on the LLM layer. This is checked in CI via `lint-imports`.
+[tool.importlinter]
+root_packages = ["planner_core", "agents", "app"]
+# Required because the forbidden contract names an external module (anthropic).
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "planner_core stays deterministic (no LLM / app imports)"
+type = "forbidden"
+source_modules = ["planner_core"]
+forbidden_modules = ["agents", "app", "anthropic"]
+
+[[tool.importlinter.contracts]]
+name = "layered architecture: app -> agents -> planner_core"
+type = "layers"
+layers = ["app", "agents", "planner_core"]
