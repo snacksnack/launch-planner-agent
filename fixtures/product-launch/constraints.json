@@ -1,0 +1,53 @@
+[
+  {
+    "id": "con-launch-date",
+    "type": "hard_date",
+    "description": "Public launch is locked to the booked press/launch-event date; fixed and works backwards from there.",
+    "hard_date": "2026-10-01",
+    "gate": null,
+    "applies_to": ["task-launch", "ms-ga"],
+    "provenance": {
+      "reasoning": "Stated as a locked, fixed date tied to a booked marketing moment and press embargo.",
+      "source_quote": "the public launch is locked to 2026-10-01",
+      "source_section": "Summary",
+      "confidence": "high",
+      "agent": "human",
+      "model": "human",
+      "timestamp": "2026-07-20T09:00:00Z"
+    }
+  },
+  {
+    "id": "con-appstore",
+    "type": "gate",
+    "description": "App Store review approval required before the public launch; Apple's review timing is not fully in our control.",
+    "hard_date": null,
+    "gate": "App Store review approval before public launch",
+    "applies_to": ["task-launch"],
+    "provenance": {
+      "reasoning": "Explicit gate on launch: the app cannot go public without App Store approval, and review timing is outside our control.",
+      "source_quote": "App Store review approval is required\nbefore the public launch",
+      "source_section": "Quality gates",
+      "confidence": "high",
+      "agent": "human",
+      "model": "human",
+      "timestamp": "2026-07-20T09:00:00Z"
+    }
+  },
+  {
+    "id": "con-privacy",
+    "type": "gate",
+    "description": "Privacy and legal review of data collection must be signed off before the closed beta starts.",
+    "hard_date": null,
+    "gate": "Privacy/legal sign-off before closed beta",
+    "applies_to": ["task-beta"],
+    "provenance": {
+      "reasoning": "Explicit gate before exposing the app to external users: privacy/legal review must be signed off before the beta.",
+      "source_quote": "the privacy and legal review of our\ndata collection has to be signed off before the closed beta starts",
+      "source_section": "Quality gates",
+      "confidence": "high",
+      "agent": "human",
+      "model": "human",
+      "timestamp": "2026-07-20T09:00:00Z"
+    }
+  }
+]

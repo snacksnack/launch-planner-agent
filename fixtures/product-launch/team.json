@@ -1,0 +1,8 @@
+[
+  { "id": "tm-pm", "name": "Jordan Access", "role": "Product Manager", "email": "jordan.access@aurora.example" },
+  { "id": "tm-ios", "name": "Riya Patel", "role": "iOS/Mobile Engineer", "email": "riya.patel@aurora.example" },
+  { "id": "tm-backend", "name": "Diego Santos", "role": "Backend Engineer", "email": "diego.santos@aurora.example" },
+  { "id": "tm-qa", "name": "Mina Haddad", "role": "QA Engineer", "email": "mina.haddad@aurora.example" },
+  { "id": "tm-legal", "name": "Paul Nguyen", "role": "Privacy & Legal Counsel", "email": "paul.nguyen@aurora.example" },
+  { "id": "tm-marketing", "name": "Sofia Rossi", "role": "Marketing Lead", "email": "sofia.rossi@aurora.example" }
+]

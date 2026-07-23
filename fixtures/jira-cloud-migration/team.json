@@ -1,0 +1,74 @@
+[
+  {
+    "id": "tm-tpm",
+    "name": "Priya Nair",
+    "role": "Technical Program Manager (migration lead)",
+    "email": "priya.nair@marigold.example"
+  },
+  {
+    "id": "tm-pmo",
+    "name": "Grace Adeyemi",
+    "role": "PMO / Change Manager",
+    "email": "grace.adeyemi@marigold.example"
+  },
+  {
+    "id": "tm-jira-admin",
+    "name": "Tomás Rivera",
+    "role": "Jira Administrator",
+    "email": "tomas.rivera@marigold.example"
+  },
+  {
+    "id": "tm-sre",
+    "name": "Marcus Bell",
+    "role": "SRE Lead",
+    "email": "marcus.bell@marigold.example"
+  },
+  {
+    "id": "tm-sec",
+    "name": "Dana Osei",
+    "role": "Security & Compliance Lead",
+    "email": "dana.osei@marigold.example"
+  },
+  {
+    "id": "tm-legal",
+    "name": "Helen Zhou",
+    "role": "Legal Counsel",
+    "email": "helen.zhou@marigold.example"
+  },
+  {
+    "id": "tm-backend",
+    "name": "Ada Okoro",
+    "role": "Backend Engineer (integrations & plugins)",
+    "email": "ada.okoro@marigold.example"
+  },
+  {
+    "id": "tm-data",
+    "name": "Sven Lindqvist",
+    "role": "Data Migration Engineer",
+    "email": "sven.lindqvist@marigold.example"
+  },
+  {
+    "id": "tm-qa",
+    "name": "Leah Kim",
+    "role": "QA Lead",
+    "email": "leah.kim@marigold.example"
+  },
+  {
+    "id": "tm-it",
+    "name": "Owen Frost",
+    "role": "IT Support Lead",
+    "email": "owen.frost@marigold.example"
+  },
+  {
+    "id": "tm-contractor-1",
+    "name": "Migration Contractor A",
+    "role": "Migration Contractor",
+    "email": null
+  },
+  {
+    "id": "tm-contractor-2",
+    "name": "Migration Contractor B",
+    "role": "Migration Contractor",
+    "email": null
+  }
+]

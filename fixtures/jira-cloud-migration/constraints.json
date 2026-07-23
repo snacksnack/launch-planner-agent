@@ -1,0 +1,104 @@
+[
+  {
+    "id": "con-license",
+    "type": "hard_date",
+    "description": "On-prem Jira Data Center license expires; all data must be migrated and the old instance decommissioned before it lapses. No extension available.",
+    "hard_date": "2027-04-30",
+    "gate": null,
+    "applies_to": ["task-decom-onprem", "ms-decom"],
+    "provenance": {
+      "reasoning": "Stated explicitly as a hard, non-extendable date and called out as the wall the whole plan is scheduled backwards from.",
+      "source_quote": "our current Data Center license expires 2027-04-30, and that date is hard",
+      "source_section": "Background",
+      "confidence": "high",
+      "agent": "human",
+      "model": "human",
+      "timestamp": "2026-07-20T09:00:00Z"
+    }
+  },
+  {
+    "id": "con-legal",
+    "type": "gate",
+    "description": "Legal sign-off (Helen Zhou) required before any client data moves to Cloud. Applies to every project touching client records, not just the pilot.",
+    "hard_date": null,
+    "gate": "Legal sign-off on client data migration",
+    "applies_to": ["task-pilot-migration", "task-bulk-migration"],
+    "provenance": {
+      "reasoning": "Called out as non-negotiable and applying to every project that touches client records; a buried gate in the Legal/Security section rather than the milestone list.",
+      "source_quote": "Legal has to sign\noff before any client data moves to Cloud",
+      "source_section": "The parts Legal and Security care about",
+      "confidence": "high",
+      "agent": "human",
+      "model": "human",
+      "timestamp": "2026-07-20T09:00:00Z"
+    }
+  },
+  {
+    "id": "con-freeze",
+    "type": "gate",
+    "description": "Q4 change freeze: no production migration activity permitted in the window 2026-11-15 to 2027-01-04. Prep and non-production work may continue. NOTE: modeled as a gate because the P1.2 Constraint has a single hard_date, not a blackout window — see fixtures README.",
+    "hard_date": null,
+    "gate": "No production migration during Q4 freeze (2026-11-15 to 2027-01-04)",
+    "applies_to": ["task-bulk-migration", "task-user-migration", "task-prod-cutover"],
+    "provenance": {
+      "reasoning": "Explicit company-wide freeze window during which no production migration activity is allowed; a hard scheduling blackout the plan must route around.",
+      "source_quote": "the company-wide Q4 change freeze runs from\n2026-11-15 to 2027-01-04, and no production migration activity is allowed during that\nwindow",
+      "source_section": "Sequencing and the freeze",
+      "confidence": "high",
+      "agent": "human",
+      "model": "human",
+      "timestamp": "2026-07-20T09:00:00Z"
+    }
+  },
+  {
+    "id": "con-security",
+    "type": "gate",
+    "description": "Security & SRE sign-off required before production cutover. Treated as a gate on the cutover itself.",
+    "hard_date": null,
+    "gate": "Security & SRE sign-off before production cutover",
+    "applies_to": ["task-prod-cutover", "ms-golive"],
+    "provenance": {
+      "reasoning": "Stated as an absolute gate on cutover ('no production cutover without ...'), explicitly not a nice-to-have.",
+      "source_quote": "there will be no production cutover without a\nsecurity and SRE sign-off",
+      "source_section": "The parts Legal and Security care about",
+      "confidence": "high",
+      "agent": "human",
+      "model": "human",
+      "timestamp": "2026-07-20T09:00:00Z"
+    }
+  },
+  {
+    "id": "con-budget",
+    "type": "gate",
+    "description": "Finance approval of contractor spend required before the two migration contractors can be onboarded. Not yet secured at time of writing.",
+    "hard_date": null,
+    "gate": "Finance approval of contractor budget before onboarding",
+    "applies_to": ["task-contractor-onboard"],
+    "provenance": {
+      "reasoning": "A buried prerequisite in the People & budget paragraph: onboarding cannot proceed until Finance approves the spend.",
+      "source_quote": "contractor spend has to be approved by Finance before anyone gets\nonboarded",
+      "source_section": "Scope & known problems",
+      "confidence": "high",
+      "agent": "human",
+      "model": "human",
+      "timestamp": "2026-07-20T09:00:00Z"
+    }
+  },
+  {
+    "id": "con-plugin",
+    "type": "gate",
+    "description": "Plugin compatibility audit sign-off (owned by the QA lead) is a prerequisite for migrating any real users.",
+    "hard_date": null,
+    "gate": "Plugin compatibility audit sign-off before user migration",
+    "applies_to": ["task-user-migration"],
+    "provenance": {
+      "reasoning": "Explicitly stated as a prerequisite for migrating users and assigned to the QA lead.",
+      "source_quote": "a plugin compatibility audit sign-off is a prerequisite for\nmigrating users",
+      "source_section": "Scope & known problems",
+      "confidence": "high",
+      "agent": "human",
+      "model": "human",
+      "timestamp": "2026-07-20T09:00:00Z"
+    }
+  }
+]

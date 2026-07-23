@@ -1,0 +1,1112 @@
+{
+  "id": "plan-jira-cloud-migration",
+  "name": "On-Prem Jira → Jira Cloud Migration (Project Skyline)",
+  "description": "Hand-authored golden baseline: the epics, tasks, dependencies, and milestones a competent TPM would extract from prd.md, plus the input roster (team.json) and known constraints (constraints.json). Used to eyeball and regression-test agent output. Provenance on extracted entities uses model='golden-baseline' to mark it as a hand-authored expectation, not a real LLM run.",
+  "created_at": "2026-07-21T15:00:00Z",
+  "source_document": "fixtures/jira-cloud-migration/prd.md",
+  "team": [
+    { "id": "tm-tpm", "name": "Priya Nair", "role": "Technical Program Manager (migration lead)", "email": "priya.nair@marigold.example" },
+    { "id": "tm-pmo", "name": "Grace Adeyemi", "role": "PMO / Change Manager", "email": "grace.adeyemi@marigold.example" },
+    { "id": "tm-jira-admin", "name": "Tomás Rivera", "role": "Jira Administrator", "email": "tomas.rivera@marigold.example" },
+    { "id": "tm-sre", "name": "Marcus Bell", "role": "SRE Lead", "email": "marcus.bell@marigold.example" },
+    { "id": "tm-sec", "name": "Dana Osei", "role": "Security & Compliance Lead", "email": "dana.osei@marigold.example" },
+    { "id": "tm-legal", "name": "Helen Zhou", "role": "Legal Counsel", "email": "helen.zhou@marigold.example" },
+    { "id": "tm-backend", "name": "Ada Okoro", "role": "Backend Engineer (integrations & plugins)", "email": "ada.okoro@marigold.example" },
+    { "id": "tm-data", "name": "Sven Lindqvist", "role": "Data Migration Engineer", "email": "sven.lindqvist@marigold.example" },
+    { "id": "tm-qa", "name": "Leah Kim", "role": "QA Lead", "email": "leah.kim@marigold.example" },
+    { "id": "tm-it", "name": "Owen Frost", "role": "IT Support Lead", "email": "owen.frost@marigold.example" },
+    { "id": "tm-contractor-1", "name": "Migration Contractor A", "role": "Migration Contractor", "email": null },
+    { "id": "tm-contractor-2", "name": "Migration Contractor B", "role": "Migration Contractor", "email": null }
+  ],
+  "epics": [
+    {
+      "id": "epic-assess",
+      "name": "Assessment & Planning",
+      "description": "Inventory the estate, audit plugins, secure budget, and produce the phased runbook before any migration begins.",
+      "provenance": {
+        "reasoning": "The PRD opens by noting nobody has a current inventory and that discovery must precede planning waves; this groups the up-front assessment work.",
+        "source_quote": "Before we can plan\nwaves we need to inventory all 20 projects",
+        "source_section": "Scope & known problems",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "epic-infra",
+      "name": "Cloud Foundation & Security",
+      "description": "Stand up the Cloud org, SSO, and security config, and clear the legal and security gates.",
+      "provenance": {
+        "reasoning": "First wave in the sequencing section is standing up the Cloud org, SSO, and security config; the legal and security gates attach here.",
+        "source_quote": "Stand up the Cloud org, SSO, and security config.",
+        "source_section": "Sequencing and the freeze",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "epic-plugin",
+      "name": "Plugin & Integration Remediation",
+      "description": "Remediate incompatible plugins, rebuild integrations against the Cloud API, and obtain the plugin compatibility sign-off.",
+      "provenance": {
+        "reasoning": "The PRD flags plugins as 'the scary part' and calls for auditing every marketplace plugin for Cloud compatibility, plus rebuilding integrations.",
+        "source_quote": "audit every marketplace plugin for Cloud compatibility",
+        "source_section": "Scope & known problems",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "epic-data",
+      "name": "Data Migration",
+      "description": "Tooling, pilot, validation, bulk waves, user migration, and reconciliation.",
+      "provenance": {
+        "reasoning": "The core of the effort: pilot two projects, validate, then bulk-migrate the remaining 18 in waves, migrate users, and reconcile.",
+        "source_quote": "bulk-migrate the remaining 18\nprojects in waves",
+        "source_section": "Sequencing and the freeze",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "epic-cutover",
+      "name": "Cutover & Go-Live",
+      "description": "Rehearse, cut over to production behind the security gate, and run hypercare.",
+      "provenance": {
+        "reasoning": "The final wave: cut over to Cloud in production and run hypercare, gated on the security & SRE sign-off.",
+        "source_quote": "Cut over to Cloud in production, hypercare, then decommission on-prem",
+        "source_section": "Sequencing and the freeze",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "epic-decom",
+      "name": "Decommission & Closeout",
+      "description": "Decommission the on-prem instance ahead of the license wall and close the project out.",
+      "provenance": {
+        "reasoning": "Success is defined partly as the on-prem instance being shut down and decommissioned before the license expires.",
+        "source_quote": "On-prem instance shut down and decommissioned before the license expires",
+        "source_section": "Why now / what success looks like",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    }
+  ],
+  "tasks": [
+    {
+      "id": "task-inventory",
+      "name": "Inventory all 20 projects, workflows, and custom fields",
+      "description": "Build the missing current-state inventory; expect conflicting/overlapping custom fields.",
+      "epic_id": "epic-assess",
+      "owner_id": "tm-jira-admin",
+      "estimate": { "optimistic": 3, "likely": 5, "pessimistic": 8 },
+      "provenance": {
+        "reasoning": "Explicitly required: no current inventory exists and one is needed before planning waves.",
+        "source_quote": "we need to inventory all 20 projects, their workflows, and the custom fields",
+        "source_section": "Scope & known problems",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "task-plugin-audit",
+      "name": "Audit all marketplace plugins for Cloud compatibility",
+      "description": "Classify every plugin: direct equivalent, needs rebuild, or drop. At least three criticals have no Cloud equivalent.",
+      "epic_id": "epic-plugin",
+      "owner_id": "tm-backend",
+      "estimate": { "optimistic": 4, "likely": 6, "pessimistic": 10 },
+      "provenance": {
+        "reasoning": "Directly called for; the plugin story is flagged as the scary part and blocks user migration.",
+        "source_quote": "audit every marketplace plugin for Cloud compatibility",
+        "source_section": "Scope & known problems",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "task-contractor-budget",
+      "name": "Secure Finance approval for contractor budget",
+      "description": "Approval not yet secured; PMO is chasing it. Gates contractor onboarding.",
+      "epic_id": "epic-assess",
+      "owner_id": "tm-pmo",
+      "estimate": { "optimistic": 2, "likely": 5, "pessimistic": 12 },
+      "provenance": {
+        "reasoning": "A buried prerequisite: contractor spend must be approved by Finance before onboarding, and approval is not yet secured.",
+        "source_quote": "contractor spend has to be approved by Finance before anyone gets\nonboarded",
+        "source_section": "Scope & known problems",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "task-contractor-onboard",
+      "name": "Onboard two migration contractors",
+      "description": "Bring on two contractors to run the wave migrations; blocked until budget is approved.",
+      "epic_id": "epic-assess",
+      "owner_id": "tm-pmo",
+      "estimate": { "optimistic": 2, "likely": 3, "pessimistic": 5 },
+      "provenance": {
+        "reasoning": "The in-house team cannot absorb the bulk migration, so two contractors are brought on to run the waves.",
+        "source_quote": "bring on two migration contractors to run the wave\nmigrations",
+        "source_section": "Scope & known problems",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "task-migration-plan",
+      "name": "Author phased migration runbook / wave plan",
+      "description": "Turn inventory + plugin findings into a phased runbook for the waves.",
+      "epic_id": "epic-assess",
+      "owner_id": "tm-tpm",
+      "estimate": { "optimistic": 3, "likely": 5, "pessimistic": 8 },
+      "provenance": {
+        "reasoning": "Inferred: the pilot is meant to prove 'the runbook' end to end, which implies a runbook/wave plan must be authored first.",
+        "source_quote": "Pilot-migrate two low-risk internal projects to prove the runbook end to\nend",
+        "source_section": "Sequencing and the freeze",
+        "confidence": "medium",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "task-cloud-provision",
+      "name": "Provision Jira Cloud org, SSO, and base security config",
+      "description": "Stand up the Premium Cloud org and baseline configuration.",
+      "epic_id": "epic-infra",
+      "owner_id": "tm-sre",
+      "estimate": { "optimistic": 2, "likely": 4, "pessimistic": 7 },
+      "provenance": {
+        "reasoning": "First step of the sequencing: stand up the Cloud org, SSO, and security config.",
+        "source_quote": "Stand up the Cloud org, SSO, and security config.",
+        "source_section": "Sequencing and the freeze",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "task-sso-integration",
+      "name": "Integrate SSO/SCIM with corporate IdP",
+      "description": "Wire single sign-on and user provisioning to the corporate IdP; prerequisite for user migration.",
+      "epic_id": "epic-infra",
+      "owner_id": "tm-sre",
+      "estimate": { "optimistic": 2, "likely": 4, "pessimistic": 6 },
+      "provenance": {
+        "reasoning": "Success requires all users migrated with single sign-on working, implying SSO/SCIM integration with the IdP.",
+        "source_quote": "migrated with the right permissions and single sign-on working",
+        "source_section": "Why now / what success looks like",
+        "confidence": "medium",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "task-security-review",
+      "name": "Security & SRE review of Cloud configuration",
+      "description": "Review SSO, IP allow-listing, and audit logging; gates production cutover.",
+      "epic_id": "epic-infra",
+      "owner_id": "tm-sec",
+      "estimate": { "optimistic": 3, "likely": 5, "pessimistic": 9 },
+      "provenance": {
+        "reasoning": "Security and SRE must review the Cloud configuration; this review is a hard gate on cutover.",
+        "source_quote": "Security and SRE need to review the Cloud configuration — SSO, IP\nallow-listing, audit logging",
+        "source_section": "The parts Legal and Security care about",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "task-legal-review",
+      "name": "Obtain legal sign-off for client data migration",
+      "description": "Non-negotiable gate; historically slow, so start early. Blocks any client-data migration.",
+      "epic_id": "epic-infra",
+      "owner_id": "tm-legal",
+      "estimate": { "optimistic": 5, "likely": 10, "pessimistic": 20 },
+      "provenance": {
+        "reasoning": "Legal must sign off before any client data moves; explicitly non-negotiable and slow, so tracked as its own long-lead task.",
+        "source_quote": "Legal has to sign\noff before any client data moves to Cloud",
+        "source_section": "The parts Legal and Security care about",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "task-plugin-replace",
+      "name": "Replace or rebuild the three incompatible critical plugins",
+      "description": "For each incompatible plugin: find a Cloud replacement, rebuild via automation/scripts, or drop.",
+      "epic_id": "epic-plugin",
+      "owner_id": "tm-backend",
+      "estimate": { "optimistic": 5, "likely": 10, "pessimistic": 18 },
+      "provenance": {
+        "reasoning": "The audit will surface plugins with no Cloud equivalent; each needs a replacement, a rebuild, or a decision to drop it.",
+        "source_quote": "find a replacement, rebuild the capability with automation/scripts, or convince the\nteam to live without it",
+        "source_section": "Scope & known problems",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "task-integration-rebuild",
+      "name": "Rebuild CI/CD and Slack integrations against Cloud REST API",
+      "description": "Integrations talk to the on-prem API and must be rebuilt, not re-pointed.",
+      "epic_id": "epic-plugin",
+      "owner_id": "tm-backend",
+      "estimate": { "optimistic": 4, "likely": 7, "pessimistic": 12 },
+      "provenance": {
+        "reasoning": "CI/CD and Slack integrations depend on the on-prem API and must be rebuilt against the Cloud REST API.",
+        "source_quote": "Those integrations will have to be rebuilt against the Cloud REST\nAPI",
+        "source_section": "Scope & known problems",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "task-plugin-signoff",
+      "name": "Plugin compatibility audit sign-off",
+      "description": "QA-owned sign-off confirming the plugin story is settled; prerequisite for user migration.",
+      "epic_id": "epic-plugin",
+      "owner_id": "tm-qa",
+      "estimate": { "optimistic": 1, "likely": 2, "pessimistic": 4 },
+      "provenance": {
+        "reasoning": "An explicit prerequisite for migrating users, owned by the QA lead.",
+        "source_quote": "a plugin compatibility audit sign-off is a prerequisite for\nmigrating users",
+        "source_section": "Scope & known problems",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "task-migration-tooling",
+      "name": "Set up migration tooling (Cloud Migration Assistant + scripts)",
+      "description": "Stand up and configure the tooling that executes the wave migrations.",
+      "epic_id": "epic-data",
+      "owner_id": "tm-data",
+      "estimate": { "optimistic": 3, "likely": 5, "pessimistic": 9 },
+      "provenance": {
+        "reasoning": "Inferred: bulk-migrating 18 projects in waves requires migration tooling to be set up and configured first.",
+        "source_quote": "bulk-migrate the remaining 18\nprojects in waves",
+        "source_section": "Sequencing and the freeze",
+        "confidence": "medium",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "task-pilot-migration",
+      "name": "Pilot-migrate two low-risk projects",
+      "description": "Prove the runbook end to end on two low-risk internal projects before the freeze.",
+      "epic_id": "epic-data",
+      "owner_id": "tm-data",
+      "estimate": { "optimistic": 3, "likely": 5, "pessimistic": 8 },
+      "provenance": {
+        "reasoning": "Second wave: pilot-migrate two low-risk internal projects to prove the runbook.",
+        "source_quote": "Pilot-migrate two low-risk internal projects to prove the runbook end to\nend",
+        "source_section": "Sequencing and the freeze",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "task-pilot-validation",
+      "name": "Validate pilot data with project owners",
+      "description": "Confirm pilot data integrity with the two pilot project owners before bulk waves.",
+      "epic_id": "epic-data",
+      "owner_id": "tm-qa",
+      "estimate": { "optimistic": 2, "likely": 4, "pessimistic": 7 },
+      "provenance": {
+        "reasoning": "Explicit third step: validate the pilot with those project owners before bulk migration.",
+        "source_quote": "Validate the pilot with those project owners",
+        "source_section": "Sequencing and the freeze",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "task-bulk-migration",
+      "name": "Bulk-migrate the remaining 18 projects in waves",
+      "description": "The main migration effort, run in waves by the contractors.",
+      "epic_id": "epic-data",
+      "owner_id": "tm-data",
+      "estimate": { "optimistic": 8, "likely": 15, "pessimistic": 30 },
+      "provenance": {
+        "reasoning": "The bulk of the work: migrate the remaining 18 projects in waves after the pilot is validated.",
+        "source_quote": "bulk-migrate the remaining 18\nprojects in waves",
+        "source_section": "Sequencing and the freeze",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "task-user-migration",
+      "name": "Migrate 450 users and permissions with SSO",
+      "description": "Move all users with correct permissions and working single sign-on; gated on plugin sign-off.",
+      "epic_id": "epic-data",
+      "owner_id": "tm-jira-admin",
+      "estimate": { "optimistic": 3, "likely": 6, "pessimistic": 12 },
+      "provenance": {
+        "reasoning": "Success requires all 450 users migrated with the right permissions and SSO working.",
+        "source_quote": "All 450 users migrated with the right permissions and single sign-on working",
+        "source_section": "Why now / what success looks like",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "task-data-reconciliation",
+      "name": "Reconcile ticket counts, comments, and attachments (per-owner sign-off)",
+      "description": "Formal reconciliation against on-prem, signed off by each project owner (assumed formal per open question).",
+      "epic_id": "epic-data",
+      "owner_id": "tm-data",
+      "estimate": { "optimistic": 3, "likely": 5, "pessimistic": 9 },
+      "provenance": {
+        "reasoning": "No-data-loss success criterion requires ticket counts, comments, and attachments to reconcile against on-prem; open question resolves to formal per-owner sign-off.",
+        "source_quote": "ticket counts, comments, and attachments reconcile against on-prem",
+        "source_section": "Why now / what success looks like",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "task-cutover-rehearsal",
+      "name": "Cutover rehearsal / dry run",
+      "description": "Rehearse the production cutover before executing it.",
+      "epic_id": "epic-cutover",
+      "owner_id": "tm-sre",
+      "estimate": { "optimistic": 2, "likely": 3, "pessimistic": 5 },
+      "provenance": {
+        "reasoning": "Inferred: a production cutover of this size warrants a rehearsal/dry run before the real cutover.",
+        "source_quote": "Cut over to Cloud in production",
+        "source_section": "Sequencing and the freeze",
+        "confidence": "low",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "task-prod-cutover",
+      "name": "Production cutover to Jira Cloud",
+      "description": "The go-live cutover; gated on security & SRE sign-off.",
+      "epic_id": "epic-cutover",
+      "owner_id": "tm-sre",
+      "estimate": { "optimistic": 1, "likely": 2, "pessimistic": 4 },
+      "provenance": {
+        "reasoning": "The production cutover to Cloud, the go-live event in the final wave.",
+        "source_quote": "Cut over to Cloud in production, hypercare, then decommission on-prem",
+        "source_section": "Sequencing and the freeze",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "task-hypercare",
+      "name": "Post-cutover hypercare and support",
+      "description": "Elevated support after cutover; owner (IT vs migration team) is an open question, assigned to IT support here.",
+      "epic_id": "epic-cutover",
+      "owner_id": "tm-it",
+      "estimate": { "optimistic": 3, "likely": 5, "pessimistic": 10 },
+      "provenance": {
+        "reasoning": "Hypercare follows the cutover in the sequencing; ownership is an open question, provisionally IT support.",
+        "source_quote": "Cut over to Cloud in production, hypercare, then decommission on-prem",
+        "source_section": "Sequencing and the freeze",
+        "confidence": "medium",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "task-decom-onprem",
+      "name": "Decommission on-prem Jira Data Center",
+      "description": "Shut down and decommission the old instance ahead of the license wall.",
+      "epic_id": "epic-decom",
+      "owner_id": "tm-sre",
+      "estimate": { "optimistic": 2, "likely": 3, "pessimistic": 5 },
+      "provenance": {
+        "reasoning": "Success requires the on-prem instance shut down and decommissioned before the license expires.",
+        "source_quote": "On-prem instance shut down and decommissioned before the license expires",
+        "source_section": "Why now / what success looks like",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "task-closeout",
+      "name": "Project closeout, retro, and documentation",
+      "description": "Wrap up: retro, final documentation, and handover.",
+      "epic_id": "epic-decom",
+      "owner_id": "tm-tpm",
+      "estimate": { "optimistic": 2, "likely": 3, "pessimistic": 5 },
+      "provenance": {
+        "reasoning": "Inferred: a closeout/retro is standard after decommissioning; not explicitly stated, hence low confidence.",
+        "source_quote": "On-prem decommissioned** — by ~2027-04-15, ahead of the license wall",
+        "source_section": "Rough milestones",
+        "confidence": "low",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    }
+  ],
+  "dependencies": [
+    {
+      "id": "dep-inventory-plan",
+      "predecessor_id": "task-inventory",
+      "successor_id": "task-migration-plan",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "Waves cannot be planned until the estate is inventoried.",
+        "source_quote": "Before we can plan\nwaves we need to inventory all 20 projects",
+        "source_section": "Scope & known problems",
+        "confidence": "high",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-pluginaudit-plan",
+      "predecessor_id": "task-plugin-audit",
+      "successor_id": "task-migration-plan",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "The runbook depends on knowing the plugin story, which must be settled before real migration.",
+        "source_quote": "We should not migrate a single real user until the plugin\nstory is settled",
+        "source_section": "Scope & known problems",
+        "confidence": "medium",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-pluginaudit-replace",
+      "predecessor_id": "task-plugin-audit",
+      "successor_id": "task-plugin-replace",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "Remediation follows the audit: audit, then find a replacement or rebuild.",
+        "source_quote": "audit every marketplace plugin for Cloud compatibility and then either\nfind a replacement",
+        "source_section": "Scope & known problems",
+        "confidence": "high",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-budget-onboard",
+      "predecessor_id": "task-contractor-budget",
+      "successor_id": "task-contractor-onboard",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "Onboarding is explicitly blocked until Finance approves the contractor spend.",
+        "source_quote": "contractor spend has to be approved by Finance before anyone gets\nonboarded",
+        "source_section": "Scope & known problems",
+        "confidence": "high",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-cloud-security",
+      "predecessor_id": "task-cloud-provision",
+      "successor_id": "task-security-review",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "Security cannot review a Cloud configuration that has not been stood up yet.",
+        "source_quote": "Security and SRE need to review the Cloud configuration",
+        "source_section": "The parts Legal and Security care about",
+        "confidence": "high",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-cloud-sso",
+      "predecessor_id": "task-cloud-provision",
+      "successor_id": "task-sso-integration",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "SSO integration needs the Cloud org to exist first.",
+        "source_quote": "Stand up the Cloud org, SSO, and security config.",
+        "source_section": "Sequencing and the freeze",
+        "confidence": "high",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-cloud-integration",
+      "predecessor_id": "task-cloud-provision",
+      "successor_id": "task-integration-rebuild",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "Integrations are rebuilt against the Cloud REST API, which requires the Cloud org to exist.",
+        "source_quote": "rebuilt against the Cloud REST\nAPI",
+        "source_section": "Scope & known problems",
+        "confidence": "medium",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-cloud-tooling",
+      "predecessor_id": "task-cloud-provision",
+      "successor_id": "task-migration-tooling",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "Migration tooling targets the destination Cloud org, so the org must exist first.",
+        "source_quote": "Stand up the Cloud org, SSO, and security config.",
+        "source_section": "Sequencing and the freeze",
+        "confidence": "medium",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-plan-tooling",
+      "predecessor_id": "task-migration-plan",
+      "successor_id": "task-migration-tooling",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "Tooling implements the runbook, so the runbook should exist first.",
+        "source_quote": "prove the runbook end to\nend",
+        "source_section": "Sequencing and the freeze",
+        "confidence": "low",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-replace-signoff",
+      "predecessor_id": "task-plugin-replace",
+      "successor_id": "task-plugin-signoff",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "The compatibility sign-off can only be given once remediation is complete.",
+        "source_quote": "a plugin compatibility audit sign-off is a prerequisite for\nmigrating users",
+        "source_section": "Scope & known problems",
+        "confidence": "medium",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-tooling-pilot",
+      "predecessor_id": "task-migration-tooling",
+      "successor_id": "task-pilot-migration",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "The pilot migration needs the migration tooling in place.",
+        "source_quote": "Pilot-migrate two low-risk internal projects to prove the runbook end to\nend",
+        "source_section": "Sequencing and the freeze",
+        "confidence": "medium",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-legal-pilot",
+      "predecessor_id": "task-legal-review",
+      "successor_id": "task-pilot-migration",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "Legal sign-off must precede any client data move, including the pilot if it touches client records.",
+        "source_quote": "Legal has to sign\noff before any client data moves to Cloud",
+        "source_section": "The parts Legal and Security care about",
+        "confidence": "high",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-onboard-pilot",
+      "predecessor_id": "task-contractor-onboard",
+      "successor_id": "task-pilot-migration",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "Contractors run the migrations, so they must be onboarded before migration work starts.",
+        "source_quote": "bring on two migration contractors to run the wave\nmigrations",
+        "source_section": "Scope & known problems",
+        "confidence": "medium",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-pilot-validation",
+      "predecessor_id": "task-pilot-migration",
+      "successor_id": "task-pilot-validation",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "Validation is of the pilot, so it follows the pilot migration.",
+        "source_quote": "Validate the pilot with those project owners",
+        "source_section": "Sequencing and the freeze",
+        "confidence": "high",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-validation-bulk",
+      "predecessor_id": "task-pilot-validation",
+      "successor_id": "task-bulk-migration",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "Bulk migration follows a validated pilot, per the explicit sequencing.",
+        "source_quote": "Validate the pilot with those project owners, then bulk-migrate the remaining 18\nprojects in waves",
+        "source_section": "Sequencing and the freeze",
+        "confidence": "high",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-signoff-bulk",
+      "predecessor_id": "task-plugin-signoff",
+      "successor_id": "task-bulk-migration",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "No real migration should proceed until the plugin story is settled and signed off.",
+        "source_quote": "We should not migrate a single real user until the plugin\nstory is settled",
+        "source_section": "Scope & known problems",
+        "confidence": "medium",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-legal-bulk",
+      "predecessor_id": "task-legal-review",
+      "successor_id": "task-bulk-migration",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "Legal sign-off applies to every project touching client records, not just the pilot, so it gates the bulk waves too.",
+        "source_quote": "applies to\nevery project that touches client records, not just the pilot",
+        "source_section": "The parts Legal and Security care about",
+        "confidence": "high",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-sso-user",
+      "predecessor_id": "task-sso-integration",
+      "successor_id": "task-user-migration",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "Users can only be migrated with SSO working once SSO is integrated.",
+        "source_quote": "migrated with the right permissions and single sign-on working",
+        "source_section": "Why now / what success looks like",
+        "confidence": "high",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-signoff-user",
+      "predecessor_id": "task-plugin-signoff",
+      "successor_id": "task-user-migration",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "The plugin compatibility sign-off is an explicit prerequisite for migrating users.",
+        "source_quote": "a plugin compatibility audit sign-off is a prerequisite for\nmigrating users",
+        "source_section": "Scope & known problems",
+        "confidence": "high",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-bulk-reconciliation",
+      "predecessor_id": "task-bulk-migration",
+      "successor_id": "task-data-reconciliation",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "Reconciliation checks migrated data against on-prem, so it follows the bulk migration.",
+        "source_quote": "ticket counts, comments, and attachments reconcile against on-prem",
+        "source_section": "Why now / what success looks like",
+        "confidence": "high",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-bulk-rehearsal",
+      "predecessor_id": "task-bulk-migration",
+      "successor_id": "task-cutover-rehearsal",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "Cutover rehearsal needs the migrated data in place.",
+        "source_quote": "Cut over to Cloud in production",
+        "source_section": "Sequencing and the freeze",
+        "confidence": "medium",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-user-rehearsal",
+      "predecessor_id": "task-user-migration",
+      "successor_id": "task-cutover-rehearsal",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "Users must be migrated before rehearsing the production cutover.",
+        "source_quote": "Cut over to Cloud in production",
+        "source_section": "Sequencing and the freeze",
+        "confidence": "medium",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-rehearsal-cutover",
+      "predecessor_id": "task-cutover-rehearsal",
+      "successor_id": "task-prod-cutover",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "The production cutover follows its rehearsal.",
+        "source_quote": "Cut over to Cloud in production, hypercare, then decommission on-prem",
+        "source_section": "Sequencing and the freeze",
+        "confidence": "medium",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-security-cutover",
+      "predecessor_id": "task-security-review",
+      "successor_id": "task-prod-cutover",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "Explicit gate: no production cutover without a security and SRE sign-off.",
+        "source_quote": "there will be no production cutover without a\nsecurity and SRE sign-off",
+        "source_section": "The parts Legal and Security care about",
+        "confidence": "high",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-cutover-hypercare",
+      "predecessor_id": "task-prod-cutover",
+      "successor_id": "task-hypercare",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "Hypercare follows the cutover in the sequencing.",
+        "source_quote": "Cut over to Cloud in production, hypercare, then decommission on-prem",
+        "source_section": "Sequencing and the freeze",
+        "confidence": "high",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-cutover-decom",
+      "predecessor_id": "task-prod-cutover",
+      "successor_id": "task-decom-onprem",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "On-prem is decommissioned only after the production cutover succeeds.",
+        "source_quote": "Cut over to Cloud in production, hypercare, then decommission on-prem",
+        "source_section": "Sequencing and the freeze",
+        "confidence": "high",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-reconciliation-decom",
+      "predecessor_id": "task-data-reconciliation",
+      "successor_id": "task-decom-onprem",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "Do not decommission on-prem until migrated data has been reconciled against it.",
+        "source_quote": "No data loss: ticket counts, comments, and attachments reconcile against on-prem",
+        "source_section": "Why now / what success looks like",
+        "confidence": "medium",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-decom-closeout",
+      "predecessor_id": "task-decom-onprem",
+      "successor_id": "task-closeout",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "Closeout follows decommissioning as the final step.",
+        "source_quote": "On-prem decommissioned** — by ~2027-04-15, ahead of the license wall",
+        "source_section": "Rough milestones",
+        "confidence": "low",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    }
+  ],
+  "milestones": [
+    {
+      "id": "ms-pilot",
+      "name": "Pilot migration complete (2 projects)",
+      "target_date": "2026-11-10",
+      "provenance": {
+        "reasoning": "Explicit milestone: pilot complete just before the freeze.",
+        "source_quote": "aiming for ~2026-11-10",
+        "source_section": "Rough milestones",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "ms-bulk",
+      "name": "Bulk migration complete",
+      "target_date": "2027-02-28",
+      "provenance": {
+        "reasoning": "Explicit milestone: bulk migration complete end of February 2027.",
+        "source_quote": "end of February 2027",
+        "source_section": "Rough milestones",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "ms-golive",
+      "name": "Production go-live / cutover",
+      "target_date": "2027-03-15",
+      "provenance": {
+        "reasoning": "Explicit target go-live date for the full production cutover.",
+        "source_quote": "2027-03-15 (target)",
+        "source_section": "Rough milestones",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "ms-decom",
+      "name": "On-prem decommissioned",
+      "target_date": "2027-04-15",
+      "provenance": {
+        "reasoning": "Explicit milestone: on-prem decommissioned ahead of the license wall.",
+        "source_quote": "by ~2027-04-15, ahead of the license wall",
+        "source_section": "Rough milestones",
+        "confidence": "high",
+        "agent": "work-breakdown",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "con-license",
+      "type": "hard_date",
+      "description": "On-prem Jira Data Center license expires; all data must be migrated and the old instance decommissioned before it lapses. No extension available.",
+      "hard_date": "2027-04-30",
+      "gate": null,
+      "applies_to": ["task-decom-onprem", "ms-decom"],
+      "provenance": {
+        "reasoning": "Stated explicitly as a hard, non-extendable date and called out as the wall the whole plan is scheduled backwards from.",
+        "source_quote": "our current Data Center license expires 2027-04-30, and that date is hard",
+        "source_section": "Background",
+        "confidence": "high",
+        "agent": "human",
+        "model": "human",
+        "timestamp": "2026-07-20T09:00:00Z"
+      }
+    },
+    {
+      "id": "con-legal",
+      "type": "gate",
+      "description": "Legal sign-off (Helen Zhou) required before any client data moves to Cloud. Applies to every project touching client records, not just the pilot.",
+      "hard_date": null,
+      "gate": "Legal sign-off on client data migration",
+      "applies_to": ["task-pilot-migration", "task-bulk-migration"],
+      "provenance": {
+        "reasoning": "Called out as non-negotiable and applying to every project that touches client records; a buried gate in the Legal/Security section rather than the milestone list.",
+        "source_quote": "Legal has to sign\noff before any client data moves to Cloud",
+        "source_section": "The parts Legal and Security care about",
+        "confidence": "high",
+        "agent": "human",
+        "model": "human",
+        "timestamp": "2026-07-20T09:00:00Z"
+      }
+    },
+    {
+      "id": "con-freeze",
+      "type": "gate",
+      "description": "Q4 change freeze: no production migration activity permitted in the window 2026-11-15 to 2027-01-04. Prep and non-production work may continue. NOTE: modeled as a gate because the P1.2 Constraint has a single hard_date, not a blackout window — see fixtures README.",
+      "hard_date": null,
+      "gate": "No production migration during Q4 freeze (2026-11-15 to 2027-01-04)",
+      "applies_to": ["task-bulk-migration", "task-user-migration", "task-prod-cutover"],
+      "provenance": {
+        "reasoning": "Explicit company-wide freeze window during which no production migration activity is allowed; a hard scheduling blackout the plan must route around.",
+        "source_quote": "the company-wide Q4 change freeze runs from\n2026-11-15 to 2027-01-04, and no production migration activity is allowed during that\nwindow",
+        "source_section": "Sequencing and the freeze",
+        "confidence": "high",
+        "agent": "human",
+        "model": "human",
+        "timestamp": "2026-07-20T09:00:00Z"
+      }
+    },
+    {
+      "id": "con-security",
+      "type": "gate",
+      "description": "Security & SRE sign-off required before production cutover. Treated as a gate on the cutover itself.",
+      "hard_date": null,
+      "gate": "Security & SRE sign-off before production cutover",
+      "applies_to": ["task-prod-cutover", "ms-golive"],
+      "provenance": {
+        "reasoning": "Stated as an absolute gate on cutover ('no production cutover without ...'), explicitly not a nice-to-have.",
+        "source_quote": "there will be no production cutover without a\nsecurity and SRE sign-off",
+        "source_section": "The parts Legal and Security care about",
+        "confidence": "high",
+        "agent": "human",
+        "model": "human",
+        "timestamp": "2026-07-20T09:00:00Z"
+      }
+    },
+    {
+      "id": "con-budget",
+      "type": "gate",
+      "description": "Finance approval of contractor spend required before the two migration contractors can be onboarded. Not yet secured at time of writing.",
+      "hard_date": null,
+      "gate": "Finance approval of contractor budget before onboarding",
+      "applies_to": ["task-contractor-onboard"],
+      "provenance": {
+        "reasoning": "A buried prerequisite in the People & budget paragraph: onboarding cannot proceed until Finance approves the spend.",
+        "source_quote": "contractor spend has to be approved by Finance before anyone gets\nonboarded",
+        "source_section": "Scope & known problems",
+        "confidence": "high",
+        "agent": "human",
+        "model": "human",
+        "timestamp": "2026-07-20T09:00:00Z"
+      }
+    },
+    {
+      "id": "con-plugin",
+      "type": "gate",
+      "description": "Plugin compatibility audit sign-off (owned by the QA lead) is a prerequisite for migrating any real users.",
+      "hard_date": null,
+      "gate": "Plugin compatibility audit sign-off before user migration",
+      "applies_to": ["task-user-migration"],
+      "provenance": {
+        "reasoning": "Explicitly stated as a prerequisite for migrating users and assigned to the QA lead.",
+        "source_quote": "a plugin compatibility audit sign-off is a prerequisite for\nmigrating users",
+        "source_section": "Scope & known problems",
+        "confidence": "high",
+        "agent": "human",
+        "model": "human",
+        "timestamp": "2026-07-20T09:00:00Z"
+      }
+    }
+  ]
+}
