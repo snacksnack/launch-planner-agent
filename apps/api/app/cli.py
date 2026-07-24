@@ -19,6 +19,7 @@ import argparse
 import json
 import sys
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 
 from planner_core import (
@@ -30,6 +31,7 @@ from planner_core import (
     WorkBreakdown,
     build_dependency_report,
     build_report,
+    schedule_plan,
 )
 
 
@@ -166,6 +168,28 @@ def cmd_dependencies(args: argparse.Namespace) -> int:
     return 0 if report.ok else 1
 
 
+def _parse_blackout(spec: str) -> tuple[date, date]:
+    start, _, end = spec.partition(":")
+    return date.fromisoformat(start), date.fromisoformat(end)
+
+
+def cmd_schedule(args: argparse.Namespace) -> int:
+    """Deterministic CPM schedule — no LLM, no credentials."""
+    plan_path = Path(args.plan)
+    if not plan_path.is_file():
+        print(f"error: {plan_path} not found", file=sys.stderr)
+        return 2
+
+    plan = Plan.model_validate_json(plan_path.read_text())
+    blackouts = tuple(_parse_blackout(b) for b in (args.blackout or []))
+
+    schedule = schedule_plan(
+        plan, start_date=date.fromisoformat(args.start_date), blackouts=blackouts
+    )
+    print(schedule.render())
+    return 0 if schedule.meets_all_deadlines else 1
+
+
 def cmd_breakdown(args: argparse.Namespace) -> int:
     from agents import WorkBreakdownAgent
 
@@ -237,6 +261,21 @@ def main(argv: list[str] | None = None) -> int:
     dependencies.add_argument("--out", help="Where to write the enriched plan (default: in place).")
     dependencies.add_argument("--model", help="Override the Anthropic model id.")
     dependencies.set_defaults(func=cmd_dependencies)
+
+    schedule = sub.add_parser(
+        "schedule", help="Compute the CPM schedule for a plan.json (deterministic, no LLM)."
+    )
+    schedule.add_argument("plan", help="Path to a plan.json.")
+    schedule.add_argument(
+        "--start-date", required=True, help="Project start date (YYYY-MM-DD)."
+    )
+    schedule.add_argument(
+        "--blackout",
+        action="append",
+        metavar="START:END",
+        help="Freeze/blackout window as START:END (YYYY-MM-DD:YYYY-MM-DD). Repeatable.",
+    )
+    schedule.set_defaults(func=cmd_schedule)
 
     args = parser.parse_args(argv)
     return args.func(args)

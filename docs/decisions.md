@@ -12,6 +12,53 @@ to).
 
 ---
 
+## ADR-0010 — Scheduling engine: CPM in working-day offsets, calendar mapping is separate
+
+**Date:** 2026-07-24 · **Ticket:** RC1-187 (P1.6) · **Status:** Accepted
+
+**Context.** The CPM engine is the project's deterministic centerpiece and the
+interview answer to "where's the real engineering?" It must produce correct
+early/late times, total and free float, and the critical path over the validated
+dependency DAG — provably, against hand-computed textbook examples — while also
+projecting onto a real working-day calendar with freeze windows and checking
+hard-date deadlines.
+
+**Explanation.** *Two clean layers.* `compute_cpm` does pure CPM in **working-day
+offsets** from the project start — no dates, no calendar. That is exactly what
+makes it testable against textbook networks (the A–B–C–D–E–F example asserts
+every ES/EF/LS/LF/float and the A-B-D-F critical path). A separate
+`WorkingCalendar` maps offsets → dates, and it is the *only* thing that knows
+about weekends and blackout/freeze windows. *Freeze windows are just non-working
+days.* A freeze is a stretch of days on which nobody works, identical to a
+weekend, so it changes no float and no offset — the schedule simply flows around
+it when offsets are mapped to dates. This falls straight out of the layering and
+needs no special CPM logic. Blackouts are passed explicitly for now; extracting
+them from constraints waits on RC1-196's first-class blackout-window type (today
+the Q4 freeze is text inside a gate constraint). *All four PDM relationship types
++ lags* (FS/SS/FF/SF) are supported in both passes — "FS first, extensible," done
+properly. *Free float* is computed from forward edge-slack (`ES(succ) −
+required_ES`), which is correct for every relationship type because shifting a
+task later moves its ES and EF together. *Durations are the `likely` estimate*
+(per the ticket), not the PERT expected value. *Hard-date checks* use a
+constraint's `applies_to` to find the targeted task and report signed
+working-day slack (negative = the plan misses the date). *Milestones* are
+scheduled as zero-duration nodes and reported as scheduled **only when a
+dependency edge reaches them**; on today's plans milestones are unlinked (the
+Dependency Agent targets tasks only), so they carry their target date but no
+projection — the linked path is unit-tested to prove the projected-date/slack
+output. The `plan schedule` CLI is fully deterministic (no LLM), so it runs on
+the golden directly: 51 working days, an 11-task critical path along the
+migration spine, clearing the license wall with 111 days of slack.
+
+**Consequences.** The engine is correct-by-construction and exhaustively tested,
+independent of any calendar or model. Two known gaps are deliberate: freeze
+auto-extraction from constraints is blocked on RC1-196, and per-milestone
+projections need milestones wired into the dependency graph (a small extension to
+the Dependency Agent). Fractional durations render at whole-working-day calendar
+granularity (offsets floor/ceil to days); the underlying float math stays exact.
+
+---
+
 ## ADR-0009 — Dependency Agent: filter edges before they enter the plan; auto-break cycles by weakest edge
 
 **Date:** 2026-07-24 · **Ticket:** RC1-186 (P1.5) · **Status:** Accepted

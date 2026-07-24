@@ -37,6 +37,18 @@ from planner_core.provenance import (
     Provenance,
     ProvenancedModel,
 )
+from planner_core.scheduling import (
+    CPMResult,
+    DeadlineCheck,
+    MilestoneSchedule,
+    NodeMetrics,
+    Schedule,
+    TaskSchedule,
+    WorkingCalendar,
+    compute_cpm,
+    critical_paths,
+    schedule_plan,
+)
 from planner_core.validation import (
     BreakdownReport,
     Severity,
@@ -86,5 +98,16 @@ __all__ = [
     "find_cycles",
     "orphan_tasks",
     "resolve_cycles",
+    # scheduling (CPM)
+    "CPMResult",
+    "DeadlineCheck",
+    "MilestoneSchedule",
+    "NodeMetrics",
+    "Schedule",
+    "TaskSchedule",
+    "WorkingCalendar",
+    "compute_cpm",
+    "critical_paths",
+    "schedule_plan",
 ]
 
