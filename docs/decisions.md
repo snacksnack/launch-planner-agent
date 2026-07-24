@@ -12,6 +12,54 @@ to).
 
 ---
 
+## ADR-0012 — Plan-of-record store: event-sourced immutable snapshots behind a repository port
+
+**Date:** 2026-07-24 · **Ticket:** RC1-189 (P1.8) · **Status:** Accepted
+
+**Context.** P1.8 is the "human approves" leg: nothing becomes a plan of record
+until a person reviews and commits it, and committed plans must be immutable and
+retrievable by version — the artifact Phase 2 baselines and Phase 3 Jira sync
+build on. The ticket named "SQLite snapshots"; we revisited the storage choice
+for both fit and portfolio signal.
+
+**Explanation.** *The pattern over the engine.* The project's identity is "the
+plan is an audit trail, not a black box," so the store is modeled as an
+**event-sourced, append-only, content-addressed** log: each commit serializes the
+plan to canonical JSON, hashes it (sha256), links to its parent, and is never
+mutated. That framing — event sourcing, immutability, content-addressing,
+lineage — is the resume signal, independent of the backend. *Ports and adapters.*
+`planner_core` owns the domain (`Snapshot`), the storage **port**
+(`PlanRepository`, a Protocol), the hash, and the commit service; the concrete
+**`SQLiteEventStore`** lives in `app` (which owns the DB connection). A single
+parametrized contract test runs against both the in-memory reference repo and the
+SQLite adapter — the port's payoff — and a Postgres adapter can drop in for the
+Phase 3 deploy behind the same interface. This keeps the "clone and run, no
+credentials" property (SQLite is local-first and genuinely production-grade for a
+single-user tool) while giving a real production story. *Immutability is
+enforced, not conventional:* the SQLite schema installs triggers that `RAISE`
+on UPDATE/DELETE, so tampering fails at the storage layer. *The commit gate* is
+the human-approval leg: a plan with validation errors (unknown owner/epic,
+dangling/cyclic dependency) cannot be committed, and an explicit approver is
+required. *Human-vs-agent audit trail:* the agent proposal is recorded as its own
+snapshot, and `diff_plans` computes the structured delta (overridden estimates,
+reassigned owners, rejected/added dependencies) between it and the commit — so
+where human judgment diverged from the agents is queryable.
+
+*Scope.* Implemented as a **structured review-and-commit step** (CLI:
+`propose` / `commit` / `history` / `show` / `diff`; API renders a committed
+snapshot in the Gantt), not a per-proposal click-to-accept/reject editing UI —
+that interactive surface overlaps RC1-197 and is deferred. Both acceptance
+criteria are met: an edited plan re-schedules and its diff from the proposal is
+queryable; the committed snapshot is immutable and retrievable by version.
+
+**Consequences.** The audit trail is durable and inspectable end-to-end, closing
+the phase-1 loop (PRD → reviewed, committed plan → Gantt). The chosen decision
+(from a user design discussion): SQLite now, Postgres-ready via the port for
+RC1-195. The interactive review UI and surfacing the decision record visually
+remain tracked in RC1-197.
+
+---
+
 ## ADR-0011 — Gantt UI: frappe-gantt over vis-timeline; the tested contract is the backend payload
 
 **Date:** 2026-07-24 · **Ticket:** RC1-188 (P1.7) · **Status:** Accepted
