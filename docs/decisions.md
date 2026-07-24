@@ -12,6 +12,54 @@ to).
 
 ---
 
+## ADR-0011 — Gantt UI: frappe-gantt over vis-timeline; the tested contract is the backend payload
+
+**Date:** 2026-07-24 · **Ticket:** RC1-188 (P1.7) · **Status:** Accepted
+
+**Context.** The interactive Gantt is the demo centerpiece. The ticket asked to
+evaluate `frappe-gantt` vs `vis-timeline` and pick one (don't build from scratch),
+and AC2 is a two-minute interview demo: the critical path and **at least one
+buried-constraint dependency** must be visibly demonstrable.
+
+**Explanation.** The two libraries split the required features almost exactly:
+
+| Feature | frappe-gantt | vis-timeline |
+| --- | --- | --- |
+| Dependency arrows | **native** | none (custom SVG overlay) |
+| Critical-path styling | per-bar `custom_class` | per-item `className` |
+| Epic grouping | none (colour/label) | **native groups** |
+| Freeze shading | overlay | **native background items** |
+| Deadline line | overlay | **native custom time** |
+| Milestone markers | 0-width bar | **native points** |
+
+Chose **frappe-gantt**, because AC2 hinges on a dependency being *visible*, and
+dependency arrows are the one thing that is genuinely hard to fake — vis-timeline
+has no native arrows, and drawing them across group rows is the riskiest possible
+thing to write for a UI I can't run here. Critical-path styling (the other AC2
+half) is trivial via `custom_class`. The features frappe lacks natively are
+handled without much risk: epics via colour, and freeze/deadline as SVG overlays
+**calibrated from two real rendered bar positions** (solve `x = a·days + b`), so
+they stay aligned regardless of frappe's internal scale — and the same facts are
+always printed textually in the header, so a positioning miss degrades gracefully.
+Pinned `frappe-gantt@0.6.1` for a stable, well-documented API and clean Vite ESM
+interop.
+
+*The tested contract is the backend.* The frontend isn't in the Python CI matrix
+and can't be exercised headlessly, so the effort went into `app/gantt.py`
+(`build_gantt_payload`) and the `/api/plan` endpoint — shape, critical-path flags,
+and provenance surfaced on **both** tasks and dependency edges (the audit trail
+the UI renders). The endpoint serves the scheduled flagship golden by default, so
+the whole PRD→agents→engine→Gantt path renders with no credentials.
+
+**Consequences.** The data the UI draws is locked down by tests; the rendering
+itself is verified in the browser (an inherently manual, interview-style check).
+Freeze shading is wired but inert until blackout windows land (RC1-196), and
+milestones show projected dates once linked into the dependency graph (RC1-198).
+If frappe 0.6.1's ESM import needs a nudge under Vite, that's the one spot to
+adjust; the payload contract is independent of the library choice.
+
+---
+
 ## ADR-0010 — Scheduling engine: CPM in working-day offsets, calendar mapping is separate
 
 **Date:** 2026-07-24 · **Ticket:** RC1-187 (P1.6) · **Status:** Accepted
