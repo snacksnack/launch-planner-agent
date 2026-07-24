@@ -24,9 +24,11 @@ from pathlib import Path
 from planner_core import (
     BreakdownReport,
     Constraint,
+    DependencyReport,
     Plan,
     TeamMember,
     WorkBreakdown,
+    build_dependency_report,
     build_report,
 )
 
@@ -107,6 +109,63 @@ def _write_plan(plan: Plan, out_path: Path) -> None:
     out_path.write_text(plan.model_dump_json(indent=2) + "\n")
 
 
+def resolve_prd(plan: Plan, plan_path: Path, explicit: str | None) -> str | None:
+    """Find the PRD text for a plan: --prd, then source_document, then sibling."""
+    candidates: list[Path] = []
+    if explicit:
+        candidates.append(Path(explicit))
+    if plan.source_document:
+        candidates.append(Path(plan.source_document))
+    candidates.append(plan_path.parent / "prd.md")
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate.read_text()
+    return None
+
+
+def cmd_dependencies(args: argparse.Namespace) -> int:
+    from agents import DependencyAgent
+
+    from app.config import get_settings
+
+    plan_path = Path(args.plan)
+    if not plan_path.is_file():
+        print(f"error: {plan_path} not found", file=sys.stderr)
+        return 2
+
+    plan = Plan.model_validate_json(plan_path.read_text())
+    prd_text = resolve_prd(plan, plan_path, args.prd)
+    if prd_text is None:
+        print(
+            "error: could not locate the PRD (pass --prd, or ensure source_document resolves)",
+            file=sys.stderr,
+        )
+        return 2
+
+    settings = get_settings()
+    model = args.model or settings.anthropic_model
+    client = None
+    if settings.anthropic_api_key:
+        import anthropic
+
+        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+
+    agent = DependencyAgent(model=model, client=client)
+    result = agent.run(prd_text, plan.tasks, plan.constraints)
+
+    enriched = plan.model_copy(update={"dependencies": result.dependencies})
+    report: DependencyReport = build_dependency_report(
+        enriched, prd_text, result.rejections, result.cycle_breaks
+    )
+
+    out_path = Path(args.out) if args.out else plan_path
+    out_path.write_text(enriched.model_dump_json(indent=2) + "\n")
+
+    print(f"wrote {out_path}")
+    print(report.render())
+    return 0 if report.ok else 1
+
+
 def cmd_breakdown(args: argparse.Namespace) -> int:
     from agents import WorkBreakdownAgent
 
@@ -169,6 +228,15 @@ def main(argv: list[str] | None = None) -> int:
     breakdown.add_argument("--out", help="Where to write plan.json (default: <fixture>/plan.json).")
     breakdown.add_argument("--model", help="Override the Anthropic model id.")
     breakdown.set_defaults(func=cmd_breakdown)
+
+    dependencies = sub.add_parser(
+        "dependencies", help="Infer and validate dependencies over an existing plan.json."
+    )
+    dependencies.add_argument("plan", help="Path to a plan.json produced by `plan breakdown`.")
+    dependencies.add_argument("--prd", help="PRD path (default: the plan's source_document).")
+    dependencies.add_argument("--out", help="Where to write the enriched plan (default: in place).")
+    dependencies.add_argument("--model", help="Override the Anthropic model id.")
+    dependencies.set_defaults(func=cmd_dependencies)
 
     args = parser.parse_args(argv)
     return args.func(args)
