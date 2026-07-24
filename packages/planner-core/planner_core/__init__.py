@@ -18,6 +18,12 @@ from planner_core.dependencies import (
     orphan_tasks,
     resolve_cycles,
 )
+from planner_core.diff import (
+    EntityDiff,
+    FieldChange,
+    PlanDiff,
+    diff_plans,
+)
 from planner_core.models import (
     Constraint,
     ConstraintType,
@@ -31,6 +37,17 @@ from planner_core.models import (
     ThreePointEstimate,
     WorkBreakdown,
     plan_json_schema,
+)
+from planner_core.plan_store import (
+    CommitRejected,
+    InMemoryPlanRepository,
+    PlanRepository,
+    Snapshot,
+    SnapshotKind,
+    blocking_errors,
+    commit_plan,
+    content_hash,
+    record_proposal,
 )
 from planner_core.provenance import (
     Confidence,
@@ -109,5 +126,20 @@ __all__ = [
     "compute_cpm",
     "critical_paths",
     "schedule_plan",
+    # plan diff (human-vs-agent audit trail)
+    "EntityDiff",
+    "FieldChange",
+    "PlanDiff",
+    "diff_plans",
+    # plan store (immutable commit / audit log)
+    "CommitRejected",
+    "InMemoryPlanRepository",
+    "PlanRepository",
+    "Snapshot",
+    "SnapshotKind",
+    "blocking_errors",
+    "commit_plan",
+    "content_hash",
+    "record_proposal",
 ]
 

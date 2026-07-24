@@ -39,6 +39,14 @@ class Settings(BaseSettings):
     def has_llm_credentials(self) -> bool:
         return bool(self.anthropic_api_key)
 
+    @property
+    def sqlite_path(self) -> str:
+        """The filesystem path for the plan-store SQLite DB, from `database_url`."""
+        prefix = "sqlite:///"
+        if self.database_url.startswith(prefix):
+            return self.database_url[len(prefix) :]
+        return self.database_url  # already a bare path or ":memory:"
+
     def sanity_check(self) -> dict[str, object]:
         """A credential-free summary of effective configuration."""
         return {

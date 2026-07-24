@@ -19,18 +19,23 @@ import argparse
 import json
 import sys
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from planner_core import (
     BreakdownReport,
+    CommitRejected,
     Constraint,
     DependencyReport,
     Plan,
+    Snapshot,
     TeamMember,
     WorkBreakdown,
     build_dependency_report,
     build_report,
+    commit_plan,
+    diff_plans,
+    record_proposal,
     schedule_plan,
 )
 
@@ -241,6 +246,126 @@ def cmd_breakdown(args: argparse.Namespace) -> int:
     return 0 if report.ok else 1
 
 
+# --- plan-of-record store (RC1-189) ---------------------------------------
+
+
+def _open_store():
+    from app.config import get_settings
+    from app.store import SQLiteEventStore
+
+    return SQLiteEventStore(get_settings().sqlite_path)
+
+
+def _resolve_ref(store, ref: str) -> Plan:
+    """Resolve a plan reference: a snapshot version (int), a content hash, or a file."""
+    if ref.isdigit():
+        snap = store.get_by_version(int(ref))
+        if snap is None:
+            raise KeyError(f"no snapshot at version {ref}")
+        return snap.plan
+    path = Path(ref)
+    if path.is_file():
+        return Plan.model_validate_json(path.read_text())
+    snap = store.get_by_hash(ref)
+    if snap is None:
+        raise KeyError(f"no snapshot for reference {ref!r}")
+    return snap.plan
+
+
+def _snapshot_line(s: Snapshot) -> str:
+    who = f" by {s.approved_by}" if s.approved_by else ""
+    msg = f" — {s.message}" if s.message else ""
+    return (
+        f"  v{s.version} [{s.kind.value}] {s.content_hash[:12]}{who} "
+        f"· {s.created_at.date().isoformat()}{msg}"
+    )
+
+
+def cmd_propose(args: argparse.Namespace) -> int:
+    """Record an agent proposal so a later commit can be diffed against it."""
+    plan = Plan.model_validate_json(Path(args.plan).read_text())
+    store = _open_store()
+    snap = record_proposal(store, plan, now=datetime.now(UTC), message=args.message)
+    print(f"recorded proposal v{snap.version} ({snap.content_hash[:12]})")
+    return 0
+
+
+def cmd_commit(args: argparse.Namespace) -> int:
+    """Review gate: validate, then freeze an immutable plan-of-record snapshot."""
+    plan = Plan.model_validate_json(Path(args.plan).read_text())
+    store = _open_store()
+
+    source_hash = None
+    if args.from_proposal:
+        try:
+            source_hash = content_hash_of(_resolve_ref(store, args.from_proposal))
+        except KeyError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+
+    try:
+        snap = commit_plan(
+            store,
+            plan,
+            approved_by=args.by,
+            now=datetime.now(UTC),
+            message=args.message,
+            source_proposal_hash=source_hash,
+        )
+    except CommitRejected as exc:
+        print(f"commit rejected: {exc.reason}", file=sys.stderr)
+        for issue in exc.issues:
+            print(f"  ✗ [{issue.code}] {issue.message}", file=sys.stderr)
+        return 1
+
+    print(f"committed v{snap.version} ({snap.content_hash[:12]}) approved by {snap.approved_by}")
+    if args.start_date:
+        schedule = schedule_plan(plan, start_date=date.fromisoformat(args.start_date))
+        print(schedule.render())
+    return 0
+
+
+def cmd_history(args: argparse.Namespace) -> int:
+    store = _open_store()
+    snapshots = store.history()
+    if not snapshots:
+        print("no snapshots yet")
+        return 0
+    print(f"{len(snapshots)} snapshot(s):")
+    for s in snapshots:
+        print(_snapshot_line(s))
+    return 0
+
+
+def cmd_show(args: argparse.Namespace) -> int:
+    store = _open_store()
+    try:
+        plan = _resolve_ref(store, args.ref)
+    except KeyError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    print(plan.model_dump_json(indent=2))
+    return 0
+
+
+def cmd_diff(args: argparse.Namespace) -> int:
+    store = _open_store()
+    try:
+        base = _resolve_ref(store, args.base)
+        revised = _resolve_ref(store, args.revised)
+    except KeyError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    print(diff_plans(base, revised).render())
+    return 0
+
+
+def content_hash_of(plan: Plan) -> str:
+    from planner_core import content_hash
+
+    return content_hash(plan)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="plan", description="Launch planner agent CLI.")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -276,6 +401,37 @@ def main(argv: list[str] | None = None) -> int:
         help="Freeze/blackout window as START:END (YYYY-MM-DD:YYYY-MM-DD). Repeatable.",
     )
     schedule.set_defaults(func=cmd_schedule)
+
+    # --- plan-of-record store (RC1-189) ---
+    propose = sub.add_parser("propose", help="Record an agent proposal in the store.")
+    propose.add_argument("plan", help="Path to a plan.json.")
+    propose.add_argument("-m", "--message", help="Optional note.")
+    propose.set_defaults(func=cmd_propose)
+
+    commit = sub.add_parser(
+        "commit", help="Validate and commit an immutable plan-of-record snapshot."
+    )
+    commit.add_argument("plan", help="Path to the reviewed plan.json.")
+    commit.add_argument("--by", required=True, help="Approver name (the human sign-off).")
+    commit.add_argument("-m", "--message", help="Commit message.")
+    commit.add_argument(
+        "--from", dest="from_proposal", metavar="REF",
+        help="The proposal this derives from (version, hash, or file) — enables the audit diff.",
+    )
+    commit.add_argument("--start-date", help="If set, re-run the schedule (YYYY-MM-DD).")
+    commit.set_defaults(func=cmd_commit)
+
+    history = sub.add_parser("history", help="List the plan snapshot history.")
+    history.set_defaults(func=cmd_history)
+
+    show = sub.add_parser("show", help="Print a snapshot's plan (by version, hash, or file).")
+    show.add_argument("ref", help="Snapshot version, content hash, or a plan.json path.")
+    show.set_defaults(func=cmd_show)
+
+    diff = sub.add_parser("diff", help="Diff two plans (human-vs-agent audit trail).")
+    diff.add_argument("base", help="Base ref (version, hash, or file) — e.g. the agent proposal.")
+    diff.add_argument("revised", help="Revised ref (version, hash, or file) — e.g. the commit.")
+    diff.set_defaults(func=cmd_diff)
 
     args = parser.parse_args(argv)
     return args.func(args)
