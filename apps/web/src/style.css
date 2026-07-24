@@ -1,35 +1,231 @@
 :root {
   color-scheme: light dark;
   font-family: system-ui, -apple-system, sans-serif;
+  --border: color-mix(in srgb, currentColor 15%, transparent);
+  --muted: color-mix(in srgb, currentColor 60%, transparent);
+  --crit: #d1495b;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  display: grid;
-  min-height: 100vh;
-  place-items: center;
 }
 
-main {
-  text-align: center;
-  padding: 2rem;
-  max-width: 40rem;
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
 }
 
-h1 {
-  margin-bottom: 0.25rem;
+#header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--border);
 }
 
-.tagline {
-  font-style: italic;
-  opacity: 0.8;
+#project-name {
+  margin: 0;
+  font-size: 1.15rem;
 }
 
-.status {
-  margin-top: 2rem;
-  opacity: 0.7;
-}
-
-.health {
+.meta {
+  margin: 0.15rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
+
+.deadline-note {
+  font-weight: 600;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  white-space: nowrap;
+}
+
+.switch {
+  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+}
+
+/* --- epic legend --- */
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  padding: 0.5rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.8rem;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--muted);
+}
+.dot {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+/* --- layout: gantt + detail panel --- */
+
+.layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+#gantt-wrap {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+}
+
+#detail {
+  width: 22rem;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border);
+  padding: 1rem 1.25rem;
+  overflow-y: auto;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* --- bar colours by epic --- */
+
+.gantt .bar-wrapper.epic-0 .bar { fill: #4e79a7; }
+.gantt .bar-wrapper.epic-1 .bar { fill: #59a14f; }
+.gantt .bar-wrapper.epic-2 .bar { fill: #b07aa1; }
+.gantt .bar-wrapper.epic-3 .bar { fill: #f28e2b; }
+.gantt .bar-wrapper.epic-4 .bar { fill: #76b7b2; }
+.gantt .bar-wrapper.epic-5 .bar { fill: #edc948; }
+.gantt .bar-wrapper.epic-6 .bar { fill: #ff9da7; }
+.gantt .bar-wrapper.epic-7 .bar { fill: #9c755f; }
+
+/* frappe shows a popup on click; we use our own detail panel instead */
+.gantt .popup-wrapper,
+.popup-wrapper {
+  display: none !important;
+}
+
+/* critical path: bold red outline so the chain reads at a glance */
+.gantt .bar-wrapper.critical .bar {
+  stroke: var(--crit);
+  stroke-width: 3.5;
+}
+.gantt .bar-wrapper.critical {
+  filter: drop-shadow(0 0 2px color-mix(in srgb, var(--crit) 55%, transparent));
+}
+
+.gantt .bar-wrapper.milestone .bar {
+  fill: #333;
+  rx: 2;
+}
+
+/* critical-path-only view dims everything else */
+#gantt-wrap.critical-only .bar-wrapper:not(.critical):not(.milestone) {
+  opacity: 0.12;
+}
+#gantt-wrap.critical-only .bar-wrapper:not(.critical) .bar-label {
+  opacity: 0.2;
+}
+
+/* overlays drawn into the SVG */
+.deadline-line {
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+}
+.deadline-line.met { stroke: #59a14f; }
+.deadline-line.miss { stroke: var(--crit); }
+.freeze-shade {
+  fill: var(--crit);
+  opacity: 0.08;
+}
+
+/* --- detail panel content --- */
+
+#detail h2 {
+  font-size: 1rem;
+  margin: 0 0 0.75rem;
+}
+
+#detail h3 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 1.25rem 0 0.4rem;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 0.75rem;
+  margin: 0;
+  font-size: 0.88rem;
+}
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; }
+
+.crit { color: var(--crit); font-weight: 600; }
+
+.reasoning {
+  font-size: 0.9rem;
+  margin: 0.25rem 0;
+}
+
+blockquote {
+  margin: 0.4rem 0;
+  padding: 0.4rem 0.75rem;
+  border-left: 3px solid var(--border);
+  font-size: 0.85rem;
+  font-style: italic;
+  color: var(--muted);
+}
+
+.prov-meta {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.deps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.deps li {
+  margin-bottom: 0.75rem;
+}
+.dep-head {
+  font-size: 0.85rem;
+}
+
+.conf {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  padding: 0.05rem 0.4rem;
+  border-radius: 0.6rem;
+  font-weight: 600;
+}
+.conf-high { background: #59a14f33; color: #59a14f; }
+.conf-medium { background: #edc94833; color: #b8940a; }
+.conf-low { background: #d1495b33; color: var(--crit); }

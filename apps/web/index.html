@@ -3,10 +3,40 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>launch-planner-agent</title>
+    <title>Launch Planner — Gantt</title>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app">
+      <header id="header">
+        <div>
+          <h1 id="project-name">Launch Planner</h1>
+          <p id="project-meta" class="meta">loading…</p>
+        </div>
+        <div class="toolbar">
+          <label class="switch">
+            <input type="checkbox" id="critical-toggle" />
+            Critical path only
+          </label>
+          <select id="view-mode" aria-label="View mode">
+            <option value="Day">Day</option>
+            <option value="Week" selected>Week</option>
+            <option value="Month">Month</option>
+          </select>
+        </div>
+      </header>
+
+      <div id="legend" class="legend"></div>
+
+      <div class="layout">
+        <div id="gantt-wrap">
+          <div id="gantt"></div>
+        </div>
+        <aside id="detail">
+          <p class="hint">Click a task or milestone to see its owner, float, and the
+          full provenance behind it.</p>
+        </aside>
+      </div>
+    </div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

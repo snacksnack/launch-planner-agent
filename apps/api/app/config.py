@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = Field(default=None, repr=False)
     anthropic_model: str = "claude-sonnet-5"
 
+    # Gantt UI (P1.7): which plan to schedule and render, and from when. Defaults
+    # to the hand-authored flagship golden so the UI renders with no credentials.
+    plan_path: str = "fixtures/jira-cloud-migration/golden/expected-plan.json"
+    project_start_date: str = "2026-08-03"  # a Monday
+
     @property
     def has_llm_credentials(self) -> bool:
         return bool(self.anthropic_api_key)
@@ -42,6 +47,8 @@ class Settings(BaseSettings):
             "database_url": self.database_url,
             "anthropic_model": self.anthropic_model,
             "anthropic_api_key": "set" if self.has_llm_credentials else "missing",
+            "plan_path": self.plan_path,
+            "project_start_date": self.project_start_date,
         }
 
 
