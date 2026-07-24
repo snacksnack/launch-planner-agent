@@ -18,12 +18,21 @@ from planner_core.models import (
     Task,
     TeamMember,
     ThreePointEstimate,
+    WorkBreakdown,
     plan_json_schema,
 )
 from planner_core.provenance import (
     Confidence,
     Provenance,
     ProvenancedModel,
+)
+from planner_core.validation import (
+    BreakdownReport,
+    Severity,
+    ValidationIssue,
+    build_report,
+    coverage_gaps,
+    markdown_sections,
 )
 
 __version__ = "0.1.0"
@@ -45,6 +54,14 @@ __all__ = [
     "Task",
     "TeamMember",
     "ThreePointEstimate",
+    "WorkBreakdown",
     "plan_json_schema",
+    # validation
+    "BreakdownReport",
+    "Severity",
+    "ValidationIssue",
+    "build_report",
+    "coverage_gaps",
+    "markdown_sections",
 ]
 
