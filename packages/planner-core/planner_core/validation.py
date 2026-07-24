@@ -32,9 +32,13 @@ class ValidationIssue:
     entity_id: str | None = None
 
 
-def _normalize(text: str) -> str:
+def normalize_whitespace(text: str) -> str:
     """Collapse whitespace so quote/section matching ignores PRD line wrapping."""
     return " ".join(text.split())
+
+
+# Backwards-compatible internal alias.
+_normalize = normalize_whitespace
 
 
 # --- individual checks -----------------------------------------------------

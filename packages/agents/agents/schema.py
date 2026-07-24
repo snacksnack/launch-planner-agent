@@ -12,7 +12,7 @@ is friendly to strict structured-output decoding while still allowing nulls.
 
 from __future__ import annotations
 
-from planner_core import Confidence, ThreePointEstimate
+from planner_core import Confidence, DependencyType, ThreePointEstimate
 from pydantic import BaseModel, ConfigDict
 
 
@@ -51,3 +51,23 @@ class ProposedWorkBreakdown(BaseModel):
 
     epics: list[ProposedEpic]
     tasks: list[ProposedTask]
+
+
+class ProposedDependency(BaseModel):
+    """A proposed precedence edge. Permissive on purpose — structurally invalid
+    edges (self-loops, dangling references, duplicates) are filtered and reported
+    by `planner_core.filter_dependencies` rather than raising during decode."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    predecessor_id: str
+    successor_id: str
+    type: DependencyType
+    lag: float
+    provenance: ProposedProvenance
+
+
+class ProposedDependencies(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    dependencies: list[ProposedDependency]

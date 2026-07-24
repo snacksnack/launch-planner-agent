@@ -12,6 +12,58 @@ to).
 
 ---
 
+## ADR-0009 — Dependency Agent: filter edges before they enter the plan; auto-break cycles by weakest edge
+
+**Date:** 2026-07-24 · **Ticket:** RC1-186 (P1.5) · **Status:** Accepted
+
+**Context.** Hallucinated dependencies are the project's highest-risk failure
+mode — one bogus edge poisons the critical path. The Dependency Agent proposes
+precedence edges and maps gate constraints ("legal sign-off before client data
+moves") to edges; deterministic code must guarantee nothing invalid reaches the
+plan. Two design points needed settling: the order of filtering vs. stamping,
+and how to treat cycles.
+
+**Explanation.** *Two-phase validation.* `ProposedDependency` is deliberately
+permissive (no self-loop validator), because a strict `planner_core.Dependency`
+would raise at construction and abort the whole decode. Instead the agent runs
+`planner_core.filter_dependencies` on the raw proposals **before** stamping:
+dangling references, self-loops, and duplicate (predecessor, successor) pairs are
+dropped with a reason and returned as `EdgeRejection`s — they never enter a
+`Plan`, and only the survivors are converted to canonical `Dependency` objects
+with Python-stamped run-facts (same pattern as ADR-0008). *Cycles are broken
+automatically, by the weakest edge.* A cycle (`a -> b -> c -> a`) has no valid
+schedule, so it cannot be left in the plan — but which edge to cut is a judgment
+call. `resolve_cycles` (using `networkx.find_cycle`) iteratively removes the edge
+the agent was *least* sure about — lowest provenance confidence, ties broken
+deterministically by edge id — until the graph is acyclic. Rationale: the
+lowest-confidence edge is the likeliest hallucination, and confidence is exactly
+the signal provenance already captures. Every removal is returned as a
+`CycleBreak` and surfaced as a prominent **warning** (with the broken cycle's
+path) — the plan stays schedulable (`report.ok` is `True`) but a human sees what
+was cut and can override. Nothing is dropped silently. The `_cycle_issues` check
+in `build_dependency_report` remains as an error-level safety net for any cycle
+that reaches the report unresolved (e.g. a hand-authored plan loaded directly).
+Orphan tasks, unverifiable quotes, and low-confidence edges are warnings. *Gate
+coverage is the
+checkable constraint validation at this stage:* a gate whose target task has no
+incoming edge is flagged (`unenforced-gate`). The freeze-window *scheduling*
+violation the ticket mentions needs computed dates and is deferred to the CPM
+engine (P1.6 / RC1-196's blackout-window work). The P1.3 golden (28 real edges)
+doubles as the acyclic regression target; AC1's induced cycle is a unit test.
+
+**Consequences.** Structurally-invalid edges are unrepresentable in a committed
+plan; a cycle can never survive into the schedule, and the human always sees the
+readable path of anything that was cut to break it. If the weakest-edge heuristic
+ever cuts the wrong edge, the `CycleBreak` warning is the reviewer's signal to
+re-add it and remove a different one. The `plan dependencies plan.json` CLI
+resolves the PRD from the plan's
+`source_document` so the agent can quote and the validator can verify quotes
+verbatim. The live agent spot-check (AC2 end-to-end) needs credentials — run
+`plan dependencies fixtures/jira-cloud-migration/plan.json` after `plan
+breakdown`.
+
+---
+
 ## ADR-0008 — Work Breakdown Agent: LLM proposes reduced provenance, Python stamps run facts
 
 **Date:** 2026-07-23 · **Ticket:** RC1-185 (P1.4) · **Status:** Accepted

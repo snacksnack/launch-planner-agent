@@ -7,6 +7,17 @@ in the loop. The `agents` package depends on this one, never the reverse — a
 rule enforced in CI by import-linter.
 """
 
+from planner_core.dependencies import (
+    CycleBreak,
+    DependencyReport,
+    EdgeRejection,
+    build_dependency_report,
+    check_gate_coverage,
+    filter_dependencies,
+    find_cycles,
+    orphan_tasks,
+    resolve_cycles,
+)
 from planner_core.models import (
     Constraint,
     ConstraintType,
@@ -33,6 +44,7 @@ from planner_core.validation import (
     build_report,
     coverage_gaps,
     markdown_sections,
+    normalize_whitespace,
 )
 
 __version__ = "0.1.0"
@@ -63,5 +75,16 @@ __all__ = [
     "build_report",
     "coverage_gaps",
     "markdown_sections",
+    "normalize_whitespace",
+    # dependency validation
+    "CycleBreak",
+    "DependencyReport",
+    "EdgeRejection",
+    "build_dependency_report",
+    "check_gate_coverage",
+    "filter_dependencies",
+    "find_cycles",
+    "orphan_tasks",
+    "resolve_cycles",
 ]
 

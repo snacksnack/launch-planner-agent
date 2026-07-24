@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-from app.cli import assemble_plan, compare_to_golden, load_fixture
+from app.cli import assemble_plan, compare_to_golden, load_fixture, resolve_prd
 from planner_core import (
     Confidence,
     Epic,
@@ -100,3 +100,20 @@ def test_compare_to_golden_matches_on_task_names():
     produced = Plan(id="p", name="p", tasks=golden.tasks, epics=golden.epics)
     summary = compare_to_golden(produced, golden)
     assert f"name-matched {len(golden.tasks)}/{len(golden.tasks)}" in summary
+
+
+def test_resolve_prd_prefers_explicit_then_source_document(tmp_path):
+    prd = FIXTURE / "prd.md"
+    # source_document points at the real PRD (relative to repo root / cwd).
+    plan = Plan(id="p", name="p", source_document=str(prd))
+    assert resolve_prd(plan, tmp_path / "plan.json", explicit=None) is not None
+
+    # Explicit --prd wins.
+    explicit = tmp_path / "other.md"
+    explicit.write_text("EXPLICIT PRD")
+    assert resolve_prd(plan, tmp_path / "plan.json", explicit=str(explicit)) == "EXPLICIT PRD"
+
+
+def test_resolve_prd_returns_none_when_unlocatable(tmp_path):
+    plan = Plan(id="p", name="p", source_document="/nowhere/prd.md")
+    assert resolve_prd(plan, tmp_path / "plan.json", explicit=None) is None
