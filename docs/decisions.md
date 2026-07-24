@@ -12,6 +12,45 @@ to).
 
 ---
 
+## ADR-0008 — Work Breakdown Agent: LLM proposes reduced provenance, Python stamps run facts
+
+**Date:** 2026-07-23 · **Ticket:** RC1-185 (P1.4) · **Status:** Accepted
+
+**Context.** The first LLM agent turns a messy PRD into a structured WBS (epics,
+tasks, owners, three-point estimates) with provenance. Three questions drove the
+design: how to force structured output without free-text parsing; who fills the
+provenance fields; and where the deterministic post-validation lives given the
+`planner_core` ↔ `agents` boundary.
+
+**Explanation.** *Schema-forced, not parsed:* the agent calls
+`client.messages.parse(output_format=ProposedWorkBreakdown)` (Anthropic
+structured outputs) and gets back a validated Pydantic object — no free-text
+extraction. *Reduced proposal:* the model is asked to fill only what it can know
+from the document — `reasoning`, verbatim `source_quote`, `source_section`,
+`confidence` — via a `ProposedProvenance` shape. The `agent`, `model`, and
+`timestamp` fields are facts about the *run*, not the document, so Python stamps
+them after parsing (`WorkBreakdownAgent._stamp`). The model literally cannot
+hallucinate a timestamp or misattribute the agent. *Validation is deterministic
+and lives in the core:* `planner_core.validation` (owners resolve, epics resolve,
+low-confidence flags, and — reusing the fixtures trick — a hallucination guard
+that flags any `source_quote` not found verbatim in the PRD, plus PRD-section
+coverage gaps) is pure and has zero LLM dependency, so it's fully unit-tested
+without credentials and sits on the "Python validates" side of the boundary. The
+Anthropic client is injectable, so the whole orchestration is tested with a fake.
+The `plan breakdown <fixture>` CLI (in `app`) wires it together and prints the
+report plus a name-based comparison against the golden baseline.
+
+**Consequences.** Provenance run-facts are trustworthy by construction; the
+quote-verbatim check catches the most damaging failure mode (invented
+citations). The agent's live spot-check against the golden (the RC1-185
+acceptance criterion) needs real credentials — run `plan breakdown
+fixtures/jira-cloud-migration/` with `LPA_ANTHROPIC_API_KEY` (or `ANTHROPIC_API_KEY`)
+set. Structured outputs is the chosen forcing mechanism over strict tool-use for
+its cleaner round-trip; if a future model/provider lacks it, the agent's
+`_propose` step is the single place to swap in forced tool-use.
+
+---
+
 ## ADR-0007 — Golden fixtures are self-contained Plans, verified by a loader test
 
 **Date:** 2026-07-23 · **Ticket:** RC1-184 (P1.3) · **Status:** Accepted

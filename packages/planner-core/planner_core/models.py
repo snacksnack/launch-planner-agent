@@ -186,6 +186,20 @@ class Plan(BaseModel):
     constraints: list[Constraint] = Field(default_factory=list)
 
 
+class WorkBreakdown(BaseModel):
+    """The Work Breakdown Agent's output: epics + tasks, before scheduling.
+
+    A deliberately narrow slice of `Plan` — the work-breakdown step proposes only
+    the WBS; dependencies, milestones, and the schedule are later tickets. The
+    CLI folds this into a full `Plan` alongside the input team and constraints.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    epics: list[Epic] = Field(default_factory=list)
+    tasks: list[Task] = Field(default_factory=list)
+
+
 def plan_json_schema() -> dict[str, Any]:
     """Publish the `Plan` JSON Schema so agents can be schema-forced against it.
 

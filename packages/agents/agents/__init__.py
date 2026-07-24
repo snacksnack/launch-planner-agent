@@ -10,6 +10,22 @@ from planner_core import (
     __version__ as planner_core_version,  # noqa: F401  (dependency-direction smoke import)
 )
 
+from agents.schema import (
+    ProposedEpic,
+    ProposedProvenance,
+    ProposedTask,
+    ProposedWorkBreakdown,
+)
+from agents.work_breakdown import WorkBreakdownAgent, build_user_prompt
+
 __version__ = "0.1.0"
 
-__all__ = ["__version__"]
+__all__ = [
+    "__version__",
+    "WorkBreakdownAgent",
+    "build_user_prompt",
+    "ProposedEpic",
+    "ProposedProvenance",
+    "ProposedTask",
+    "ProposedWorkBreakdown",
+]
