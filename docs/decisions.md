@@ -12,6 +12,40 @@ to).
 
 ---
 
+## ADR-0013 — Milestones are dependency-graph nodes, linked by task → milestone edges
+
+**Date:** 2026-07-25 · **Ticket:** RC1-198 · **Status:** Accepted
+
+**Context.** The CPM engine already treats milestones as zero-duration nodes and
+can project a date + slack-to-target for any milestone — but only once a
+dependency edge actually reaches it. The Dependency Agent proposed edges between
+*tasks* only, and `filter_dependencies` rejected any endpoint that wasn't a task
+id, so the flagship milestones stayed unlinked and unprojected, leaving RC1-187's
+"projected date + slack per milestone" criterion only partly demonstrable.
+
+**Explanation.** *Reuse the edge, don't add a concept.* A milestone-completion
+link is just a precedence edge whose successor is a milestone, so we widened the
+existing `Dependency` endpoint rule rather than adding a new field on `Milestone`
+or a distinct "completes" relation. `filter_dependencies` now validates endpoints
+against `task_ids | milestone_ids` (the schedulable ids), and the Dependency Agent
+is handed the milestone list with an instruction to link each one from the task
+that completes it. *Direction convention:* a milestone is a zero-duration
+checkpoint, so it is normally an edge's **successor** (task → milestone), never a
+predecessor of real work — captured in the prompt, not enforced structurally
+(the scheduler handles either direction fine, so a hard rule would be
+over-constraint). *The engine was already correct*, so this ticket is agent +
+validation + fixture only: the golden gains four `dep-*-ms*` edges, each with a
+verbatim PRD quote, and its milestones now project real dates.
+
+**Consequences.** Milestone projection is exercised on real data, and the Gantt
+payload's `projected_date` / `slack_working_days` fields (already present) light
+up. `filter_dependencies`' parameter is renamed `task_ids → endpoint_ids` and its
+"unknown task" rejection message generalized to "unknown id". Milestone-as-node
+means a future edit could accidentally point work *at* a milestone as a
+predecessor; we accept that (scheduler-valid) rather than add a guard now.
+
+---
+
 ## ADR-0012 — Plan-of-record store: event-sourced immutable snapshots behind a repository port
 
 **Date:** 2026-07-24 · **Ticket:** RC1-189 (P1.8) · **Status:** Accepted

@@ -945,6 +945,70 @@
         "model": "golden-baseline",
         "timestamp": "2026-07-21T15:00:00Z"
       }
+    },
+    {
+      "id": "dep-validation-mspilot",
+      "predecessor_id": "task-pilot-validation",
+      "successor_id": "ms-pilot",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "The pilot-complete milestone is reached once the pilot migration is validated by the project owners.",
+        "source_quote": "Validate the pilot with those project owners",
+        "source_section": "Sequencing and the freeze",
+        "confidence": "high",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-bulk-msbulk",
+      "predecessor_id": "task-bulk-migration",
+      "successor_id": "ms-bulk",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "The bulk-complete milestone is reached when the wave migration of the remaining 18 projects finishes.",
+        "source_quote": "bulk-migrate the remaining 18\n   projects in waves",
+        "source_section": "Sequencing and the freeze",
+        "confidence": "high",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-cutover-msgolive",
+      "predecessor_id": "task-prod-cutover",
+      "successor_id": "ms-golive",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "The go-live milestone is the production cutover itself completing.",
+        "source_quote": "Cut over to Cloud in production",
+        "source_section": "Sequencing and the freeze",
+        "confidence": "high",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "dep-decom-msdecom",
+      "predecessor_id": "task-decom-onprem",
+      "successor_id": "ms-decom",
+      "type": "finish_to_start",
+      "lag": 0.0,
+      "provenance": {
+        "reasoning": "The decommission milestone is reached when the on-prem instance is decommissioned.",
+        "source_quote": "decommission on-prem",
+        "source_section": "Sequencing and the freeze",
+        "confidence": "high",
+        "agent": "dependency",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
     }
   ],
   "milestones": [

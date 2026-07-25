@@ -85,6 +85,16 @@ def test_filter_drops_dangling_self_loop_and_duplicate_edges():
     assert codes == ["dangling-reference", "duplicate-edge", "self-loop"]
 
 
+def test_filter_accepts_milestone_ids_as_endpoints():
+    # A task -> milestone edge is valid when the milestone id is a known endpoint;
+    # it's only dangling if the id isn't in the endpoint set (RC1-198).
+    endpoint_ids = {"task-a", "ms-1"}
+    edges = [_edge("task-a", "ms-1"), _edge("task-a", "ms-ghost")]
+    accepted, rejected = filter_dependencies(edges, endpoint_ids)
+    assert [(e.predecessor_id, e.successor_id) for e in accepted] == [("task-a", "ms-1")]
+    assert [r.code for r in rejected] == ["dangling-reference"]
+
+
 # --- cycle detection (AC1) -------------------------------------------------
 
 
@@ -200,11 +210,18 @@ def test_unverifiable_dependency_quote_flagged():
 
 
 def test_flagship_golden_dependency_graph_is_clean():
-    """The hand-authored golden (28 deps) must validate with no errors."""
+    """The hand-authored golden (28 task edges + 4 milestone links) validates clean."""
     plan = Plan.model_validate_json((FIXTURE / "golden" / "expected-plan.json").read_text())
     prd = (FIXTURE / "prd.md").read_text()
     report = build_dependency_report(plan, prd)
     assert report.ok, report.render()
-    assert report.dependency_count == 28
+    assert report.dependency_count == 32
+    # The last 4 edges link each milestone to the task that completes it (RC1-198).
+    milestone_edges = [
+        d for d in plan.dependencies if d.successor_id.startswith("ms-")
+    ]
+    assert {d.successor_id for d in milestone_edges} == {
+        "ms-pilot", "ms-bulk", "ms-golive", "ms-decom",
+    }
     # Every dependency quote is verbatim in the PRD.
     assert not any(i.code == "unverifiable-quote" for i in report.warnings)

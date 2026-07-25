@@ -53,14 +53,16 @@ class EdgeRejection:
 
 
 def filter_dependencies(
-    edges: list, task_ids: set[str]
+    edges: list, endpoint_ids: set[str]
 ) -> tuple[list, list[EdgeRejection]]:
     """Split proposed edges into (accepted, rejected).
 
-    Rejects — and therefore keeps out of the plan — edges that reference an
-    unknown task, loop a task to itself, or duplicate an already-accepted
-    (predecessor, successor) pair. Accepted edges are returned unchanged and in
-    order, so the caller can stamp/convert them.
+    `endpoint_ids` is the set of ids an edge may legally reference — tasks *and*
+    milestones (a task -> milestone edge lets the scheduler project the
+    milestone). Rejects — and therefore keeps out of the plan — edges that
+    reference an unknown id, loop a node to itself, or duplicate an
+    already-accepted (predecessor, successor) pair. Accepted edges are returned
+    unchanged and in order, so the caller can stamp/convert them.
     """
     accepted: list = []
     rejected: list[EdgeRejection] = []
@@ -69,17 +71,17 @@ def filter_dependencies(
     for index, edge in enumerate(edges):
         pred, succ = edge.predecessor_id, edge.successor_id
         pair = (pred, succ)
-        if pred not in task_ids or succ not in task_ids:
-            missing = pred if pred not in task_ids else succ
+        if pred not in endpoint_ids or succ not in endpoint_ids:
+            missing = pred if pred not in endpoint_ids else succ
             rejected.append(
                 EdgeRejection(
                     index, pred, succ, "dangling-reference",
-                    f"references unknown task {missing!r}",
+                    f"references unknown id {missing!r}",
                 )
             )
         elif pred == succ:
             rejected.append(
-                EdgeRejection(index, pred, succ, "self-loop", "a task cannot depend on itself")
+                EdgeRejection(index, pred, succ, "self-loop", "a node cannot depend on itself")
             )
         elif pair in seen:
             rejected.append(
