@@ -110,6 +110,33 @@ body {
   cursor: pointer;
 }
 
+.toolbtn {
+  font: inherit;
+  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+.toolbtn:hover {
+  background: var(--panel);
+  border-color: var(--sep);
+}
+.toolbtn .count {
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1;
+  padding: 0.12rem 0.4rem;
+  border-radius: 999px;
+  background: var(--caution-bg);
+  color: var(--caution);
+}
+
 .icon-btn {
   width: 1.9rem;
   height: 1.9rem;
@@ -239,6 +266,15 @@ body {
 }
 .task-row.critical .task-name {
   font-weight: 600;
+}
+/* low-confidence extractions: a subtle amber flag pushed to the row's right edge
+   (honest-gaps ethos — visible, not alarming) */
+.task-row .low-conf-flag {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--caution);
+  font-size: 0.8rem;
+  line-height: 1;
 }
 
 #gantt-wrap {
@@ -459,3 +495,55 @@ blockquote {
 .conf-high { background: var(--success-bg); color: var(--success); }
 .conf-medium { background: var(--info-bg); color: var(--info); }
 .conf-low { background: var(--caution-bg); color: var(--caution); }
+
+/* --- decisions panel (the build-time audit) --- */
+
+.dec-list {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+}
+.dec-list li {
+  margin-bottom: 0.9rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.dec-list li:last-child {
+  border-bottom: none;
+}
+.dec-head {
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.dec-head a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.dec-head a:hover {
+  text-decoration: underline;
+}
+.dec-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.7rem;
+  padding: 0.08rem 0.4rem;
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.dec-reason {
+  margin: 0.25rem 0 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+.dec-gaps {
+  margin: 0.25rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.5;
+}

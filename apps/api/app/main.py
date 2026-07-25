@@ -7,7 +7,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from planner_core import Plan, schedule_plan
+from planner_core import DecisionRecord, Plan, Snapshot, build_decision_record, schedule_plan
 
 from app import __version__
 from app.config import get_settings
@@ -29,6 +29,33 @@ def _resolve_plan(path_str: str) -> Path | None:
         if resolved.is_file():
             return resolved
     return None
+
+
+def _resolve_prd_text(plan: Plan, plan_path: Path | None) -> str | None:
+    """Best-effort PRD lookup so the decision record's source-dependent checks
+    (unverifiable quotes, coverage gaps) can be recomputed: the plan's
+    `source_document`, then a `prd.md` beside the plan or one level up (the golden
+    lives in a `golden/` subdir). Returns None if the PRD can't be located."""
+    if plan.source_document:
+        resolved = _resolve_plan(plan.source_document)
+        if resolved is not None:
+            return resolved.read_text()
+    if plan_path is not None:
+        for sibling in (plan_path.parent / "prd.md", plan_path.parent.parent / "prd.md"):
+            if sibling.is_file():
+                return sibling.read_text()
+    return None
+
+
+def _decisions_for(
+    plan: Plan, plan_path: Path | None, persisted: DecisionRecord | None
+) -> DecisionRecord:
+    """The persisted build-time audit for a committed snapshot, or a fresh one
+    recomputed from plan + PRD (the recomputable flags/coverage — a plan rebuilt
+    from JSON has no captured rejections/cycle-breaks)."""
+    if persisted is not None:
+        return persisted
+    return build_decision_record(plan, _resolve_prd_text(plan, plan_path))
 
 
 def create_app() -> FastAPI:
@@ -70,14 +97,18 @@ def create_app() -> FastAPI:
         otherwise a plan file (defaulting to the flagship golden), so the UI
         renders end-to-end without any LLM credentials.
         """
+        plan_path: Path | None = None
+        persisted_record: DecisionRecord | None = None
         if snapshot is not None:
-            parsed = _load_snapshot_plan(settings.sqlite_path, snapshot)
+            snap = _load_snapshot(settings.sqlite_path, snapshot)
+            parsed = snap.plan
+            persisted_record = snap.decision_record
         else:
             requested = plan or settings.plan_path
-            path = _resolve_plan(requested)
-            if path is None:
+            plan_path = _resolve_plan(requested)
+            if plan_path is None:
                 raise HTTPException(status_code=404, detail=f"plan not found: {requested}")
-            parsed = Plan.model_validate_json(path.read_text())
+            parsed = Plan.model_validate_json(plan_path.read_text())
 
         try:
             start_date = date.fromisoformat(start or settings.project_start_date)
@@ -85,7 +116,9 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=400, detail=f"invalid start date: {exc}") from exc
 
         schedule = schedule_plan(parsed, start_date=start_date)
-        return build_gantt_payload(parsed, schedule)
+        payload = build_gantt_payload(parsed, schedule)
+        payload["decisions"] = _decisions_for(parsed, plan_path, persisted_record).model_dump()
+        return payload
 
     @app.get("/api/history", tags=["plan"])
     def api_history() -> list[dict[str, object]]:
@@ -109,7 +142,7 @@ def create_app() -> FastAPI:
     return app
 
 
-def _load_snapshot_plan(sqlite_path: str, ref: str) -> Plan:
+def _load_snapshot(sqlite_path: str, ref: str) -> Snapshot:
     store = SQLiteEventStore(sqlite_path)
     try:
         snap = store.get_by_version(int(ref)) if ref.isdigit() else store.get_by_hash(ref)
@@ -117,7 +150,7 @@ def _load_snapshot_plan(sqlite_path: str, ref: str) -> Plan:
         store.close()
     if snap is None:
         raise HTTPException(status_code=404, detail=f"snapshot not found: {ref}")
-    return snap.plan
+    return snap
 
 
 app = create_app()

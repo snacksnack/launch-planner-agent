@@ -24,6 +24,7 @@ from typing import Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict
 
+from planner_core.decision_record import DecisionRecord
 from planner_core.dependencies import build_dependency_report
 from planner_core.models import Plan
 from planner_core.validation import ValidationIssue, build_report
@@ -48,6 +49,9 @@ class Snapshot(BaseModel):
     approved_by: str | None = None
     message: str | None = None
     created_at: datetime
+    # The audit of how this plan was built (RC1-197). Metadata *about* the plan,
+    # not part of it — kept off the plan so `content_hash` stays clean.
+    decision_record: DecisionRecord | None = None
 
 
 def content_hash(plan: Plan) -> str:
@@ -124,7 +128,12 @@ def blocking_errors(plan: Plan) -> list[ValidationIssue]:
 
 
 def record_proposal(
-    repo: PlanRepository, plan: Plan, *, now: datetime, message: str | None = None
+    repo: PlanRepository,
+    plan: Plan,
+    *,
+    now: datetime,
+    message: str | None = None,
+    decision_record: DecisionRecord | None = None,
 ) -> Snapshot:
     """Store an agent's proposal so a later commit can be diffed against it."""
     snapshot = Snapshot(
@@ -133,6 +142,7 @@ def record_proposal(
         plan=plan,
         message=message,
         created_at=now,
+        decision_record=decision_record,
     )
     return repo.append(snapshot)
 
@@ -145,12 +155,15 @@ def commit_plan(
     now: datetime,
     message: str | None = None,
     source_proposal_hash: str | None = None,
+    decision_record: DecisionRecord | None = None,
 ) -> Snapshot:
     """Gate, then append an immutable plan-of-record snapshot.
 
     Refuses to commit a plan with validation errors, or without an approver — the
     human-approval leg of "LLM proposes, Python validates, human approves". Links
-    the new commit to the previous one (parent), forming the event log.
+    the new commit to the previous one (parent), forming the event log. The
+    `decision_record`, when supplied, freezes the build-time audit (rejected and
+    cycle-broken edges) onto the immutable snapshot.
     """
     if not approved_by or not approved_by.strip():
         raise CommitRejected("an approver is required to commit a plan of record")
@@ -171,5 +184,6 @@ def commit_plan(
         approved_by=approved_by.strip(),
         message=message,
         created_at=now,
+        decision_record=decision_record,
     )
     return repo.append(snapshot)

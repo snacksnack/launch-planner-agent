@@ -80,6 +80,19 @@ def test_api_plan_endpoint_serves_the_golden_by_default():
     assert len(body["tasks"]) == 23
 
 
+def test_api_plan_includes_the_decision_record():
+    """RC1-197: the decisions/validation audit rides the payload (recomputed here,
+    since the golden is a plan file with a resolvable sibling PRD)."""
+    body = TestClient(create_app()).get("/api/plan").json()
+    decisions = body["decisions"]
+    assert set(decisions) == {"rejected_edges", "cycle_breaks", "flagged", "coverage_gaps"}
+    # The golden is hand-authored clean, but its inferred entities are low-confidence.
+    low = [f for f in decisions["flagged"] if f["code"] == "low-confidence"]
+    assert {f["entity_id"] for f in low} >= {"task-cutover-rehearsal", "task-closeout"}
+    # PRD is resolvable, so source-dependent coverage is computed (non-empty).
+    assert decisions["coverage_gaps"]
+
+
 def test_api_plan_rejects_missing_plan_and_bad_date():
     client = TestClient(create_app())
     assert client.get("/api/plan", params={"plan": "/nope.json"}).status_code == 404

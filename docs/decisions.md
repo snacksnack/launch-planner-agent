@@ -12,6 +12,50 @@ to).
 
 ---
 
+## ADR-0014 — Decision record: a durable build-time audit kept beside the plan, not inside it
+
+**Date:** 2026-07-25 · **Ticket:** RC1-197 · **Status:** Accepted
+
+**Context.** The project's differentiator is that a plan is an *audit trail, not a
+black box* — but that only held for provenance (which was already on every entity
+and surfaced in the UI). The *decisions* the pipeline made — edges the filter
+rejected, edges cut to break a cycle, low-confidence extractions, unverifiable
+quotes, unenforced gates, uncited PRD sections — lived only in ephemeral CLI
+stdout. Rejections and cycle-breaks in particular leave **no trace in
+`plan.json`**: once the losing edge is dropped, it's gone. A reviewer couldn't see
+any of it without reading logs.
+
+**Explanation.** *Two kinds of fact, one record.* A `DecisionRecord`
+(`planner_core`) holds both the **non-recomputable** run-time facts
+(`rejected_edges`, `cycle_breaks` — captured by the Dependency Agent as the graph
+is built, then gone) and the **recomputable** deterministic flags
+(`flagged`, `coverage_gaps` — pure functions of `plan + PRD`).
+`build_decision_record` assembles the whole thing from the two existing report
+objects, so there's one definition of "a decision". *Beside the plan, not inside
+it.* The record is metadata about *how* the plan was built, not part of the plan,
+so embedding it in `Plan` would pollute the content hash and every diff. Instead
+it rides a **`decisions.json` sidecar** (written by `plan dependencies`, kept at
+`plan.decisions.json`) and is frozen onto the immutable `Snapshot` at commit time
+(new nullable `decision_json` column, added by an append-only-safe `ADD COLUMN`
+migration) — so the audit is as durable as the plan of record. *Recompute when
+there's no run.* The API serves the persisted record for a committed snapshot, but
+for a raw plan file (the credential-free golden, never run through the agent) it
+**recomputes** the recomputable half from plan + resolved PRD; without the PRD the
+source-dependent checks are suppressed rather than emitted as false positives.
+*Provenance was already there,* so the UI work is a lean **Decisions panel** (drop
+counts, cut edges, flags that link to the entity) plus a subtle amber low-confidence
+flag in the task column — the "honest gaps" cue, not an alarm.
+
+**Consequences.** Both acceptance criteria hold: a reviewer sees the
+low-confidence items, dropped/cut edges and reasons, and can trace any entity to
+its PRD quote — in the UI, not logs; and cycle-breaks/rejections are persisted on
+the immutable snapshot. The golden demo shows low-confidence + coverage-gaps
+(dropped edges are zero because it's hand-authored clean — those appear on a real
+agent run). The snapshot schema now carries build-time metadata; a Postgres
+adapter must add the same nullable column behind the port.
+
+---
+
 ## ADR-0013 — Milestones are dependency-graph nodes, linked by task → milestone edges
 
 **Date:** 2026-07-25 · **Ticket:** RC1-198 · **Status:** Accepted

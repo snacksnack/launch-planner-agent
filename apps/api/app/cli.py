@@ -26,11 +26,13 @@ from planner_core import (
     BreakdownReport,
     CommitRejected,
     Constraint,
+    DecisionRecord,
     DependencyReport,
     Plan,
     Snapshot,
     TeamMember,
     WorkBreakdown,
+    build_decision_record,
     build_dependency_report,
     build_report,
     commit_plan,
@@ -116,6 +118,23 @@ def _write_plan(plan: Plan, out_path: Path) -> None:
     out_path.write_text(plan.model_dump_json(indent=2) + "\n")
 
 
+def decisions_sidecar(plan_path: Path) -> Path:
+    """The decision-record sidecar for a plan file (plan.json -> plan.decisions.json).
+
+    Kept beside the plan rather than inside it so the plan's content hash stays
+    clean; carried onto the immutable snapshot at commit time.
+    """
+    return plan_path.with_suffix(".decisions.json")
+
+
+def load_decision_record(plan_path: Path) -> DecisionRecord | None:
+    """Load the decision-record sidecar next to a plan, if one was written."""
+    sidecar = decisions_sidecar(plan_path)
+    if sidecar.is_file():
+        return DecisionRecord.model_validate_json(sidecar.read_text())
+    return None
+
+
 def resolve_prd(plan: Plan, plan_path: Path, explicit: str | None) -> str | None:
     """Find the PRD text for a plan: --prd, then source_document, then sibling."""
     candidates: list[Path] = []
@@ -168,7 +187,16 @@ def cmd_dependencies(args: argparse.Namespace) -> int:
     out_path = Path(args.out) if args.out else plan_path
     out_path.write_text(enriched.model_dump_json(indent=2) + "\n")
 
+    # Persist the build-time audit (rejected + cycle-broken edges, plus the
+    # deterministic validation flags) so it survives beyond this stdout (RC1-197).
+    record = build_decision_record(
+        enriched, prd_text, rejected=result.rejections, cycle_breaks=result.cycle_breaks
+    )
+    sidecar = decisions_sidecar(out_path)
+    sidecar.write_text(record.model_dump_json(indent=2) + "\n")
+
     print(f"wrote {out_path}")
+    print(f"wrote {sidecar}")
     print(report.render())
     return 0 if report.ok else 1
 
@@ -283,16 +311,24 @@ def _snapshot_line(s: Snapshot) -> str:
 
 def cmd_propose(args: argparse.Namespace) -> int:
     """Record an agent proposal so a later commit can be diffed against it."""
-    plan = Plan.model_validate_json(Path(args.plan).read_text())
+    plan_path = Path(args.plan)
+    plan = Plan.model_validate_json(plan_path.read_text())
     store = _open_store()
-    snap = record_proposal(store, plan, now=datetime.now(UTC), message=args.message)
+    snap = record_proposal(
+        store,
+        plan,
+        now=datetime.now(UTC),
+        message=args.message,
+        decision_record=load_decision_record(plan_path),
+    )
     print(f"recorded proposal v{snap.version} ({snap.content_hash[:12]})")
     return 0
 
 
 def cmd_commit(args: argparse.Namespace) -> int:
     """Review gate: validate, then freeze an immutable plan-of-record snapshot."""
-    plan = Plan.model_validate_json(Path(args.plan).read_text())
+    plan_path = Path(args.plan)
+    plan = Plan.model_validate_json(plan_path.read_text())
     store = _open_store()
 
     source_hash = None
@@ -311,6 +347,7 @@ def cmd_commit(args: argparse.Namespace) -> int:
             now=datetime.now(UTC),
             message=args.message,
             source_proposal_hash=source_hash,
+            decision_record=load_decision_record(plan_path),
         )
     except CommitRejected as exc:
         print(f"commit rejected: {exc.reason}", file=sys.stderr)

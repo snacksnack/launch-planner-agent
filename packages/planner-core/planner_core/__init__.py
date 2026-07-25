@@ -7,6 +7,13 @@ in the loop. The `agents` package depends on this one, never the reverse — a
 rule enforced in CI by import-linter.
 """
 
+from planner_core.decision_record import (
+    CycleBreakEntry,
+    DecisionRecord,
+    FlaggedIssue,
+    RejectedEdge,
+    build_decision_record,
+)
 from planner_core.dependencies import (
     CycleBreak,
     DependencyReport,
@@ -110,6 +117,12 @@ __all__ = [
     "DependencyReport",
     "EdgeRejection",
     "build_dependency_report",
+    # decision record (durable build-time audit)
+    "CycleBreakEntry",
+    "DecisionRecord",
+    "FlaggedIssue",
+    "RejectedEdge",
+    "build_decision_record",
     "check_gate_coverage",
     "filter_dependencies",
     "find_cycles",
