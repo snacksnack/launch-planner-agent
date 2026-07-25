@@ -11,8 +11,11 @@ are measured against.
   Integration Remediation, Data Migration, Cutover & Go-Live, Decommission &
   Closeout.
 - **24 tasks** with owners (from `../team.json`) and PERT three-point estimates.
-- **28 dependencies** forming an acyclic graph from inventory → planning →
-  foundation → pilot → bulk → cutover → decommission → closeout.
+- **32 dependencies** forming an acyclic graph from inventory → planning →
+  foundation → pilot → bulk → cutover → decommission → closeout. 28 are
+  task → task; the last 4 link each milestone to the task that completes it
+  (`dep-validation-mspilot`, `dep-bulk-msbulk`, `dep-cutover-msgolive`,
+  `dep-decom-msdecom`) so the scheduler can project the milestone dates (RC1-198).
 - **4 milestones** (pilot / bulk / go-live / decommission) and **6 constraints**
   (mirrored from `../constraints.json`).
 

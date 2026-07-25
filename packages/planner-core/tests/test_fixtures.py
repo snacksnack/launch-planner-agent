@@ -114,9 +114,11 @@ def test_referential_integrity(fixture: Path):
         if task.owner_id is not None:
             assert task.owner_id in member_ids, f"{task.id} -> unknown owner {task.owner_id}"
 
+    # Dependency endpoints may be tasks or milestones (task -> milestone links let
+    # the scheduler project the milestone).
     for dep in plan.dependencies:
-        assert dep.predecessor_id in task_ids, f"{dep.id} -> unknown predecessor"
-        assert dep.successor_id in task_ids, f"{dep.id} -> unknown successor"
+        assert dep.predecessor_id in schedulable_ids, f"{dep.id} -> unknown predecessor"
+        assert dep.successor_id in schedulable_ids, f"{dep.id} -> unknown successor"
 
     for con in plan.constraints:
         for ref in con.applies_to:
@@ -128,6 +130,7 @@ def test_dependency_graph_is_acyclic(fixture: Path):
     plan = _load_plan(fixture)
     graph = nx.DiGraph()
     graph.add_nodes_from(t.id for t in plan.tasks)
+    graph.add_nodes_from(m.id for m in plan.milestones)
     graph.add_edges_from((d.predecessor_id, d.successor_id) for d in plan.dependencies)
     assert nx.is_directed_acyclic_graph(graph), "golden dependency graph has a cycle"
 

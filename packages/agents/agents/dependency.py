@@ -23,6 +23,7 @@ from planner_core import (
     CycleBreak,
     Dependency,
     EdgeRejection,
+    Milestone,
     Provenance,
     Task,
     filter_dependencies,
@@ -37,15 +38,19 @@ DEFAULT_MODEL = "claude-sonnet-5"
 SYSTEM_PROMPT = """\
 You are a senior technical program manager inferring task dependencies for a plan.
 
-You are given the tasks already broken out of a PRD, the project's constraints, \
-and the PRD itself. Propose the precedence edges between tasks — what must finish \
-before what can start.
+You are given the tasks already broken out of a PRD, the plan's milestones, the \
+project's constraints, and the PRD itself. Propose the precedence edges between \
+tasks — what must finish before what can start.
 
 Rules:
 - Default every edge to finish_to_start with lag 0 unless the PRD clearly implies \
 otherwise.
-- Reference tasks ONLY by the ids in the task list. Never invent a task id. \
-Do not create an edge from a task to itself.
+- Reference nodes ONLY by the ids in the task and milestone lists. Never invent an \
+id. Do not create an edge from a node to itself.
+- Link each milestone into the graph with an edge from the task whose completion \
+marks it reached (predecessor = task, successor = milestone id), so the scheduler \
+can project the milestone's date. A milestone is a zero-duration checkpoint; it is \
+normally an edge's successor, not its predecessor.
 - Map gate constraints to edges: if a constraint says something must happen before \
 other work (e.g. "legal sign-off before any client data moves", "SRE review before \
 production cutover"), add the edge(s) that enforce it, pointing the gating task at \
@@ -80,6 +85,12 @@ def _format_tasks(tasks: Sequence[Task]) -> str:
     return "\n".join(f"- {t.id}: {t.name}" for t in tasks) or "(no tasks)"
 
 
+def _format_milestones(milestones: Sequence[Milestone]) -> str:
+    if not milestones:
+        return "(no milestones)"
+    return "\n".join(f"- {m.id}: {m.name}" for m in milestones)
+
+
 def _format_constraints(constraints: Sequence[Constraint]) -> str:
     if not constraints:
         return "(no constraints)"
@@ -92,12 +103,17 @@ def _format_constraints(constraints: Sequence[Constraint]) -> str:
 
 
 def build_user_prompt(
-    prd_text: str, tasks: Sequence[Task], constraints: Sequence[Constraint]
+    prd_text: str,
+    tasks: Sequence[Task],
+    constraints: Sequence[Constraint],
+    milestones: Sequence[Milestone] = (),
 ) -> str:
-    """Assemble the user turn: tasks, constraints, then the PRD."""
+    """Assemble the user turn: tasks, milestones, constraints, then the PRD."""
     return (
         "TASKS (reference predecessor_id / successor_id from these ids only):\n"
         f"{_format_tasks(tasks)}\n\n"
+        "MILESTONES (link each with an edge from the task that completes it):\n"
+        f"{_format_milestones(milestones)}\n\n"
         "CONSTRAINTS (map gates to enforcing edges):\n"
         f"{_format_constraints(constraints)}\n\n"
         "PRD:\n"
@@ -127,14 +143,16 @@ class DependencyAgent:
         prd_text: str,
         tasks: Sequence[Task],
         constraints: Sequence[Constraint],
+        milestones: Sequence[Milestone] = (),
     ) -> DependencyResult:
         client = self._client or self._default_client()
-        proposal = self._propose(client, prd_text, tasks, constraints)
+        proposal = self._propose(client, prd_text, tasks, constraints, milestones)
 
         # Structural triage BEFORE stamping: invalid edges never enter the plan,
         # and filtering first avoids self-loops raising at Dependency construction.
-        task_ids = {t.id for t in tasks}
-        accepted, rejections = filter_dependencies(list(proposal.dependencies), task_ids)
+        # Milestone ids are valid endpoints so task -> milestone edges survive.
+        endpoint_ids = {t.id for t in tasks} | {m.id for m in milestones}
+        accepted, rejections = filter_dependencies(list(proposal.dependencies), endpoint_ids)
 
         ts = self._now or datetime.now(UTC)
         stamped = [self._to_dependency(edge, index, ts) for index, edge in enumerate(accepted)]
@@ -156,13 +174,17 @@ class DependencyAgent:
         prd_text: str,
         tasks: Sequence[Task],
         constraints: Sequence[Constraint],
+        milestones: Sequence[Milestone] = (),
     ) -> ProposedDependencies:
         response = client.messages.parse(
             model=self._model,
             max_tokens=16000,
             system=SYSTEM_PROMPT,
             messages=[
-                {"role": "user", "content": build_user_prompt(prd_text, tasks, constraints)}
+                {
+                    "role": "user",
+                    "content": build_user_prompt(prd_text, tasks, constraints, milestones),
+                }
             ],
             output_format=ProposedDependencies,
         )

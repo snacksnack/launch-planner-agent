@@ -222,5 +222,14 @@ def test_schedule_the_flagship_golden_plan():
     assert len(sched.critical_path_ids) > 0
     # con-license (hard_date) targets task-decom-onprem -> a deadline check exists.
     assert any(c.task_id == "task-decom-onprem" for c in sched.deadline_checks)
-    # Golden milestones aren't wired into the dependency graph yet.
-    assert all(not m.scheduled for m in sched.milestones)
+
+    # Every golden milestone is wired into the dependency graph (RC1-198), so the
+    # scheduler projects a date and slack-to-target for each.
+    assert {m.milestone_id for m in sched.milestones} == {
+        "ms-pilot", "ms-bulk", "ms-golive", "ms-decom",
+    }
+    for m in sched.milestones:
+        assert m.scheduled, f"{m.milestone_id} should be scheduled"
+        assert m.projected_date is not None
+        assert m.target_date is not None
+        assert m.slack_working_days is not None

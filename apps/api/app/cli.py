@@ -158,7 +158,7 @@ def cmd_dependencies(args: argparse.Namespace) -> int:
         client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
     agent = DependencyAgent(model=model, client=client)
-    result = agent.run(prd_text, plan.tasks, plan.constraints)
+    result = agent.run(prd_text, plan.tasks, plan.constraints, plan.milestones)
 
     enriched = plan.model_copy(update={"dependencies": result.dependencies})
     report: DependencyReport = build_dependency_report(

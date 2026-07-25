@@ -17,6 +17,7 @@ from planner_core import (
     Constraint,
     ConstraintType,
     DependencyType,
+    Milestone,
     Provenance,
     Task,
     ThreePointEstimate,
@@ -53,6 +54,7 @@ CONSTRAINTS = [
         provenance=TASKS[0].provenance,
     )
 ]
+MILESTONES = [Milestone(id="ms-done", name="All done", provenance=TASKS[0].provenance)]
 
 
 def _pp(quote: str) -> ProposedProvenance:
@@ -163,11 +165,32 @@ def test_schema_forces_the_proposal_model():
     assert call["output_format"] is ProposedDependencies
 
 
-def test_user_prompt_lists_task_and_constraint_ids():
-    prompt = build_user_prompt("PRD BODY", TASKS, CONSTRAINTS)
+def test_user_prompt_lists_task_milestone_and_constraint_ids():
+    prompt = build_user_prompt("PRD BODY", TASKS, CONSTRAINTS, MILESTONES)
     assert "task-legal" in prompt and "task-data" in prompt
     assert "con-legal" in prompt
+    assert "ms-done" in prompt  # milestones offered as linkable endpoints (RC1-198)
     assert "PRD BODY" in prompt
+
+
+def test_task_to_milestone_edge_survives_filtering():
+    # A milestone id is a valid endpoint, so a task -> milestone link is accepted
+    # and stamped; an edge to an unknown milestone is dropped as dangling (RC1-198).
+    proposal = ProposedDependencies(
+        dependencies=[
+            _edge("task-a", "ms-done"),  # task -> milestone: valid
+            _edge("task-a", "ms-ghost"),  # unknown milestone: dangling
+        ]
+    )
+    agent = DependencyAgent(
+        model="m", client=_FakeClient(proposal), now=datetime(2026, 7, 24, tzinfo=UTC)
+    )
+    result = agent.run("prd", TASKS, CONSTRAINTS, MILESTONES)
+
+    assert [(d.predecessor_id, d.successor_id) for d in result.dependencies] == [
+        ("task-a", "ms-done")
+    ]
+    assert [r.code for r in result.rejections] == ["dangling-reference"]
 
 
 def test_proposal_schema_is_publishable():
