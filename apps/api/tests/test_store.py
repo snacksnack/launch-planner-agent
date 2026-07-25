@@ -72,6 +72,24 @@ def test_repository_contract_round_trips_the_plan(repo):
     assert fetched.plan == _valid_plan()  # full Plan survives the round trip
 
 
+def test_repository_contract_persists_the_decision_record(repo):
+    """The build-time audit rides the immutable snapshot (RC1-197)."""
+    from planner_core import build_decision_record
+
+    plan = _valid_plan()
+    record = build_decision_record(plan, "unrelated prd text")  # flags the unverifiable quote
+    committed = commit_plan(repo, plan, approved_by="Reid", now=NOW, decision_record=record)
+
+    fetched = repo.get_by_version(committed.version)
+    assert fetched.decision_record == record
+    assert any(f.code == "unverifiable-quote" for f in fetched.decision_record.flagged)
+
+
+def test_repository_contract_decision_record_is_optional(repo):
+    committed = commit_plan(repo, _valid_plan(), approved_by="Reid", now=NOW)
+    assert repo.get_by_version(committed.version).decision_record is None
+
+
 # --- SQLite-specific: immutability enforced by the database ----------------
 
 

@@ -10,10 +10,19 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-from app.cli import assemble_plan, compare_to_golden, load_fixture, resolve_prd
+from app.cli import (
+    assemble_plan,
+    compare_to_golden,
+    decisions_sidecar,
+    load_decision_record,
+    load_fixture,
+    resolve_prd,
+)
 from planner_core import (
     Confidence,
+    DecisionRecord,
     Epic,
+    FlaggedIssue,
     Plan,
     Provenance,
     Task,
@@ -117,3 +126,22 @@ def test_resolve_prd_prefers_explicit_then_source_document(tmp_path):
 def test_resolve_prd_returns_none_when_unlocatable(tmp_path):
     plan = Plan(id="p", name="p", source_document="/nowhere/prd.md")
     assert resolve_prd(plan, tmp_path / "plan.json", explicit=None) is None
+
+
+def test_decisions_sidecar_path_sits_beside_the_plan(tmp_path):
+    assert decisions_sidecar(tmp_path / "plan.json") == tmp_path / "plan.decisions.json"
+
+
+def test_load_decision_record_round_trips_the_sidecar(tmp_path):
+    plan_path = tmp_path / "plan.json"
+    record = DecisionRecord(
+        flagged=[
+            FlaggedIssue(severity="warning", code="low-confidence", message="m", entity_id="a")
+        ]
+    )
+    decisions_sidecar(plan_path).write_text(record.model_dump_json())
+    assert load_decision_record(plan_path) == record
+
+
+def test_load_decision_record_absent_is_none(tmp_path):
+    assert load_decision_record(tmp_path / "plan.json") is None

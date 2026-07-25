@@ -24,6 +24,7 @@ const ROW_H = BAR_H + PADDING;
 let payload = null; // the /api/plan response
 let gantt = null;
 let byId = new Map(); // id -> task | milestone (for the detail panel)
+let depById = new Map(); // dep id -> {from, to} (to name dependency flags)
 let detailHint = ""; // the panel's initial placeholder, restored on close
 
 init();
@@ -49,6 +50,12 @@ function index() {
   byId = new Map();
   for (const t of payload.tasks) byId.set(t.id, { ...t, kind: "task" });
   for (const m of payload.milestones) byId.set(m.id, { ...m, kind: "milestone" });
+  // dep id -> its endpoints, so a flag on a dependency can read as "A → B"
+  // (task names) instead of an opaque id like "dep-plan-tooling".
+  depById = new Map();
+  for (const t of payload.tasks) {
+    for (const p of t.predecessors) depById.set(p.id, { from: p.from, to: t.id });
+  }
 }
 
 function renderHeader() {
@@ -161,13 +168,17 @@ function renderTaskColumn() {
     const centre = parseFloat(barRect.getAttribute("y")) + parseFloat(barRect.getAttribute("height")) / 2;
     const colour = r.kind === "milestone" ? "var(--text)" : epicColour(r.epic_id);
     barRect.style.fill = colour; // colour the bar by epic from the single palette source
+    // Low-confidence extractions carry a subtle amber flag (honest-gaps ethos),
+    // so a reviewer sees where the agent was unsure without opening each item.
+    const lowConf = byId.get(r.id)?.provenance?.confidence === "low";
     const row = document.createElement("div");
-    row.className = `task-row${r.is_critical ? " critical" : ""}`;
+    row.className = `task-row${r.is_critical ? " critical" : ""}${lowConf ? " low-conf" : ""}`;
     row.dataset.id = r.id;
     row.style.top = `${centre - ROW_H / 2}px`;
     row.innerHTML =
       `<span class="epic-accent" style="background:${colour}"></span>` +
-      `<span class="task-name">${escapeHtml(r.name)}</span>`;
+      `<span class="task-name">${escapeHtml(r.name)}</span>` +
+      (lowConf ? `<span class="low-conf-flag" title="low-confidence extraction">⚑</span>` : "");
     row.addEventListener("click", () => showDetail(r.id));
     inner.appendChild(row);
   }
@@ -261,6 +272,113 @@ function clearDetail() {
   for (const sel of document.querySelectorAll(".selected")) sel.classList.remove("selected");
 }
 
+// --- decision record (the audit of how the plan was built) -----------------
+
+// Total number of items a reviewer might want to look at.
+function decisionCount() {
+  const d = payload?.decisions;
+  if (!d) return 0;
+  return d.rejected_edges.length + d.cycle_breaks.length + d.flagged.length + d.coverage_gaps.length;
+}
+
+// Friendly labels for validation codes; unknown codes fall back to the raw code.
+const FLAG_LABELS = {
+  "low-confidence": "Low confidence",
+  "unverifiable-quote": "Unverifiable quote",
+  "unenforced-gate": "Unenforced gate",
+  "orphan-task": "No dependencies",
+  "unassigned-task": "Unassigned",
+  "dependency-cycle": "Dependency cycle",
+  "unknown-owner": "Unknown owner",
+  "unknown-epic": "Unknown epic",
+};
+
+function nameFor(id) {
+  return byId.get(id)?.name ?? id;
+}
+
+// Turn a flag's entity id into a human, clickable subject: a task/milestone name
+// (jumps to its detail), or a dependency's "Predecessor → Successor" names
+// (jumps to the successor, whose panel lists the edge). Falls back to the raw id.
+function flagSubject(entityId) {
+  if (!entityId) return "";
+  if (byId.has(entityId)) {
+    return `<a href="#" data-jump="${escapeHtml(entityId)}">${escapeHtml(nameFor(entityId))}</a>`;
+  }
+  const edge = depById.get(entityId);
+  if (edge) {
+    return `<a href="#" data-jump="${escapeHtml(edge.to)}">${escapeHtml(nameFor(edge.from))} → ${escapeHtml(nameFor(edge.to))}</a>`;
+  }
+  return escapeHtml(entityId);
+}
+
+// Render the decision record into the detail panel: dropped/cut edges, the
+// deterministic validation flags, and PRD sections nothing cited.
+function showDecisions() {
+  setPanelCollapsed(false);
+  const d = payload?.decisions;
+  const el = document.querySelector("#detail");
+  for (const sel of document.querySelectorAll(".selected")) sel.classList.remove("selected");
+
+  const sections = [];
+
+  if (d?.rejected_edges.length) {
+    const rows = d.rejected_edges
+      .map(
+        (r) =>
+          `<li><div class="dec-head"><strong>${escapeHtml(nameFor(r.predecessor_id))}</strong> → <strong>${escapeHtml(nameFor(r.successor_id))}</strong>
+            <span class="dec-code">${escapeHtml(r.code)}</span></div>
+            <p class="dec-reason">${escapeHtml(r.reason)}</p></li>`,
+      )
+      .join("");
+    sections.push(`<h3>Edges dropped (${d.rejected_edges.length})</h3><ul class="dec-list">${rows}</ul>`);
+  }
+
+  if (d?.cycle_breaks.length) {
+    const rows = d.cycle_breaks
+      .map(
+        (c) =>
+          `<li><div class="dec-head">broke cycle <span class="dec-code">cut ${escapeHtml(c.predecessor_id)} → ${escapeHtml(c.successor_id)}</span></div>
+            <p class="dec-reason">${escapeHtml(c.cycle.join(" → "))} → ${escapeHtml(c.cycle[0] ?? "")}</p></li>`,
+      )
+      .join("");
+    sections.push(`<h3>Cycles broken (${d.cycle_breaks.length})</h3><ul class="dec-list">${rows}</ul>`);
+  }
+
+  if (d?.flagged.length) {
+    const rows = d.flagged
+      .map((f) => {
+        const label = FLAG_LABELS[f.code] ?? f.code;
+        return `<li><div class="dec-head"><span class="conf conf-${f.severity === "error" ? "low" : "medium"}">${escapeHtml(label)}</span> ${flagSubject(f.entity_id)}</div>
+          <p class="dec-reason">${escapeHtml(f.message)}</p></li>`;
+      })
+      .join("");
+    sections.push(`<h3>Validation flags (${d.flagged.length})</h3><ul class="dec-list">${rows}</ul>`);
+  }
+
+  if (d?.coverage_gaps.length) {
+    const rows = d.coverage_gaps.map((g) => `<li>${escapeHtml(g)}</li>`).join("");
+    sections.push(`<h3>PRD sections uncited (${d.coverage_gaps.length})</h3><ul class="dec-gaps">${rows}</ul>`);
+  }
+
+  const body = sections.length
+    ? sections.join("")
+    : `<p class="hint">No decisions to review — the plan validated clean: no dropped edges, no low-confidence extractions, every quote verbatim.</p>`;
+
+  el.innerHTML =
+    `<button class="detail-close" aria-label="Close" title="Close">×</button>` +
+    `<h2>Decisions & validation</h2>` +
+    `<p class="reasoning">What the agents proposed and what Python accepted, rejected, or flagged — the audit behind this plan.</p>` +
+    body;
+  el.querySelector(".detail-close").addEventListener("click", clearDetail);
+  for (const a of el.querySelectorAll("[data-jump]")) {
+    a.addEventListener("click", (e) => {
+      e.preventDefault();
+      showDetail(a.getAttribute("data-jump"));
+    });
+  }
+}
+
 // Collapse/expand the right detail panel to reclaim timeline width.
 function setPanelCollapsed(collapsed) {
   document.querySelector(".layout").classList.toggle("panel-collapsed", collapsed);
@@ -348,6 +466,11 @@ function wireControls() {
     const collapsed = document.querySelector(".layout").classList.contains("panel-collapsed");
     setPanelCollapsed(!collapsed);
   });
+  // The decision-record panel: what the agents proposed vs. what Python did.
+  const decBtn = document.querySelector("#decisions-btn");
+  const n = decisionCount();
+  if (n) decBtn.innerHTML = `Decisions <span class="count">${n}</span>`;
+  decBtn.addEventListener("click", showDecisions);
   // Own the click handling via delegation rather than frappe's on_click (which
   // is unreliable across versions). #gantt persists across re-renders.
   document.querySelector("#gantt").addEventListener("click", (e) => {

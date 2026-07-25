@@ -13,7 +13,7 @@ from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 
-from planner_core import Plan, Snapshot, SnapshotKind
+from planner_core import DecisionRecord, Plan, Snapshot, SnapshotKind
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS snapshots (
@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS snapshots (
     approved_by          TEXT,
     message              TEXT,
     created_at           TEXT NOT NULL,
-    plan_json            TEXT NOT NULL
+    plan_json            TEXT NOT NULL,
+    decision_json        TEXT
 );
 
 -- Immutability enforced by the database, not just the application.
@@ -40,7 +41,7 @@ CREATE TRIGGER IF NOT EXISTS snapshots_no_delete
 
 _COLUMNS = (
     "version, content_hash, kind, parent_hash, source_proposal_hash, "
-    "approved_by, message, created_at, plan_json"
+    "approved_by, message, created_at, plan_json, decision_json"
 )
 
 
@@ -56,17 +57,28 @@ class SQLiteEventStore:
         self._conn.row_factory = sqlite3.Row
         with self._conn:
             self._conn.executescript(_SCHEMA)
+            self._migrate()
+
+    def _migrate(self) -> None:
+        """Add columns introduced after a DB was first created (append-only-safe:
+        ADD COLUMN neither updates nor deletes rows, so the triggers don't fire)."""
+        existing = {row["name"] for row in self._conn.execute("PRAGMA table_info(snapshots)")}
+        if "decision_json" not in existing:
+            self._conn.execute("ALTER TABLE snapshots ADD COLUMN decision_json TEXT")
 
     def close(self) -> None:
         self._conn.close()
 
     def append(self, snapshot: Snapshot) -> Snapshot:
+        decision_json = (
+            snapshot.decision_record.model_dump_json() if snapshot.decision_record else None
+        )
         with self._conn:
             cursor = self._conn.execute(
                 "INSERT INTO snapshots "
                 "(content_hash, kind, parent_hash, source_proposal_hash, "
-                " approved_by, message, created_at, plan_json) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                " approved_by, message, created_at, plan_json, decision_json) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     snapshot.content_hash,
                     snapshot.kind.value,
@@ -76,6 +88,7 @@ class SQLiteEventStore:
                     snapshot.message,
                     snapshot.created_at.isoformat(),
                     snapshot.plan.model_dump_json(),
+                    decision_json,
                 ),
             )
         return snapshot.model_copy(update={"version": cursor.lastrowid})
@@ -111,6 +124,7 @@ class SQLiteEventStore:
 
 
 def _row_to_snapshot(row: sqlite3.Row) -> Snapshot:
+    decision_json = row["decision_json"]
     return Snapshot(
         version=row["version"],
         content_hash=row["content_hash"],
@@ -121,4 +135,7 @@ def _row_to_snapshot(row: sqlite3.Row) -> Snapshot:
         approved_by=row["approved_by"],
         message=row["message"],
         created_at=datetime.fromisoformat(row["created_at"]),
+        decision_record=(
+            DecisionRecord.model_validate_json(decision_json) if decision_json else None
+        ),
     )

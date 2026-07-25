@@ -44,6 +44,17 @@ from the column or a bar — highlights both and opens the provenance panel. Row
 geometry (`--header-h` / `--row-h`) is kept in sync between `main.js` and
 `style.css`.
 
+## Decisions panel (RC1-197)
+
+The **Decisions** toolbar button (with a count badge) opens the build-time audit
+from the payload's `decisions` block: edges the deterministic filter dropped and
+why, edges cut to break a cycle, low-confidence extractions, unverifiable quotes,
+unenforced gates, and PRD sections nothing cited. Each flag links back to its
+entity's full provenance. Low-confidence tasks also carry a subtle amber flag (⚑)
+in the task column — the "honest gaps" cue. For a committed snapshot the record is
+the one persisted at commit time; for a raw plan file (the golden) the recomputable
+half is rebuilt server-side from plan + PRD.
+
 ## Notes
 
 - Library choice (frappe-gantt vs vis-timeline) is recorded in
