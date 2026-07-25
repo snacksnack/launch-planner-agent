@@ -10,13 +10,21 @@ import "frappe-gantt/dist/frappe-gantt.css";
 import "./style.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
-// Epic palette — index matches the .epic-N bar rules in style.css.
-const PALETTE = ["#4e79a7", "#59a14f", "#b07aa1", "#f28e2b", "#76b7b2", "#edc948", "#ff9da7", "#9c755f"];
+// Subtle blue-family palette for epic identity (bars + legend + column accents).
+// Ordered so adjacent epics alternate in lightness/hue; kept in the blue / teal /
+// slate range so nothing clashes with the brand (no green / amber / purple).
+const PALETTE = ["#2f6cb0", "#6ba0cf", "#3f8fa0", "#86a0b8", "#5f7896", "#4784c2", "#21507f", "#a8c0d4"];
 const EPIC_COLOURS = PALETTE.length;
+// Chart geometry — must match the frappe options below and --row-h in style.css.
+const HEADER_H = 50;
+const BAR_H = 18;
+const PADDING = 14;
+const ROW_H = BAR_H + PADDING;
 
 let payload = null; // the /api/plan response
 let gantt = null;
 let byId = new Map(); // id -> task | milestone (for the detail panel)
+let detailHint = ""; // the panel's initial placeholder, restored on close
 
 init();
 
@@ -30,6 +38,7 @@ async function init() {
       `Could not reach the API at ${API_BASE} — is uvicorn running? (${err.message})`;
     return;
   }
+  detailHint = document.querySelector("#detail").innerHTML;
   index();
   renderHeader();
   renderGantt("Week");
@@ -69,45 +78,99 @@ function epicIndex(epicId) {
   return i < 0 ? 0 : i % EPIC_COLOURS;
 }
 
-function ganttTasks() {
-  const bars = payload.tasks.map((t) => ({
+function epicColour(epicId) {
+  return PALETTE[epicIndex(epicId)];
+}
+
+// The ordered chart rows — tasks, then any scheduled milestones. Both the bars
+// and the left task-name column derive from this, so they stay 1:1 aligned.
+// (Unlinked milestones are skipped: they'd stretch the axis to far-future target
+// dates and read as if scheduled — RC1-198.)
+function chartRows() {
+  const rows = payload.tasks.map((t) => ({
     id: t.id,
     name: t.name,
+    epic_id: t.epic_id,
+    is_critical: t.is_critical,
+    kind: "task",
     start: t.start,
     end: t.end,
-    progress: 0,
-    // frappe draws an arrow from each dependency (predecessor) to this bar.
     dependencies: t.predecessors.map((p) => p.from).join(","),
-    custom_class: `epic-${epicIndex(t.epic_id)}${t.is_critical ? " critical" : ""}`,
   }));
-
-  // Milestones as markers — only ones the scheduler actually placed. Unlinked
-  // milestones (no dependency edge yet — RC1-198) would otherwise stretch the
-  // axis out to their far-future target dates and read as if scheduled.
   for (const m of payload.milestones) {
     if (!m.projected_date) continue;
-    bars.push({
+    rows.push({
       id: m.id,
       name: `◆ ${m.name}`,
+      epic_id: null,
+      is_critical: false,
+      kind: "milestone",
       start: m.projected_date,
       end: m.projected_date,
-      progress: 0,
-      custom_class: "milestone",
+      dependencies: "",
     });
   }
-  return bars;
+  return rows;
+}
+
+function ganttTasks() {
+  return chartRows().map((r) => ({
+    id: r.id,
+    name: r.name,
+    start: r.start,
+    end: r.end,
+    progress: 0,
+    dependencies: r.dependencies, // frappe draws an arrow from each predecessor
+    custom_class:
+      r.kind === "milestone"
+        ? "milestone"
+        : `epic-${epicIndex(r.epic_id)}${r.is_critical ? " critical" : ""}`,
+  }));
 }
 
 function renderGantt(viewMode) {
   document.querySelector("#gantt").innerHTML = "";
   gantt = new Gantt("#gantt", ganttTasks(), {
     view_mode: viewMode,
-    bar_height: 18,
-    padding: 14,
+    header_height: HEADER_H,
+    bar_height: BAR_H,
+    padding: PADDING,
     custom_popup_html: () => null, // we use our own detail panel instead
     on_click: (bar) => showDetail(bar.id),
   });
-  requestAnimationFrame(drawScheduleOverlays);
+  requestAnimationFrame(() => {
+    renderTaskColumn();
+    drawScheduleOverlays();
+  });
+}
+
+// The fixed left column of task names, aligned row-for-row with the bars. Task
+// names live here (bar labels are hidden), which is the clean, canonical Gantt
+// layout. Rows are positioned to the measured bar centres, so alignment holds
+// regardless of frappe's internal geometry.
+function renderTaskColumn() {
+  const inner = document.querySelector("#task-column-inner");
+  const svg = document.querySelector("#gantt svg");
+  for (const old of inner.querySelectorAll(".task-row")) old.remove();
+  if (!svg) return;
+  inner.style.height = `${Number(svg.getAttribute("height")) || svg.getBBox().height}px`;
+
+  for (const r of chartRows()) {
+    const barRect = document.querySelector(`.bar-wrapper[data-id="${cssEscape(r.id)}"] .bar`);
+    if (!barRect) continue;
+    const centre = parseFloat(barRect.getAttribute("y")) + parseFloat(barRect.getAttribute("height")) / 2;
+    const colour = r.kind === "milestone" ? "var(--text)" : epicColour(r.epic_id);
+    barRect.style.fill = colour; // colour the bar by epic from the single palette source
+    const row = document.createElement("div");
+    row.className = `task-row${r.is_critical ? " critical" : ""}`;
+    row.dataset.id = r.id;
+    row.style.top = `${centre - ROW_H / 2}px`;
+    row.innerHTML =
+      `<span class="epic-accent" style="background:${colour}"></span>` +
+      `<span class="task-name">${escapeHtml(r.name)}</span>`;
+    row.addEventListener("click", () => showDetail(r.id));
+    inner.appendChild(row);
+  }
 }
 
 // Deadline lines + freeze shading, drawn directly into frappe's SVG so they
@@ -181,7 +244,29 @@ function showDetail(id) {
     el.innerHTML = `<p class="hint">No detail for ${id}.</p>`;
     return;
   }
-  el.innerHTML = item.kind === "task" ? taskDetail(item) : milestoneDetail(item);
+  setPanelCollapsed(false); // reveal the panel if it was collapsed
+  const body = item.kind === "task" ? taskDetail(item) : milestoneDetail(item);
+  el.innerHTML = `<button class="detail-close" aria-label="Close details" title="Close">×</button>${body}`;
+  el.querySelector(".detail-close").addEventListener("click", clearDetail);
+
+  // Highlight the selection in both the column and the chart.
+  for (const sel of document.querySelectorAll(".selected")) sel.classList.remove("selected");
+  for (const sel of document.querySelectorAll(`[data-id="${cssEscape(id)}"]`)) {
+    sel.classList.add("selected");
+  }
+}
+
+function clearDetail() {
+  document.querySelector("#detail").innerHTML = detailHint;
+  for (const sel of document.querySelectorAll(".selected")) sel.classList.remove("selected");
+}
+
+// Collapse/expand the right detail panel to reclaim timeline width.
+function setPanelCollapsed(collapsed) {
+  document.querySelector(".layout").classList.toggle("panel-collapsed", collapsed);
+  const btn = document.querySelector("#panel-toggle");
+  btn.textContent = collapsed ? "‹" : "›";
+  btn.title = collapsed ? "Show details panel" : "Hide details panel";
 }
 
 function taskDetail(t) {
@@ -246,17 +331,37 @@ function provenanceBlock(title, prov) {
 // --- controls --------------------------------------------------------------
 
 function wireControls() {
+  const wrap = document.querySelector("#gantt-wrap");
+  // Dependency arrows web up a dense plan — hide them by default for a clean
+  // read (per-task dependencies are always in the detail panel), toggle to show.
+  wrap.classList.add("hide-deps");
+  document.querySelector("#deps-toggle").addEventListener("change", (e) => {
+    wrap.classList.toggle("hide-deps", !e.target.checked);
+  });
   document.querySelector("#critical-toggle").addEventListener("change", (e) => {
-    document.querySelector("#gantt-wrap").classList.toggle("critical-only", e.target.checked);
+    wrap.classList.toggle("critical-only", e.target.checked);
   });
   document.querySelector("#view-mode").addEventListener("change", (e) => {
     renderGantt(e.target.value);
+  });
+  document.querySelector("#panel-toggle").addEventListener("click", () => {
+    const collapsed = document.querySelector(".layout").classList.contains("panel-collapsed");
+    setPanelCollapsed(!collapsed);
   });
   // Own the click handling via delegation rather than frappe's on_click (which
   // is unreliable across versions). #gantt persists across re-renders.
   document.querySelector("#gantt").addEventListener("click", (e) => {
     const wrapper = e.target.closest(".bar-wrapper");
     if (wrapper) showDetail(wrapper.getAttribute("data-id"));
+  });
+  // Keep the left task column in vertical lockstep with the chart.
+  wrap.addEventListener("scroll", () => {
+    document.querySelector("#task-column-inner").style.transform =
+      `translateY(${-wrap.scrollTop}px)`;
+  });
+  // Escape closes the detail panel.
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") clearDetail();
   });
 }
 

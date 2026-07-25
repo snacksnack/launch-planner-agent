@@ -1,9 +1,36 @@
+/* Brand-aligned styling for the Gantt UI (RC1-199).
+   Tokens mirror the hihelloreid.com resume site (src/index.css) and the
+   CareerTimeline component: navy text, Carbon-blue accent, system sans, 6–8px
+   radii, and the "amber-not-red for honest gaps" semantic palette. */
+
 :root {
-  color-scheme: light dark;
-  font-family: system-ui, -apple-system, sans-serif;
-  --border: color-mix(in srgb, currentColor 15%, transparent);
-  --muted: color-mix(in srgb, currentColor 60%, transparent);
-  --crit: #d1495b;
+  /* Brand tokens (from the resume site). */
+  --text: #0b1220;
+  --muted: #5b657a;
+  --bg: #ffffff;
+  --panel: #fbfcfe;
+  --accent: #0f62fe;
+  --bar: #2f6cb0; /* calm brand blue for bar fills (monochromatic) */
+  --border: #e6e8ee;
+  --sep: #c2c7d1;
+
+  --success: #0f7b3f;
+  --success-bg: #e7f4ec;
+  --info: #0f62fe;
+  --info-bg: #eaf0ff;
+  --caution: #9a6700;
+  --caution-bg: #fdf3e2;
+
+  /* Critical path reads as a domain signal, distinct from the epic palette. */
+  --crit: #c0392b;
+
+  --radius: 8px;
+  --radius-sm: 6px;
+  /* chart geometry — must match HEADER_H / ROW_H in main.js */
+  --header-h: 50px;
+  --row-h: 32px;
+  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica,
+    Arial, "Apple Color Emoji", "Segoe UI Emoji";
 }
 
 * {
@@ -12,6 +39,11 @@
 
 body {
   margin: 0;
+  font-family: var(--font);
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 #app {
@@ -20,35 +52,40 @@ body {
   height: 100vh;
 }
 
+/* --- header --- */
+
 #header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.75rem 1.25rem;
+  padding: 0.85rem 1.5rem;
   border-bottom: 1px solid var(--border);
 }
 
 #project-name {
   margin: 0;
   font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .meta {
-  margin: 0.15rem 0 0;
-  font-size: 0.85rem;
+  margin: 0.2rem 0 0;
+  font-size: 0.82rem;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 
 .deadline-note {
   font-weight: 600;
+  color: var(--text);
 }
 
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.85rem;
   white-space: nowrap;
 }
 
@@ -58,6 +95,38 @@ body {
   align-items: center;
   gap: 0.4rem;
   cursor: pointer;
+  color: var(--muted);
+  accent-color: var(--accent);
+}
+
+#view-mode {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.icon-btn {
+  width: 1.9rem;
+  height: 1.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.icon-btn:hover {
+  background: var(--border);
+  color: var(--text);
 }
 
 /* --- epic legend --- */
@@ -65,30 +134,111 @@ body {
 .legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem 1rem;
-  padding: 0.5rem 1.25rem;
+  gap: 0.4rem 1.1rem;
+  padding: 0.55rem 1.5rem;
   border-bottom: 1px solid var(--border);
-  font-size: 0.8rem;
+  font-size: 0.78rem;
 }
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.4rem;
   color: var(--muted);
 }
 .dot {
   width: 0.7rem;
   height: 0.7rem;
-  border-radius: 2px;
+  border-radius: 3px;
   display: inline-block;
 }
 
-/* --- layout: gantt + detail panel --- */
+/* --- layout: task column + gantt + detail panel --- */
 
 .layout {
   display: flex;
   flex: 1;
   min-height: 0;
+  position: relative;
+}
+
+/* collapsing the detail panel hands its width back to the timeline */
+.layout.panel-collapsed #detail {
+  display: none;
+}
+
+/* the collapse/expand control rides the panel's edge (its reopen handle when
+   collapsed), rather than sitting off in the toolbar */
+.panel-tab {
+  position: absolute;
+  top: 0.55rem;
+  right: 23rem; /* == #detail width: straddle the panel's left border */
+  transform: translateX(50%);
+  z-index: 6;
+  box-shadow: 0 1px 4px rgba(11, 18, 32, 0.12);
+}
+.layout.panel-collapsed .panel-tab {
+  right: 0.5rem;
+  transform: none;
+}
+
+/* fixed left column of task names, aligned row-for-row with the bars */
+#task-column {
+  width: 20rem;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+  background: var(--bg);
+}
+#task-column-inner {
+  position: relative;
+  will-change: transform;
+}
+.task-col-header {
+  height: var(--header-h);
+  display: flex;
+  align-items: flex-end;
+  padding: 0 1rem 0.5rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+.task-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: var(--row-h);
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0 1rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+}
+.task-row:hover {
+  background: #f4f6fa;
+}
+.task-row.selected {
+  background: var(--info-bg);
+}
+.task-row .epic-accent {
+  width: 3px;
+  height: 1.05rem;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.task-row.critical .epic-accent {
+  background: var(--crit) !important;
+}
+.task-row .task-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.task-row.critical .task-name {
+  font-weight: 600;
 }
 
 #gantt-wrap {
@@ -98,28 +248,87 @@ body {
 }
 
 #detail {
-  width: 22rem;
+  width: 23rem;
   flex-shrink: 0;
+  position: relative;
   border-left: 1px solid var(--border);
-  padding: 1rem 1.25rem;
+  background: var(--panel);
+  padding: 1.15rem 1.35rem;
   overflow-y: auto;
+}
+
+.detail-close {
+  position: absolute;
+  top: 0.7rem;
+  right: 0.8rem;
+  width: 1.6rem;
+  height: 1.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.detail-close:hover {
+  background: var(--border);
+  color: var(--text);
 }
 
 .hint {
   color: var(--muted);
   font-size: 0.9rem;
+  line-height: 1.5;
 }
 
-/* --- bar colours by epic --- */
+/* --- Gantt chart theming --- */
 
-.gantt .bar-wrapper.epic-0 .bar { fill: #4e79a7; }
-.gantt .bar-wrapper.epic-1 .bar { fill: #59a14f; }
-.gantt .bar-wrapper.epic-2 .bar { fill: #b07aa1; }
-.gantt .bar-wrapper.epic-3 .bar { fill: #f28e2b; }
-.gantt .bar-wrapper.epic-4 .bar { fill: #76b7b2; }
-.gantt .bar-wrapper.epic-5 .bar { fill: #edc948; }
-.gantt .bar-wrapper.epic-6 .bar { fill: #ff9da7; }
-.gantt .bar-wrapper.epic-7 .bar { fill: #9c755f; }
+.gantt text {
+  font-family: var(--font);
+}
+.gantt .grid-header {
+  fill: #f7f8fa;
+  stroke: var(--border);
+}
+.gantt .grid-row {
+  fill: #ffffff;
+}
+.gantt .grid-row:nth-child(even) {
+  fill: #fbfcfe;
+}
+.gantt .row-line,
+.gantt .tick {
+  stroke: var(--border);
+}
+.gantt .lower-text,
+.gantt .upper-text {
+  fill: var(--muted);
+  font-size: 0.72rem;
+}
+.gantt .arrow {
+  stroke: var(--sep);
+  stroke-width: 1.4;
+}
+/* dependency arrows are opt-in — hidden by default for a clean read */
+#gantt-wrap.hide-deps .arrow {
+  display: none;
+}
+/* task names live in the fixed left column, so hide the in-bar labels */
+.gantt .bar-label {
+  display: none;
+}
+
+/* monochromatic bars — epic identity lives in the left column + legend, so the
+   timeline stays clean and on-brand (no jarring categorical hues) */
+.gantt .bar-wrapper .bar {
+  fill: var(--bar);
+  rx: 4;
+  ry: 4;
+}
 
 /* frappe shows a popup on click; we use our own detail panel instead */
 .gantt .popup-wrapper,
@@ -130,20 +339,25 @@ body {
 /* critical path: bold red outline so the chain reads at a glance */
 .gantt .bar-wrapper.critical .bar {
   stroke: var(--crit);
-  stroke-width: 3.5;
+  stroke-width: 3;
 }
 .gantt .bar-wrapper.critical {
-  filter: drop-shadow(0 0 2px color-mix(in srgb, var(--crit) 55%, transparent));
+  filter: drop-shadow(0 0 2px color-mix(in srgb, var(--crit) 45%, transparent));
 }
 
 .gantt .bar-wrapper.milestone .bar {
-  fill: #333;
-  rx: 2;
+  fill: var(--text);
+}
+
+/* selected task: emphasise the bar to match the highlighted column row */
+.gantt .bar-wrapper.selected .bar {
+  stroke: var(--accent);
+  stroke-width: 2;
 }
 
 /* critical-path-only view dims everything else */
 #gantt-wrap.critical-only .bar-wrapper:not(.critical):not(.milestone) {
-  opacity: 0.12;
+  opacity: 0.1;
 }
 #gantt-wrap.critical-only .bar-wrapper:not(.critical) .bar-label {
   opacity: 0.2;
@@ -154,34 +368,37 @@ body {
   stroke-width: 2;
   stroke-dasharray: 5 4;
 }
-.deadline-line.met { stroke: #59a14f; }
+.deadline-line.met { stroke: var(--success); }
 .deadline-line.miss { stroke: var(--crit); }
 .freeze-shade {
   fill: var(--crit);
-  opacity: 0.08;
+  opacity: 0.07;
 }
 
 /* --- detail panel content --- */
 
 #detail h2 {
   font-size: 1rem;
-  margin: 0 0 0.75rem;
+  font-weight: 700;
+  margin: 0 0 0.85rem;
+  padding-right: 1.5rem; /* clear the close button */
+  line-height: 1.3;
 }
 
 #detail h3 {
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   color: var(--muted);
-  margin: 1.25rem 0 0.4rem;
+  margin: 1.35rem 0 0.45rem;
 }
 
 .facts {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 0.25rem 0.75rem;
+  gap: 0.3rem 0.85rem;
   margin: 0;
-  font-size: 0.88rem;
+  font-size: 0.87rem;
 }
 .facts dt { color: var(--muted); }
 .facts dd { margin: 0; }
@@ -190,21 +407,28 @@ body {
 
 .reasoning {
   font-size: 0.9rem;
+  line-height: 1.5;
   margin: 0.25rem 0;
 }
 
 blockquote {
-  margin: 0.4rem 0;
-  padding: 0.4rem 0.75rem;
-  border-left: 3px solid var(--border);
+  margin: 0.5rem 0;
+  padding: 0.4rem 0.8rem;
+  border-left: 3px solid var(--accent);
+  background: var(--info-bg);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   font-size: 0.85rem;
   font-style: italic;
-  color: var(--muted);
+  color: var(--text);
 }
 
 .prov-meta {
   font-size: 0.78rem;
   color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
 }
 
 .deps {
@@ -213,19 +437,25 @@ blockquote {
   padding: 0;
 }
 .deps li {
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.9rem;
 }
 .dep-head {
   font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
 }
 
+/* confidence badges use the brand semantic tints (amber for gaps, not red) */
 .conf {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   text-transform: uppercase;
-  padding: 0.05rem 0.4rem;
-  border-radius: 0.6rem;
+  letter-spacing: 0.03em;
+  padding: 0.08rem 0.45rem;
+  border-radius: 999px;
   font-weight: 600;
 }
-.conf-high { background: #59a14f33; color: #59a14f; }
-.conf-medium { background: #edc94833; color: #b8940a; }
-.conf-low { background: #d1495b33; color: var(--crit); }
+.conf-high { background: var(--success-bg); color: var(--success); }
+.conf-medium { background: var(--info-bg); color: var(--info); }
+.conf-low { background: var(--caution-bg); color: var(--caution); }

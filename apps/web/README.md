@@ -29,6 +29,21 @@ request via `/api/plan?plan=...&start=YYYY-MM-DD`.
    panel shows the dependency on **legal review**, quoting the buried PRD line
    *"Legal has to sign off before any client data moves to Cloud."*
 
+## Styling
+
+The UI is themed to the hihelloreid.com resume site (RC1-199): tokens mirror the
+site's `src/index.css` (navy `--text #0b1220`, Carbon-blue `--accent #0f62fe`,
+system-sans, 6–8px radii) and the `CareerTimeline` component (bar conventions,
+semantic tints). Confidence badges follow the site's "amber-not-red for honest
+gaps" ethos: HIGH = success green, MEDIUM = info blue, LOW = caution amber.
+
+Layout is the canonical Gantt shape: a **fixed left task-name column** (with epic
+colour accents; critical tasks bolded) aligned row-for-row with the bars, and a
+scrollable timeline with clean bars/arrows (no in-bar labels). Selecting a task —
+from the column or a bar — highlights both and opens the provenance panel. Row
+geometry (`--header-h` / `--row-h`) is kept in sync between `main.js` and
+`style.css`.
+
 ## Notes
 
 - Library choice (frappe-gantt vs vis-timeline) is recorded in

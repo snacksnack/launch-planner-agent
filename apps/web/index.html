@@ -14,6 +14,10 @@
         </div>
         <div class="toolbar">
           <label class="switch">
+            <input type="checkbox" id="deps-toggle" />
+            Dependencies
+          </label>
+          <label class="switch">
             <input type="checkbox" id="critical-toggle" />
             Critical path only
           </label>
@@ -28,6 +32,11 @@
       <div id="legend" class="legend"></div>
 
       <div class="layout">
+        <div id="task-column">
+          <div id="task-column-inner">
+            <div class="task-col-header">Task</div>
+          </div>
+        </div>
         <div id="gantt-wrap">
           <div id="gantt"></div>
         </div>
@@ -35,6 +44,12 @@
           <p class="hint">Click a task or milestone to see its owner, float, and the
           full provenance behind it.</p>
         </aside>
+        <button
+          id="panel-toggle"
+          class="icon-btn panel-tab"
+          title="Hide details panel"
+          aria-label="Toggle details panel"
+        >›</button>
       </div>
     </div>
     <script type="module" src="/src/main.js"></script>
