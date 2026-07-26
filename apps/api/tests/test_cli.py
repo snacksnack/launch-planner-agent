@@ -145,3 +145,25 @@ def test_load_decision_record_round_trips_the_sidecar(tmp_path):
 
 def test_load_decision_record_absent_is_none(tmp_path):
     assert load_decision_record(tmp_path / "plan.json") is None
+
+
+def test_build_scenario_parses_slip_and_dep_flags():
+    from argparse import Namespace
+
+    from app.cli import _build_scenario
+    from planner_core import AddDependency, DelayTask, RemoveDependency
+
+    scenario = _build_scenario(
+        Namespace(
+            name="what-if",
+            slip=["task-a:5", "task-b:2.5"],
+            add_dep=["task-a:task-c"],
+            remove_dep=["task-x:task-y"],
+        )
+    )
+    assert scenario.name == "what-if"
+    kinds = [type(c) for c in scenario.changes]
+    assert kinds == [DelayTask, DelayTask, AddDependency, RemoveDependency]
+    assert scenario.changes[0].task_id == "task-a" and scenario.changes[0].days == 5.0
+    assert scenario.changes[2].predecessor_id == "task-a"
+    assert scenario.changes[3].successor_id == "task-y"

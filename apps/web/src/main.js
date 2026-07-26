@@ -21,11 +21,18 @@ const BAR_H = 18;
 const PADDING = 14;
 const ROW_H = BAR_H + PADDING;
 
-let payload = null; // the /api/plan response
+let payload = null; // the baseline /api/plan response
+let view = null; // the payload currently rendered (baseline, or the simulated one)
 let gantt = null;
 let byId = new Map(); // id -> task | milestone (for the detail panel)
 let depById = new Map(); // dep id -> {from, to} (to name dependency flags)
 let detailHint = ""; // the panel's initial placeholder, restored on close
+let currentViewMode = "Week";
+
+// Simulation (RC1-190) state.
+let simActive = false;
+let simResult = null; // { baseline, simulated, delta, warnings }
+let scenarioChanges = []; // the what-if changes being composed
 
 init();
 
@@ -39,21 +46,22 @@ async function init() {
       `Could not reach the API at ${API_BASE} — is uvicorn running? (${err.message})`;
     return;
   }
+  view = payload;
   detailHint = document.querySelector("#detail").innerHTML;
   index();
   renderHeader();
-  renderGantt("Week");
+  renderGantt(currentViewMode);
   wireControls();
 }
 
 function index() {
   byId = new Map();
-  for (const t of payload.tasks) byId.set(t.id, { ...t, kind: "task" });
-  for (const m of payload.milestones) byId.set(m.id, { ...m, kind: "milestone" });
+  for (const t of view.tasks) byId.set(t.id, { ...t, kind: "task" });
+  for (const m of view.milestones) byId.set(m.id, { ...m, kind: "milestone" });
   // dep id -> its endpoints, so a flag on a dependency can read as "A → B"
   // (task names) instead of an opaque id like "dep-plan-tooling".
   depById = new Map();
-  for (const t of payload.tasks) {
+  for (const t of view.tasks) {
     for (const p of t.predecessors) depById.set(p.id, { from: p.from, to: t.id });
   }
 }
@@ -94,7 +102,7 @@ function epicColour(epicId) {
 // (Unlinked milestones are skipped: they'd stretch the axis to far-future target
 // dates and read as if scheduled — RC1-198.)
 function chartRows() {
-  const rows = payload.tasks.map((t) => ({
+  const rows = view.tasks.map((t) => ({
     id: t.id,
     name: t.name,
     epic_id: t.epic_id,
@@ -104,7 +112,7 @@ function chartRows() {
     end: t.end,
     dependencies: t.predecessors.map((p) => p.from).join(","),
   }));
-  for (const m of payload.milestones) {
+  for (const m of view.milestones) {
     if (!m.projected_date) continue;
     rows.push({
       id: m.id,
@@ -136,6 +144,7 @@ function ganttTasks() {
 }
 
 function renderGantt(viewMode) {
+  currentViewMode = viewMode;
   document.querySelector("#gantt").innerHTML = "";
   gantt = new Gantt("#gantt", ganttTasks(), {
     view_mode: viewMode,
@@ -148,6 +157,7 @@ function renderGantt(viewMode) {
   requestAnimationFrame(() => {
     renderTaskColumn();
     drawScheduleOverlays();
+    if (simActive && simResult) drawGhostOverlay();
   });
 }
 
@@ -179,7 +189,9 @@ function renderTaskColumn() {
       `<span class="epic-accent" style="background:${colour}"></span>` +
       `<span class="task-name">${escapeHtml(r.name)}</span>` +
       (lowConf ? `<span class="low-conf-flag" title="low-confidence extraction">⚑</span>` : "");
-    row.addEventListener("click", () => showDetail(r.id));
+    row.addEventListener("click", () => {
+      if (!simActive) showDetail(r.id); // in sim mode the scenario panel owns the rail
+    });
     inner.appendChild(row);
   }
 }
@@ -199,7 +211,7 @@ function drawScheduleOverlays() {
     if (!map) return;
     const ns = "http://www.w3.org/2000/svg";
 
-    for (const f of payload.freezes) {
+    for (const f of view.freezes) {
       const x1 = map(f.start);
       const x2 = map(f.end);
       const rect = document.createElementNS(ns, "rect");
@@ -211,7 +223,7 @@ function drawScheduleOverlays() {
       svg.appendChild(rect);
     }
 
-    for (const d of payload.deadlines) {
+    for (const d of view.deadlines) {
       const x = map(d.deadline);
       const line = document.createElementNS(ns, "line");
       line.setAttribute("x1", x);
@@ -228,7 +240,7 @@ function drawScheduleOverlays() {
 
 // Read two rendered bars, solve x = a*days + b, return a date->x function.
 function calibrateDateToX() {
-  const bars = payload.tasks
+  const bars = view.tasks
     .map((t) => {
       const rect = document.querySelector(`.bar-wrapper[data-id="${cssEscape(t.id)}"] .bar`);
       return rect ? { date: t.start, x: Number(rect.getAttribute("x")) } : null;
@@ -446,6 +458,261 @@ function provenanceBlock(title, prov) {
   `;
 }
 
+// --- slippage simulator (RC1-190) ------------------------------------------
+
+function toggleSimMode() {
+  if (simActive) exitSimMode();
+  else enterSimMode();
+}
+
+function enterSimMode() {
+  simActive = true;
+  simResult = null;
+  scenarioChanges = [];
+  document.querySelector("#simulate-btn").classList.add("active");
+  updateSimBanner();
+  renderSimPanel();
+}
+
+function exitSimMode() {
+  simActive = false;
+  simResult = null;
+  scenarioChanges = [];
+  document.querySelector("#simulate-btn").classList.remove("active");
+  document.querySelector("#sim-banner").hidden = true;
+  view = payload;
+  index();
+  renderGantt(currentViewMode);
+  clearDetail();
+}
+
+function describeChange(c) {
+  if (c.kind === "delay_task") return `${nameFor(c.task_id)} slips ${c.days}d`;
+  const verb = c.kind === "add_dependency" ? "add" : "remove";
+  return `${verb} ${nameFor(c.predecessor_id)} → ${nameFor(c.successor_id)}`;
+}
+
+function describeScenario() {
+  return scenarioChanges.map(describeChange).join("; ");
+}
+
+// POST the composed scenario, swap the rendered view to the simulated schedule,
+// and refresh the banner + panel. Empty scenario falls back to the baseline.
+async function runSimulation() {
+  if (!scenarioChanges.length) {
+    simResult = null;
+    view = payload;
+    index();
+    renderGantt(currentViewMode);
+    updateSimBanner();
+    renderSimPanel();
+    return;
+  }
+  try {
+    const resp = await fetch(`${API_BASE}/api/simulate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ changes: scenarioChanges }),
+    });
+    if (!resp.ok) throw new Error(`API ${resp.status}`);
+    simResult = await resp.json();
+  } catch (err) {
+    document.querySelector("#sim-impact").innerHTML =
+      `<p class="hint">Simulation failed: ${escapeHtml(err.message)}</p>`;
+    return;
+  }
+  view = simResult.simulated;
+  index();
+  renderGantt(currentViewMode); // rAF draws the ghost baseline overlay
+  updateSimBanner();
+  renderSimPanel();
+}
+
+function updateSimBanner() {
+  const banner = document.querySelector("#sim-banner");
+  const text = document.querySelector("#sim-banner-text");
+  if (!simActive) {
+    banner.hidden = true;
+    return;
+  }
+  banner.hidden = false;
+  if (!simResult) {
+    banner.className = "";
+    text.textContent = "Simulate mode — compose a what-if in the panel to see its impact.";
+    return;
+  }
+  const d = simResult.delta;
+  const missed = d.deadline_flips.some((f) => f.met_before && !f.met_after);
+  banner.className = missed ? "miss" : d.finish_shift_days > 0 ? "slip" : "ok";
+  text.innerHTML = `<strong>${escapeHtml(describeScenario())}</strong> — ${escapeHtml(d.headline)}`;
+}
+
+function renderSimPanel() {
+  setPanelCollapsed(false);
+  const el = document.querySelector("#detail");
+  const taskOpts = payload.tasks
+    .map((t) => `<option value="${escapeHtml(t.id)}">${escapeHtml(t.name)}</option>`)
+    .join("");
+  const nodeOpts = [...payload.tasks, ...payload.milestones]
+    .map((n) => `<option value="${escapeHtml(n.id)}">${escapeHtml(n.name)}</option>`)
+    .join("");
+  const changeList = scenarioChanges.length
+    ? `<ul class="sim-changes">${scenarioChanges
+        .map(
+          (c, i) =>
+            `<li><span>${escapeHtml(describeChange(c))}</span><button class="sim-x" data-rm="${i}" title="Remove" aria-label="Remove change">×</button></li>`,
+        )
+        .join("")}</ul>`
+    : `<p class="hint">No changes yet — slip a task or edit a dependency below.</p>`;
+
+  el.innerHTML = `
+    <button class="detail-close" aria-label="Exit simulate" title="Exit simulate">×</button>
+    <h2>Simulate — what if?</h2>
+    <p class="reasoning">Compose hypothetical changes; the schedule recomputes deterministically and the timeline shows the shift against a ghost of the baseline.</p>
+    <h3>Scenario</h3>
+    ${changeList}
+    <div class="sim-form">
+      <label class="sim-label" for="sim-task">Slip a task</label>
+      <div class="sim-row">
+        <select id="sim-task">${taskOpts}</select>
+        <input id="sim-days" type="number" min="1" step="1" value="5" aria-label="Working days" />
+        <button id="sim-add-slip" class="toolbtn">Add</button>
+      </div>
+    </div>
+    <div class="sim-form">
+      <label class="sim-label" for="sim-pred">Dependency edge</label>
+      <div class="sim-row">
+        <select id="sim-pred">${nodeOpts}</select>
+        <span>→</span>
+        <select id="sim-succ">${nodeOpts}</select>
+      </div>
+      <div class="sim-row">
+        <button id="sim-add-dep" class="toolbtn">Add edge</button>
+        <button id="sim-remove-dep" class="toolbtn">Remove edge</button>
+      </div>
+    </div>
+    <div id="sim-impact">${renderImpact()}</div>
+  `;
+
+  el.querySelector(".detail-close").addEventListener("click", exitSimMode);
+  el.querySelector("#sim-add-slip").addEventListener("click", () => {
+    const task_id = el.querySelector("#sim-task").value;
+    const days = Number(el.querySelector("#sim-days").value);
+    if (task_id && days > 0) {
+      scenarioChanges.push({ kind: "delay_task", task_id, days });
+      runSimulation();
+    }
+  });
+  const addEdge = (kind) => {
+    const predecessor_id = el.querySelector("#sim-pred").value;
+    const successor_id = el.querySelector("#sim-succ").value;
+    if (predecessor_id && successor_id) {
+      scenarioChanges.push({ kind, predecessor_id, successor_id });
+      runSimulation();
+    }
+  };
+  el.querySelector("#sim-add-dep").addEventListener("click", () => addEdge("add_dependency"));
+  el.querySelector("#sim-remove-dep").addEventListener("click", () => addEdge("remove_dependency"));
+  for (const b of el.querySelectorAll("[data-rm]")) {
+    b.addEventListener("click", () => {
+      scenarioChanges.splice(Number(b.dataset.rm), 1);
+      runSimulation();
+    });
+  }
+}
+
+// The detailed impact (the one-line headline lives in the banner).
+function renderImpact() {
+  if (!simResult) return "";
+  const d = simResult.delta;
+  const parts = [];
+
+  if (d.notes.length) {
+    parts.push(`<ul class="sim-notes">${d.notes.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul>`);
+  }
+
+  const missed = d.deadline_flips.filter((f) => f.met_before && !f.met_after);
+  if (missed.length) {
+    const rows = missed
+      .map((f) => `<li><span class="conf conf-low">deadline missed</span> ${escapeHtml(f.constraint_id)} (${signed(f.slack_after)}d)</li>`)
+      .join("");
+    parts.push(`<h3>Deadlines breached (${missed.length})</h3><ul class="dec-list">${rows}</ul>`);
+  }
+
+  const moved = d.task_shifts.filter((s) => s.finish_shift_days !== 0);
+  if (moved.length) {
+    const rows = moved
+      .slice()
+      .sort((a, b) => b.finish_shift_days - a.finish_shift_days)
+      .map(
+        (s) =>
+          `<li><span class="sim-moved-name">${escapeHtml(s.task_name)}</span><span class="sim-shift">${signed(s.finish_shift_days)}d</span></li>`,
+      )
+      .join("");
+    parts.push(`<h3>Tasks moved (${moved.length})</h3><ul class="sim-moved">${rows}</ul>`);
+  }
+
+  if (simResult.warnings.length) {
+    const rows = simResult.warnings.map((w) => `<li>${escapeHtml(w)}</li>`).join("");
+    parts.push(`<h3>Warnings</h3><ul class="dec-gaps">${rows}</ul>`);
+  }
+
+  const body = parts.length
+    ? parts.join("")
+    : `<p class="hint">No schedule change from this scenario.</p>`;
+  return `<h3>Impact</h3>${body}`;
+}
+
+// Draw a faint "ghost" of each moved task's baseline position behind the
+// simulated bar, with a connector showing the shift. Uses the same date->x
+// calibration as the deadline/freeze overlays.
+function drawGhostOverlay() {
+  try {
+    const svg = document.querySelector("#gantt svg");
+    if (!svg || !simResult) return;
+    const map = calibrateDateToX();
+    if (!map) return;
+    const ns = "http://www.w3.org/2000/svg";
+    const baseById = new Map(simResult.baseline.tasks.map((t) => [t.id, t]));
+    for (const shift of simResult.delta.task_shifts) {
+      const base = baseById.get(shift.task_id);
+      const barRect = document.querySelector(
+        `.bar-wrapper[data-id="${cssEscape(shift.task_id)}"] .bar`,
+      );
+      if (!base || !barRect) continue;
+      const y = Number(barRect.getAttribute("y"));
+      const h = Number(barRect.getAttribute("height"));
+      const x1 = map(base.start);
+      const x2 = map(base.end);
+      const gx = Math.min(x1, x2);
+      const gw = Math.max(2, Math.abs(x2 - x1));
+
+      const rect = document.createElementNS(ns, "rect");
+      rect.setAttribute("x", gx);
+      rect.setAttribute("y", y);
+      rect.setAttribute("width", gw);
+      rect.setAttribute("height", h);
+      rect.setAttribute("rx", 3);
+      rect.setAttribute("class", "ghost-bar");
+      svg.appendChild(rect);
+
+      const simX = Number(barRect.getAttribute("x"));
+      if (Math.abs(simX - (gx + gw)) > 1) {
+        const line = document.createElementNS(ns, "line");
+        const cy = y + h / 2;
+        line.setAttribute("x1", gx + gw);
+        line.setAttribute("x2", simX);
+        line.setAttribute("y1", cy);
+        line.setAttribute("y2", cy);
+        line.setAttribute("class", "ghost-connector");
+        svg.appendChild(line);
+      }
+    }
+  } catch (err) {
+    console.warn("ghost overlay skipped:", err);
+  }
+}
+
 // --- controls --------------------------------------------------------------
 
 function wireControls() {
@@ -471,20 +738,26 @@ function wireControls() {
   const n = decisionCount();
   if (n) decBtn.innerHTML = `Decisions <span class="count">${n}</span>`;
   decBtn.addEventListener("click", showDecisions);
+  // The slippage simulator (RC1-190).
+  document.querySelector("#simulate-btn").addEventListener("click", toggleSimMode);
+  document.querySelector("#sim-reset").addEventListener("click", exitSimMode);
   // Own the click handling via delegation rather than frappe's on_click (which
   // is unreliable across versions). #gantt persists across re-renders.
   document.querySelector("#gantt").addEventListener("click", (e) => {
     const wrapper = e.target.closest(".bar-wrapper");
-    if (wrapper) showDetail(wrapper.getAttribute("data-id"));
+    // In simulate mode the scenario panel owns the rail; don't hijack it.
+    if (wrapper && !simActive) showDetail(wrapper.getAttribute("data-id"));
   });
   // Keep the left task column in vertical lockstep with the chart.
   wrap.addEventListener("scroll", () => {
     document.querySelector("#task-column-inner").style.transform =
       `translateY(${-wrap.scrollTop}px)`;
   });
-  // Escape closes the detail panel.
+  // Escape exits simulate mode, else closes the detail panel.
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") clearDetail();
+    if (e.key !== "Escape") return;
+    if (simActive) exitSimMode();
+    else clearDetail();
   });
 }
 
