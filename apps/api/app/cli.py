@@ -23,12 +23,16 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 
 from planner_core import (
+    AddDependency,
     BreakdownReport,
     CommitRejected,
     Constraint,
     DecisionRecord,
+    DelayTask,
     DependencyReport,
     Plan,
+    RemoveDependency,
+    Scenario,
     Snapshot,
     TeamMember,
     WorkBreakdown,
@@ -39,6 +43,7 @@ from planner_core import (
     diff_plans,
     record_proposal,
     schedule_plan,
+    simulate,
 )
 
 
@@ -221,6 +226,43 @@ def cmd_schedule(args: argparse.Namespace) -> int:
     )
     print(schedule.render())
     return 0 if schedule.meets_all_deadlines else 1
+
+
+def _build_scenario(args: argparse.Namespace) -> Scenario:
+    """Assemble a Scenario from repeatable --slip / --add-dep / --remove-dep flags."""
+    changes: list = []
+    for spec in args.slip or []:
+        task_id, _, days = spec.partition(":")
+        changes.append(DelayTask(task_id=task_id, days=float(days)))
+    for spec in args.add_dep or []:
+        pred, _, succ = spec.partition(":")
+        changes.append(AddDependency(predecessor_id=pred, successor_id=succ))
+    for spec in args.remove_dep or []:
+        pred, _, succ = spec.partition(":")
+        changes.append(RemoveDependency(predecessor_id=pred, successor_id=succ))
+    return Scenario(name=args.name, changes=changes)
+
+
+def cmd_simulate(args: argparse.Namespace) -> int:
+    """What-if: apply a scenario, re-run CPM, and print the schedule delta (no LLM)."""
+    plan_path = Path(args.plan)
+    if not plan_path.is_file():
+        print(f"error: {plan_path} not found", file=sys.stderr)
+        return 2
+
+    plan = Plan.model_validate_json(plan_path.read_text())
+    blackouts = tuple(_parse_blackout(b) for b in (args.blackout or []))
+    result = simulate(
+        plan,
+        _build_scenario(args),
+        start_date=date.fromisoformat(args.start_date),
+        blackouts=blackouts,
+    )
+    for warning in result.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
+    print(result.delta.render())
+    # Non-zero exit when the what-if pushes the launch out — useful in scripts.
+    return 1 if result.delta.finish_shift_days > 0 else 0
 
 
 def cmd_breakdown(args: argparse.Namespace) -> int:
@@ -438,6 +480,33 @@ def main(argv: list[str] | None = None) -> int:
         help="Freeze/blackout window as START:END (YYYY-MM-DD:YYYY-MM-DD). Repeatable.",
     )
     schedule.set_defaults(func=cmd_schedule)
+
+    simulate_cmd = sub.add_parser(
+        "simulate",
+        help="What-if: apply a scenario (slips, dep edits) and print the schedule delta.",
+    )
+    simulate_cmd.add_argument("plan", help="Path to a plan.json.")
+    simulate_cmd.add_argument(
+        "--start-date", required=True, help="Project start date (YYYY-MM-DD)."
+    )
+    simulate_cmd.add_argument("--name", help="Optional scenario name.")
+    simulate_cmd.add_argument(
+        "--slip", action="append", metavar="TASK_ID:DAYS",
+        help="Slip a task by N working days. Repeatable.",
+    )
+    simulate_cmd.add_argument(
+        "--add-dep", action="append", metavar="PRED:SUCC",
+        help="Add a hypothetical dependency edge. Repeatable.",
+    )
+    simulate_cmd.add_argument(
+        "--remove-dep", action="append", metavar="PRED:SUCC",
+        help="Remove an existing dependency edge. Repeatable.",
+    )
+    simulate_cmd.add_argument(
+        "--blackout", action="append", metavar="START:END",
+        help="Freeze/blackout window as START:END (YYYY-MM-DD:YYYY-MM-DD). Repeatable.",
+    )
+    simulate_cmd.set_defaults(func=cmd_simulate)
 
     # --- plan-of-record store (RC1-189) ---
     propose = sub.add_parser("propose", help="Record an agent proposal in the store.")

@@ -127,6 +127,11 @@ body {
   background: var(--panel);
   border-color: var(--sep);
 }
+.toolbtn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
 .toolbtn .count {
   font-size: 0.72rem;
   font-weight: 600;
@@ -546,4 +551,173 @@ blockquote {
   font-size: 0.82rem;
   color: var(--muted);
   line-height: 1.5;
+}
+
+/* --- slippage simulator (RC1-190) --- */
+
+/* full-width headline banner: colour by outcome (amber slip / red miss / green none) */
+#sim-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.55rem 1.5rem;
+  font-size: 0.85rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--info-bg);
+  color: var(--text);
+}
+/* the [hidden] attribute must win over the display:flex above */
+#sim-banner[hidden] {
+  display: none;
+}
+#sim-banner.slip {
+  background: var(--caution-bg);
+  border-bottom-color: color-mix(in srgb, var(--caution) 40%, var(--border));
+}
+#sim-banner.miss {
+  background: color-mix(in srgb, var(--crit) 10%, var(--bg));
+  border-bottom-color: color-mix(in srgb, var(--crit) 40%, var(--border));
+}
+#sim-banner.ok {
+  background: var(--success-bg);
+  border-bottom-color: color-mix(in srgb, var(--success) 40%, var(--border));
+}
+#sim-banner-text {
+  min-width: 0;
+}
+.sim-reset {
+  flex-shrink: 0;
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0.25rem 0.7rem;
+  border: 1px solid var(--sep);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+.sim-reset:hover {
+  background: var(--panel);
+}
+
+/* ghost of the baseline position behind a moved bar, + a connector to the shift */
+.gantt .ghost-bar {
+  fill: color-mix(in srgb, var(--muted) 12%, transparent);
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+.gantt .ghost-connector {
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
+  opacity: 0.7;
+}
+
+/* scenario builder + impact, in the right rail */
+.sim-form {
+  margin: 0.85rem 0;
+}
+.sim-label {
+  display: block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+.sim-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+  flex-wrap: wrap;
+}
+.sim-row select,
+.sim-row input {
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  min-width: 0;
+}
+.sim-row select {
+  flex: 1;
+  max-width: 100%;
+}
+.sim-row input[type="number"] {
+  width: 3.5rem;
+}
+.sim-changes {
+  list-style: none;
+  margin: 0.25rem 0;
+  padding: 0;
+}
+.sim-changes li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.83rem;
+  padding: 0.3rem 0.5rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 0.35rem;
+}
+.sim-x {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.sim-x:hover {
+  color: var(--crit);
+}
+.sim-notes {
+  list-style: none;
+  margin: 0.25rem 0;
+  padding: 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.sim-notes li {
+  padding: 0.2rem 0;
+}
+.sim-notes li::before {
+  content: "→ ";
+  color: var(--muted);
+}
+.sim-moved {
+  list-style: none;
+  margin: 0.25rem 0;
+  padding: 0;
+  font-size: 0.83rem;
+}
+.sim-moved li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+}
+.sim-moved-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sim-shift {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--caution);
 }

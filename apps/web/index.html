@@ -29,6 +29,14 @@
           >
             Decisions
           </button>
+          <button
+            type="button"
+            class="toolbtn"
+            id="simulate-btn"
+            title="What-if: slip a task or edit dependencies and see the impact"
+          >
+            Simulate
+          </button>
           <select id="view-mode" aria-label="View mode">
             <option value="Day">Day</option>
             <option value="Week" selected>Week</option>
@@ -38,6 +46,11 @@
       </header>
 
       <div id="legend" class="legend"></div>
+
+      <div id="sim-banner" hidden>
+        <span id="sim-banner-text"></span>
+        <button type="button" id="sim-reset" class="sim-reset">Reset</button>
+      </div>
 
       <div class="layout">
         <div id="task-column">

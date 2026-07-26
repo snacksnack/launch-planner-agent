@@ -55,6 +55,19 @@ in the task column — the "honest gaps" cue. For a committed snapshot the recor
 the one persisted at commit time; for a raw plan file (the golden) the recomputable
 half is rebuilt server-side from plan + PRD.
 
+## Simulate — what-if analysis (RC1-190)
+
+The **Simulate** toolbar button enters what-if mode. Compose a scenario in the
+right rail — slip a task by N working days, or add/remove a dependency edge — and
+each change POSTs to `/api/simulate`, which re-runs CPM on a copy of the plan and
+returns the baseline + simulated schedules and a structured `ScheduleDelta`. The
+timeline swaps to the simulated schedule and draws each moved task's **baseline
+position as a faint dashed "ghost"** behind it, with a connector showing the
+shift. A full-width banner states the launch impact in plain language (amber for a
+slip, red when a deadline is breached, green when the change is absorbed by
+float), and the panel lists critical-path joiners/leavers, breached deadlines, and
+the tasks that moved. **Reset** (or Escape) exits back to the baseline.
+
 ## Notes
 
 - Library choice (frappe-gantt vs vis-timeline) is recorded in

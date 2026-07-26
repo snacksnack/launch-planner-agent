@@ -12,6 +12,51 @@ to).
 
 ---
 
+## ADR-0015 — Slippage simulator: apply-copy-reschedule-diff, slip modeled as added duration
+
+**Date:** 2026-07-26 · **Ticket:** RC1-190 (P2.1) · **Status:** Accepted
+
+**Context.** Phase 2's headline is the what-if: *"if data migration slips 5 days,
+what happens to the launch?"* The deterministic CPM engine already computes the
+answer for any plan; the question was how to pose a hypothetical and present the
+difference without a second scheduling implementation.
+
+**Explanation.** *Reuse the engine, diff the outputs.* A `Scenario` (a list of
+typed changes — `delay_task`, `set_estimate`, `add_dependency`,
+`remove_dependency`) is applied to a **deep copy** of the plan, and the same
+`schedule_plan` runs again; `diff_schedules` compares the two `Schedule`s into a
+structured `ScheduleDelta`. No parallel math — the simulator's correctness is the
+scheduler's correctness. *Slip = added duration.* "Task slips N days" is modeled
+as *+N working days on that task's `likely` estimate* (which the CPM uses as
+duration). This gives the two acceptance criteria for free from textbook float
+behaviour: a critical task's slip moves the finish by exactly N; a slip within a
+task's total float is fully absorbed with zero launch impact (the finish shift is
+just `simulated.project_duration − baseline.project_duration`). The three-point
+ordering invariant is preserved when bumping. *Never raise on bad input.* Unknown
+ids, self-loops, duplicate or **cycle-creating** edges, and invalid estimates are
+collected as `warnings` and skipped, so a recompute always yields a schedule —
+important for an interactive UI. *Ghost-overlay UI.* Rather than two stacked
+Gantts, the simulated schedule renders in place and each moved task's baseline
+position is drawn as a faint dashed "ghost" behind it with a connector — one
+aligned axis, movement legible at a glance — reusing the SVG date→x calibration
+already built for the deadline/freeze overlays. A plain-language banner states the
+launch impact; the panel lists critical-path joiners/leavers, breached deadlines,
+and moved tasks.
+
+*Deferred (optional in the spec):* Monte Carlo over the three-point estimates
+(confidence band on the launch date) and saved named scenarios — filed as their
+own tickets rather than dropped.
+
+**Consequences.** The simulator is a thin, fully-deterministic layer over the CPM
+engine (pure `planner_core`, credential-free, testable against the golden), served
+at `POST /api/simulate` and driven by a `plan simulate` CLI verb. The `/api/plan`
+CORS policy gained `POST` for the endpoint. Because a slip is added duration, a
+"slip" and an "estimate grows" are the same underlying operation — deliberately, a
+delayed *start* is out of scope (it would need a start-constraint concept the model
+doesn't yet have).
+
+---
+
 ## ADR-0014 — Decision record: a durable build-time audit kept beside the plan, not inside it
 
 **Date:** 2026-07-25 · **Ticket:** RC1-197 · **Status:** Accepted

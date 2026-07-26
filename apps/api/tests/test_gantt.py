@@ -99,6 +99,34 @@ def test_api_plan_rejects_missing_plan_and_bad_date():
     assert client.get("/api/plan", params={"start": "not-a-date"}).status_code == 400
 
 
+def test_api_simulate_returns_baseline_simulated_and_delta():
+    """RC1-190: POST a scenario → baseline + simulated payloads + schedule delta."""
+    client = TestClient(create_app())
+    resp = client.post(
+        "/api/simulate",
+        json={"changes": [{"kind": "delay_task", "task_id": "task-legal-review", "days": 30}]},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert set(body) == {"baseline", "simulated", "delta", "warnings"}
+    assert len(body["simulated"]["tasks"]) == 23
+    delta = body["delta"]
+    # Legal review has 6 working days of float; a 30-day slip overflows by 24.
+    assert delta["finish_shift_days"] == 24
+    assert any(n["id"] == "task-legal-review" for n in delta["critical_joined"])
+
+
+def test_api_simulate_absorbed_slip_reports_zero_impact():
+    client = TestClient(create_app())
+    resp = client.post(
+        "/api/simulate",
+        json={"changes": [{"kind": "delay_task", "task_id": "task-inventory", "days": 1}]},
+    )
+    body = resp.json()
+    assert body["delta"]["finish_shift_days"] == 0
+    assert "absorbed by available float" in body["delta"]["headline"]
+
+
 def test_default_plan_resolves_regardless_of_cwd(tmp_path, monkeypatch):
     # uvicorn is often launched from apps/api, not the repo root — the default
     # relative plan_path must still resolve (via the repo-root fallback).

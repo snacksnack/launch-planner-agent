@@ -7,7 +7,15 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from planner_core import DecisionRecord, Plan, Snapshot, build_decision_record, schedule_plan
+from planner_core import (
+    DecisionRecord,
+    Plan,
+    Scenario,
+    Snapshot,
+    build_decision_record,
+    schedule_plan,
+    simulate,
+)
 
 from app import __version__
 from app.config import get_settings
@@ -70,7 +78,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],  # local demo tool; tighten before any real deployment
-        allow_methods=["GET"],
+        allow_methods=["GET", "POST"],  # POST for /api/simulate (RC1-190)
         allow_headers=["*"],
     )
 
@@ -82,6 +90,26 @@ def create_app() -> FastAPI:
             "version": __version__,
             "environment": settings.environment,
         }
+
+    def _load_request_plan(
+        plan: str | None, snapshot: str | None
+    ) -> tuple[Plan, Path | None, DecisionRecord | None]:
+        """Resolve the plan a request targets: a committed snapshot, or a file
+        (defaulting to the flagship golden — no credentials needed)."""
+        if snapshot is not None:
+            snap = _load_snapshot(settings.sqlite_path, snapshot)
+            return snap.plan, None, snap.decision_record
+        requested = plan or settings.plan_path
+        plan_path = _resolve_plan(requested)
+        if plan_path is None:
+            raise HTTPException(status_code=404, detail=f"plan not found: {requested}")
+        return Plan.model_validate_json(plan_path.read_text()), plan_path, None
+
+    def _request_start_date(start: str | None) -> date:
+        try:
+            return date.fromisoformat(start or settings.project_start_date)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=f"invalid start date: {exc}") from exc
 
     @app.get("/api/plan", tags=["plan"])
     def api_plan(
@@ -97,28 +125,33 @@ def create_app() -> FastAPI:
         otherwise a plan file (defaulting to the flagship golden), so the UI
         renders end-to-end without any LLM credentials.
         """
-        plan_path: Path | None = None
-        persisted_record: DecisionRecord | None = None
-        if snapshot is not None:
-            snap = _load_snapshot(settings.sqlite_path, snapshot)
-            parsed = snap.plan
-            persisted_record = snap.decision_record
-        else:
-            requested = plan or settings.plan_path
-            plan_path = _resolve_plan(requested)
-            if plan_path is None:
-                raise HTTPException(status_code=404, detail=f"plan not found: {requested}")
-            parsed = Plan.model_validate_json(plan_path.read_text())
-
-        try:
-            start_date = date.fromisoformat(start or settings.project_start_date)
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=f"invalid start date: {exc}") from exc
-
+        parsed, plan_path, persisted_record = _load_request_plan(plan, snapshot)
+        start_date = _request_start_date(start)
         schedule = schedule_plan(parsed, start_date=start_date)
         payload = build_gantt_payload(parsed, schedule)
         payload["decisions"] = _decisions_for(parsed, plan_path, persisted_record).model_dump()
         return payload
+
+    @app.post("/api/simulate", tags=["plan"])
+    def api_simulate(
+        scenario: Scenario,
+        start: str | None = Query(default=None, description="Project start (YYYY-MM-DD)."),
+        plan: str | None = Query(default=None, description="Path to a plan.json to simulate."),
+        snapshot: str | None = Query(
+            default=None, description="Simulate over a committed snapshot (version or hash)."
+        ),
+    ) -> dict[str, object]:
+        """Apply a scenario, re-run CPM, and return baseline + simulated Gantt
+        payloads with the structured schedule delta — the what-if for the UI."""
+        parsed, _, _ = _load_request_plan(plan, snapshot)
+        start_date = _request_start_date(start)
+        result = simulate(parsed, scenario, start_date=start_date)
+        return {
+            "baseline": build_gantt_payload(parsed, result.baseline),
+            "simulated": build_gantt_payload(result.simulated_plan, result.simulated),
+            "delta": result.delta.model_dump(mode="json"),
+            "warnings": result.warnings,
+        }
 
     @app.get("/api/history", tags=["plan"])
     def api_history() -> list[dict[str, object]]:
