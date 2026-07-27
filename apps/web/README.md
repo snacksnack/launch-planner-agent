@@ -55,6 +55,17 @@ in the task column — the "honest gaps" cue. For a committed snapshot the recor
 the one persisted at commit time; for a raw plan file (the golden) the recomputable
 half is rebuilt server-side from plan + PRD.
 
+## Generate Jira (RC1-193)
+
+The **Jira** toolbar button opens a **mock preview** (`GET /api/jira`) of exactly
+what real mode would create: epics, stories (with scheduled due dates and labels),
+and dependency → "blocks" links — every description carrying the provenance audit.
+Each issue has a checkbox (partial approval); the panel surfaces the equivalent
+gated CLI command for the selected subset. **The web UI never writes to Jira** — a
+real run is an explicit `plan jira <plan> --start-date … --real --confirm` with
+configured credentials, which creates the issues and writes their keys back onto
+the plan so re-runs update rather than duplicate.
+
 ## Baseline / plan-vs-actual (RC1-192)
 
 The **Baseline** toolbar button compares the current plan against the committed

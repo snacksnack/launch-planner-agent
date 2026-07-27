@@ -12,6 +12,45 @@ to).
 
 ---
 
+## ADR-0018 — Jira generation: one generation plan drives both mock and real, behind a gate
+
+**Date:** 2026-07-27 · **Ticket:** RC1-193 (P3.1) · **Status:** Accepted
+
+**Context.** Turning a committed plan into Jira issues is the first feature that
+can cause *external side effects*. The acceptance bar is strict: the mock preview
+must match what real mode creates 1:1, re-runs must never duplicate, and no write
+may happen without explicit approval. The risk is a mock and a real path drifting,
+or an accidental write.
+
+**Explanation.** *One object, two executions.* `build_generation_plan(plan,
+schedule)` produces a single deterministic `GenerationPlan` — a typed list of
+issue and link operations. Rendering it *is* the mock preview; running
+`execute_generation` against a `JiraTarget` *is* real mode. Because both go
+through the same object and the same executor, mock-matches-real holds **by
+construction**, not by keeping two code paths in sync. *Ports & adapters, again.*
+`JiraTarget` is a Protocol in `planner_core` with a credential-free
+`MockJiraTarget` reference implementation; the `RealJiraTarget` httpx adapter
+lives in `app` (which owns I/O) — the same split as the SQLite store behind
+`PlanRepository`. `planner_core` does no network I/O. *Idempotency via the plan.*
+Created keys are written back onto each entity (`jira_key` on `Task`/`Epic`); a
+re-run turns those into updates, so re-running produces **zero duplicate creates**.
+(This is the model field RC1-200 was going to add, so that ticket shrinks to the
+UI link.) *Safety is layered.* Mock is the default everywhere. Real mode needs
+configured credentials **and** an explicit `--confirm`; the web UI is deliberately
+**preview-and-select only** — it never writes to Jira, instead surfacing the gated
+CLI command for the approved subset (partial approval via `--only`). *The audit
+travels.* Every generated description carries the provenance block (reasoning +
+verbatim quote + confidence), so the "why" follows the work into Jira.
+
+**Consequences.** A demo runs credential-free (mock) and shows exactly what would
+be created; a real run is an explicit, gated CLI action against a scratch project.
+The plan model now carries `jira_key`. `RealJiraTarget` converts descriptions to
+ADF (required by the v3 API) — the one place the real path adds shape the mock
+doesn't, verified against an httpx mock transport. Real writes are never performed
+by the tooling automatically, only by a human running `plan jira --real --confirm`.
+
+---
+
 ## ADR-0017 — Baselines & plan-vs-actual: a baseline snapshot kind, variance by composing existing diffs
 
 **Date:** 2026-07-27 · **Ticket:** RC1-192 (P2.3) · **Status:** Accepted

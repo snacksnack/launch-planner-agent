@@ -14,6 +14,7 @@ from planner_core import (
     Scenario,
     Snapshot,
     build_decision_record,
+    build_generation_plan,
     compare_versions,
     schedule_plan,
     simulate,
@@ -173,6 +174,29 @@ def create_app() -> FastAPI:
             ]
         finally:
             store.close()
+
+    @app.get("/api/jira", tags=["plan"])
+    def api_jira(
+        start: str | None = Query(default=None, description="Project start (YYYY-MM-DD)."),
+        plan: str | None = Query(default=None, description="Path to a plan.json."),
+        snapshot: str | None = Query(default=None, description="A committed snapshot ref."),
+        project: str | None = Query(default=None, description="Jira project key override."),
+    ) -> dict[str, object]:
+        """The Jira generation plan — the mock preview of exactly what real mode
+        would create (RC1-193). Read-only: this endpoint never writes to Jira;
+        real writes go through the gated `plan jira --real --confirm` CLI."""
+        parsed, _, _ = _load_request_plan(plan, snapshot)
+        start_date = _request_start_date(start)
+        schedule = schedule_plan(parsed, start_date=start_date)
+        project_key = project or settings.jira_project_key
+        gen = build_generation_plan(parsed, schedule, project_key=project_key)
+        return {
+            "generation": gen.model_dump(mode="json"),
+            "creates": gen.creates,
+            "updates": gen.updates,
+            "links": len(gen.links),
+            "has_credentials": settings.has_jira_credentials,
+        }
 
     @app.get("/api/baseline", tags=["plan"])
     def api_baseline(

@@ -617,6 +617,111 @@ async function copyRaidMarkdown() {
   }
 }
 
+// --- Jira generation preview (RC1-193) -------------------------------------
+
+let jiraGen = null; // the generation plan from /api/jira
+let jiraSelected = null; // Set of selected local_ids (partial approval)
+
+async function showJira() {
+  setPanelCollapsed(false);
+  const el = document.querySelector("#detail");
+  for (const sel of document.querySelectorAll(".selected")) sel.classList.remove("selected");
+  el.innerHTML =
+    `<button class="detail-close" title="Close">×</button><h2>Generate Jira</h2>` +
+    `<p class="hint">Loading preview…</p>`;
+  el.querySelector(".detail-close").addEventListener("click", clearDetail);
+
+  let data;
+  try {
+    const resp = await fetch(`${API_BASE}/api/jira`);
+    if (!resp.ok) throw new Error(`API ${resp.status}`);
+    data = await resp.json();
+  } catch (err) {
+    el.innerHTML =
+      `<button class="detail-close" title="Close">×</button><h2>Generate Jira</h2>` +
+      `<p class="hint">Couldn't load the preview: ${escapeHtml(err.message)}</p>`;
+    el.querySelector(".detail-close").addEventListener("click", clearDetail);
+    return;
+  }
+
+  jiraGen = data.generation;
+  jiraSelected = new Set(jiraGen.issues.map((op) => op.local_id)); // default: all approved
+  renderJiraPanel(data);
+}
+
+function renderJiraPanel(data) {
+  const el = document.querySelector("#detail");
+  const gen = jiraGen;
+  const epics = gen.issues.filter((op) => op.issue_type === "Epic");
+  const stories = gen.issues.filter((op) => op.issue_type === "Story");
+
+  const issueRow = (op) =>
+    `<li class="jira-op">
+      <label>
+        <input type="checkbox" data-op="${escapeHtml(op.local_id)}" ${jiraSelected.has(op.local_id) ? "checked" : ""} />
+        <span class="jira-type jira-type-${op.issue_type.toLowerCase()}">${op.action === "update" ? "~" : "+"} ${op.issue_type}</span>
+        <span class="jira-summary">${escapeHtml(op.summary)}</span>
+      </label>
+      ${op.due_date ? `<span class="jira-due">due ${op.due_date}</span>` : ""}
+    </li>`;
+
+  el.innerHTML =
+    `<button class="detail-close" aria-label="Close" title="Close">×</button>` +
+    `<h2>Generate Jira</h2>` +
+    `<p class="jira-note">🔒 Mock preview — no writes. ${data.has_credentials ? "" : "Real mode needs Jira credentials and "}runs only via the gated CLI below.</p>` +
+    `<p class="reasoning">${data.creates} create · ${data.updates} update · ${data.links} link(s) into <strong>${escapeHtml(gen.project_key)}</strong>. Every description carries the provenance audit.</p>` +
+    (epics.length
+      ? `<h3>Epics (${epics.length})</h3><ul class="jira-list">${epics.map(issueRow).join("")}</ul>`
+      : "") +
+    (stories.length
+      ? `<h3>Stories (${stories.length})</h3><ul class="jira-list">${stories.map(issueRow).join("")}</ul>`
+      : "") +
+    (gen.links.length
+      ? `<h3>Links (${gen.links.length})</h3><ul class="jira-links">${gen.links
+          .map(
+            (l) =>
+              `<li>${escapeHtml(nameFor(l.outward_local_id))} <span class="jira-blocks">blocks</span> ${escapeHtml(nameFor(l.inward_local_id))}</li>`,
+          )
+          .join("")}</ul>`
+      : "") +
+    `<h3>Apply the selection</h3><pre class="jira-cmd" id="jira-cmd"></pre>` +
+    `<button id="jira-copy" class="toolbtn">Copy command</button>`;
+
+  el.querySelector(".detail-close").addEventListener("click", clearDetail);
+  for (const cb of el.querySelectorAll("[data-op]")) {
+    cb.addEventListener("change", () => {
+      if (cb.checked) jiraSelected.add(cb.dataset.op);
+      else jiraSelected.delete(cb.dataset.op);
+      updateJiraCommand();
+    });
+  }
+  el.querySelector("#jira-copy").addEventListener("click", copyJiraCommand);
+  updateJiraCommand();
+}
+
+function jiraCommand() {
+  const partial = jiraSelected.size < jiraGen.issues.length;
+  const only = partial ? ` --only ${[...jiraSelected].join(",")}` : "";
+  return `plan jira <plan.json> --start-date ${payload.project.start_date} --project ${jiraGen.project_key}${only} --real --confirm`;
+}
+
+function updateJiraCommand() {
+  const el = document.querySelector("#jira-cmd");
+  if (el) el.textContent = jiraSelected.size ? jiraCommand() : "(nothing selected)";
+}
+
+async function copyJiraCommand() {
+  const btn = document.querySelector("#jira-copy");
+  try {
+    await navigator.clipboard.writeText(jiraCommand());
+    const prev = btn.textContent;
+    btn.textContent = "Copied ✓";
+    setTimeout(() => (btn.textContent = prev), 1500);
+  } catch {
+    btn.textContent = "Copy failed";
+  }
+}
+
 // --- slippage simulator (RC1-190) ------------------------------------------
 
 function toggleSimMode() {
@@ -1040,6 +1145,8 @@ function wireControls() {
   document.querySelector("#simulate-btn").addEventListener("click", toggleSimMode);
   // The baseline / plan-vs-actual view (RC1-192).
   document.querySelector("#baseline-btn").addEventListener("click", toggleBaselineMode);
+  // The Jira generation preview (RC1-193).
+  document.querySelector("#jira-btn").addEventListener("click", showJira);
   // The banner's Reset exits whichever overlay mode is active.
   document.querySelector("#sim-reset").addEventListener("click", exitOverlayMode);
   // Own the click handling via delegation rather than frappe's on_click (which

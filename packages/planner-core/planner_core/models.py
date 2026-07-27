@@ -93,6 +93,9 @@ class Epic(ProvenancedModel):
     id: str = Field(..., min_length=1)
     name: str = Field(..., min_length=1)
     description: str | None = None
+    jira_key: str | None = Field(
+        None, description="Key of the Jira issue this maps to, once generated (RC1-193)."
+    )
 
 
 class Task(ProvenancedModel):
@@ -104,6 +107,9 @@ class Task(ProvenancedModel):
     epic_id: str | None = Field(None, description="Id of the owning Epic, if any.")
     owner_id: str | None = Field(None, description="Id of the TeamMember who owns this task.")
     estimate: ThreePointEstimate
+    jira_key: str | None = Field(
+        None, description="Key of the Jira issue this maps to, once generated (RC1-193)."
+    )
 
 
 class Dependency(ProvenancedModel):
