@@ -1172,5 +1172,134 @@
         "timestamp": "2026-07-20T09:00:00Z"
       }
     }
+  ],
+  "raid": [
+    {
+      "id": "raid-single-owner",
+      "type": "risk",
+      "title": "Critical path concentrated on one engineer",
+      "description": "Sven Lindqvist owns four of the eleven critical-path tasks (tooling, pilot, bulk, reconciliation). Illness, churn, or competing priorities on that one person stalls the whole migration.",
+      "probability": 3,
+      "impact": 4,
+      "mitigation": "Cross-train a second migration engineer on the tooling and wave runbook; pair on the pilot and bulk waves so the chain isn't single-threaded.",
+      "suggested_owner_id": "tm-tpm",
+      "decided_on": null,
+      "rationale": null,
+      "provenance": {
+        "reasoning": "Key-person risk surfaced by the schedule: a single owner sits on most of the zero-float chain, so their availability gates the launch.",
+        "confidence": "high",
+        "evidence": {
+          "kind": "schedule",
+          "fact_code": "single-owner-critical-path",
+          "statement": "The critical path runs through a single owner: Sven Lindqvist owns 4 of 11 critical-path tasks.",
+          "entity_ids": [
+            "tm-data",
+            "task-migration-tooling",
+            "task-pilot-migration",
+            "task-bulk-migration",
+            "task-data-reconciliation"
+          ]
+        },
+        "agent": "raid",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "raid-plugin-incompat",
+      "type": "risk",
+      "title": "Critical plugins have no Cloud equivalent",
+      "description": "At least three critical marketplace plugins can't be re-pointed to Cloud; each needs a replacement, a scripted rebuild, or a decision to live without it before users migrate.",
+      "probability": 4,
+      "impact": 4,
+      "mitigation": "Audit every plugin for Cloud compatibility early; gate user migration on the plugin sign-off; budget rebuild time for the three known gaps.",
+      "suggested_owner_id": "tm-qa",
+      "decided_on": null,
+      "rationale": null,
+      "provenance": {
+        "reasoning": "The PRD calls plugins the scary part and names three with no direct Cloud path — a high-likelihood, high-impact risk to the wave plan.",
+        "confidence": "high",
+        "evidence": {
+          "kind": "prd",
+          "source_quote": "at least three of our critical plugins have no direct Cloud equivalent",
+          "source_section": "Scope & known problems"
+        },
+        "agent": "raid",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "raid-contractor-budget",
+      "type": "issue",
+      "title": "Contractor budget not yet approved",
+      "description": "The bulk migration depends on two contractors, but Finance approval for contractor spend is not secured yet, blocking onboarding.",
+      "probability": null,
+      "impact": null,
+      "mitigation": null,
+      "suggested_owner_id": "tm-tpm",
+      "decided_on": null,
+      "rationale": null,
+      "provenance": {
+        "reasoning": "An open, live blocker (not a hypothetical): onboarding cannot start until the spend is approved, and it gates the bulk waves.",
+        "confidence": "high",
+        "evidence": {
+          "kind": "prd",
+          "source_quote": "contractor spend has to be approved by Finance before anyone gets\nonboarded",
+          "source_section": "Scope & known problems"
+        },
+        "agent": "raid",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "raid-recon-formal",
+      "type": "assumption",
+      "title": "Formal per-owner data reconciliation assumed",
+      "description": "The plan assumes a formal reconciliation step signed off by each project owner (not a spot check). If a spot check is deemed enough, the reconciliation task shrinks.",
+      "probability": null,
+      "impact": null,
+      "mitigation": null,
+      "suggested_owner_id": null,
+      "decided_on": null,
+      "rationale": null,
+      "provenance": {
+        "reasoning": "The PRD leaves this open but says to assume formal for now — a planning assumption worth surfacing so it can be confirmed.",
+        "confidence": "medium",
+        "evidence": {
+          "kind": "prd",
+          "source_quote": "Assuming formal for now",
+          "source_section": "Open questions"
+        },
+        "agent": "raid",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    },
+    {
+      "id": "raid-lift-shift",
+      "type": "decision",
+      "title": "Lift-and-shift; defer workflow redesign",
+      "description": "Workflows are migrated as-is; redesigning them is explicitly out of scope and deferred to a later project.",
+      "probability": null,
+      "impact": null,
+      "mitigation": null,
+      "suggested_owner_id": null,
+      "decided_on": null,
+      "rationale": "Scope discipline against the hard license-expiry wall: workflow cleanup is a separate later project so it can't jeopardise the migration deadline.",
+      "provenance": {
+        "reasoning": "A recorded scope decision from the PRD, captured so the rationale survives into the plan of record.",
+        "confidence": "high",
+        "evidence": {
+          "kind": "prd",
+          "source_quote": "We lift-and-shift; workflow cleanup\nis a later project",
+          "source_section": "Explicitly out of scope (for now)"
+        },
+        "agent": "raid",
+        "model": "golden-baseline",
+        "timestamp": "2026-07-21T15:00:00Z"
+      }
+    }
   ]
 }

@@ -206,6 +206,54 @@ def cmd_dependencies(args: argparse.Namespace) -> int:
     return 0 if report.ok else 1
 
 
+def cmd_raid(args: argparse.Namespace) -> int:
+    """Generate a RAID log from the PRD + the computed schedule facts."""
+    from agents import RaidAgent
+    from planner_core import analyze_schedule_risks, build_raid_report
+
+    from app.config import get_settings
+
+    plan_path = Path(args.plan)
+    if not plan_path.is_file():
+        print(f"error: {plan_path} not found", file=sys.stderr)
+        return 2
+
+    plan = Plan.model_validate_json(plan_path.read_text())
+    prd_text = resolve_prd(plan, plan_path, args.prd)
+    if prd_text is None:
+        print(
+            "error: could not locate the PRD (pass --prd, or ensure source_document resolves)",
+            file=sys.stderr,
+        )
+        return 2
+
+    # Schedule facts are the agent's schedule-aware feed.
+    schedule = schedule_plan(plan, start_date=date.fromisoformat(args.start_date))
+    facts = analyze_schedule_risks(plan, schedule)
+
+    settings = get_settings()
+    model = args.model or settings.anthropic_model
+    client = None
+    if settings.anthropic_api_key:
+        import anthropic
+
+        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+
+    agent = RaidAgent(model=model, client=client)
+    items = agent.run(prd_text, facts, plan.team)
+
+    enriched = plan.model_copy(update={"raid": items})
+    report = build_raid_report(enriched, prd_text)
+
+    out_path = Path(args.out) if args.out else plan_path
+    out_path.write_text(enriched.model_dump_json(indent=2) + "\n")
+
+    print(f"wrote {out_path}")
+    print(f"({len(facts)} schedule fact(s) fed to the agent)")
+    print(report.render())
+    return 0 if report.ok else 1
+
+
 def _parse_blackout(spec: str) -> tuple[date, date]:
     start, _, end = spec.partition(":")
     return date.fromisoformat(start), date.fromisoformat(end)
@@ -465,6 +513,16 @@ def main(argv: list[str] | None = None) -> int:
     dependencies.add_argument("--out", help="Where to write the enriched plan (default: in place).")
     dependencies.add_argument("--model", help="Override the Anthropic model id.")
     dependencies.set_defaults(func=cmd_dependencies)
+
+    raid = sub.add_parser(
+        "raid", help="Generate a RAID log from the PRD + computed schedule facts."
+    )
+    raid.add_argument("plan", help="Path to a scheduled plan.json.")
+    raid.add_argument("--start-date", required=True, help="Project start date (YYYY-MM-DD).")
+    raid.add_argument("--prd", help="PRD path (default: the plan's source_document).")
+    raid.add_argument("--out", help="Where to write the enriched plan (default: in place).")
+    raid.add_argument("--model", help="Override the Anthropic model id.")
+    raid.set_defaults(func=cmd_raid)
 
     schedule = sub.add_parser(
         "schedule", help="Compute the CPM schedule for a plan.json (deterministic, no LLM)."

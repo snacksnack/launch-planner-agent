@@ -12,6 +12,50 @@ to).
 
 ---
 
+## ADR-0016 — RAID agent: dual-source evidence (PRD quote or schedule fact), fed by a deterministic analyzer
+
+**Date:** 2026-07-27 · **Ticket:** RC1-191 (P2.2) · **Status:** Accepted
+
+**Context.** The RAID log (Risks / Assumptions / Issues / Decisions) is the second
+agent, and the spec's whole point is that it be *schedule-aware*, not a PRD
+summarizer — "at least one schedule-derived risk (e.g. the critical path runs
+through a single owner)." But provenance, the project's differentiator, was built
+around a **verbatim PRD quote**, and a schedule-derived risk has no PRD sentence
+behind it. So "every item traceable to a source quote **or a schedule fact**"
+forced a modeling decision.
+
+**Explanation.** *Dual-source evidence.* A RAID item's evidence is a discriminated
+union — `PrdEvidence{source_quote, source_section}` **or**
+`ScheduleEvidence{fact_code, statement, entity_ids}` — carried on a
+`RaidProvenance` alongside reasoning/confidence and the Python-stamped run facts.
+This keeps the audit honest: every item says exactly whether it came from the
+document or from the computed schedule, and the UI renders the two distinctly (a
+PRD blockquote vs. a ⛓ schedule fact). We rejected reusing bare `Provenance` with
+a flag, because stuffing a synthesized schedule statement into `source_quote`
+(which means "verbatim PRD text") is a lie the validators would then have to
+special-case. *A deterministic analyzer feeds the agent.*
+`analyze_schedule_risks(plan, schedule)` mines the CPM output for concrete signals
+— single-owner critical chains, zero/low float, missed deadlines, tight gates —
+and the agent is handed these facts to articulate as risks, citing the `fact_code`
+it used. This is the line between "LLM invents risks" and "LLM explains the
+machine's findings": the schedule facts are computed, not hallucinated, and
+validation checks a schedule-sourced item actually references known nodes.
+*RAID lives on the plan.* Items are a `Plan.raid` list — committed, diffed, and
+served like tasks/deps — and RAID errors (unknown owner, duplicate id) join the
+commit gate. *Where things live.* The domain models sit in `raid.py` (imports only
+`provenance`) so `models.Plan` can hold them without an import cycle; the analyzer
+and validator sit in `raid_analysis.py` (which imports `Plan`, `Schedule`).
+
+**Consequences.** The RAID output is genuinely schedule-aware and every item is
+traceable to a quote or a computed fact. The golden carries a hand-authored
+5-item RAID log (one schedule-derived, four PRD-derived) so the credential-free
+demo and tests exercise it. A UI RAID view (filter by type, sort by severity,
+copy-as-Markdown) surfaces it. The dual-source evidence is a new shape distinct
+from `Provenance`; anything consuming RAID provenance reads `evidence.kind` rather
+than assuming a `source_quote`.
+
+---
+
 ## ADR-0015 — Slippage simulator: apply-copy-reschedule-diff, slip modeled as added duration
 
 **Date:** 2026-07-26 · **Ticket:** RC1-190 (P2.1) · **Status:** Accepted

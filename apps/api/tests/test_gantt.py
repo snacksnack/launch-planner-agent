@@ -64,6 +64,26 @@ def test_buried_legal_constraint_surfaces_as_a_dependency_with_quote():
     assert "Legal has to sign" in quote
 
 
+def test_payload_carries_the_raid_log_with_severity_and_evidence():
+    """RC1-191: the RAID log rides the payload, with derived severity + owner name."""
+    payload = _golden_payload()
+    raid = payload["raid"]
+    assert len(raid) == 5
+    by_id = {r["id"]: r for r in raid}
+
+    risk = by_id["raid-single-owner"]
+    assert risk["type"] == "risk"
+    assert risk["severity"] == 12  # probability 3 x impact 4
+    assert risk["suggested_owner_name"] == "Priya Nair"
+    assert risk["provenance"]["evidence"]["kind"] == "schedule"
+    assert risk["provenance"]["evidence"]["fact_code"] == "single-owner-critical-path"
+
+    # A PRD-sourced item carries its verbatim quote.
+    plugin = by_id["raid-plugin-incompat"]
+    assert plugin["provenance"]["evidence"]["kind"] == "prd"
+    assert "no direct Cloud equivalent" in plugin["provenance"]["evidence"]["source_quote"]
+
+
 def test_deadline_check_present_for_hard_date_constraint():
     payload = _golden_payload()
     checks = {c["task_id"]: c for c in payload["deadlines"]}

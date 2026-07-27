@@ -55,6 +55,17 @@ in the task column — the "honest gaps" cue. For a committed snapshot the recor
 the one persisted at commit time; for a raw plan file (the golden) the recomputable
 half is rebuilt server-side from plan + PRD.
 
+## RAID log (RC1-191)
+
+The **RAID** toolbar button opens the Risks / Assumptions / Issues / Decisions log
+from the payload's `raid` block. It's filterable by type and sorted by risk
+severity (probability × impact), and each item shows its **dual-source evidence** —
+a verbatim PRD quote (blockquote) or a ⛓ computed schedule fact (e.g. *"the
+critical path runs through a single owner"*), with a confidence badge. The
+schedule-derived risks come from a deterministic `analyze_schedule_risks` pass over
+the CPM output, not from the LLM guessing. **Copy as Markdown** exports the
+(filtered) log to the clipboard.
+
 ## Simulate — what-if analysis (RC1-190)
 
 The **Simulate** toolbar button enters what-if mode. Compose a scenario in the
