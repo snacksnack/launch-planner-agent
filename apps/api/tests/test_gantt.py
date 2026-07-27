@@ -147,6 +147,21 @@ def test_api_simulate_absorbed_slip_reports_zero_impact():
     assert "absorbed by available float" in body["delta"]["headline"]
 
 
+def test_api_jira_returns_the_mock_generation_plan():
+    """RC1-193: /api/jira serves the mock preview (read-only, no writes)."""
+    body = TestClient(create_app()).get("/api/jira").json()
+    assert body["creates"] == 29  # 6 epics + 23 stories
+    assert body["links"] == 28
+    assert body["has_credentials"] is False  # no creds in tests
+    gen = body["generation"]
+    assert gen["project_key"] == "PMA"
+    epics = [op for op in gen["issues"] if op["issue_type"] == "Epic"]
+    assert len(epics) == 6
+    story = next(op for op in gen["issues"] if op["local_id"] == "task-inventory")
+    assert story["due_date"]  # scheduled finish date
+    assert "Reasoning:" in story["description"]  # provenance travels in
+
+
 def test_api_baseline_reports_no_baseline_on_an_empty_store(tmp_path, monkeypatch):
     monkeypatch.setenv("LPA_DATABASE_URL", f"sqlite:///{tmp_path / 'empty.db'}")
     from app.config import get_settings

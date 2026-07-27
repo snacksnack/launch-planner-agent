@@ -836,3 +836,86 @@ blockquote {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
 }
+
+/* --- Jira generation preview (RC1-193) --- */
+
+.jira-note {
+  font-size: 0.82rem;
+  padding: 0.45rem 0.7rem;
+  margin: 0.4rem 0 0.6rem;
+  background: var(--info-bg);
+  border: 1px solid color-mix(in srgb, var(--info) 30%, var(--border));
+  border-radius: var(--radius-sm);
+  color: var(--text);
+}
+.jira-list {
+  list-style: none;
+  margin: 0.25rem 0;
+  padding: 0;
+}
+.jira-op {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.2rem 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+.jira-op label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  font-size: 0.83rem;
+  cursor: pointer;
+}
+.jira-op input {
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+.jira-type {
+  flex-shrink: 0;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 600;
+  padding: 0.05rem 0.35rem;
+  border-radius: var(--radius-sm);
+}
+.jira-type-epic { background: color-mix(in srgb, var(--accent) 14%, var(--bg)); color: var(--accent); }
+.jira-type-story { background: var(--panel); color: var(--muted); border: 1px solid var(--border); }
+.jira-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.jira-due {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.jira-links {
+  list-style: none;
+  margin: 0.25rem 0;
+  padding: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.jira-blocks {
+  color: var(--crit);
+  font-weight: 600;
+}
+.jira-cmd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.74rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+  padding: 0.55rem 0.7rem;
+  margin: 0.25rem 0 0.5rem;
+  background: var(--text);
+  color: #eef2f8;
+  border-radius: var(--radius-sm);
+}

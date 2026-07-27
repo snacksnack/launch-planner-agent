@@ -30,19 +30,23 @@ from planner_core import (
     DecisionRecord,
     DelayTask,
     DependencyReport,
+    MockJiraTarget,
     Plan,
     RemoveDependency,
     Scenario,
     Snapshot,
     TeamMember,
     WorkBreakdown,
+    apply_keys_to_plan,
     build_decision_record,
     build_dependency_report,
+    build_generation_plan,
     build_report,
     commit_baseline,
     commit_plan,
     compare_versions,
     diff_plans,
+    execute_generation,
     record_proposal,
     schedule_plan,
     simulate,
@@ -541,6 +545,69 @@ def cmd_variance(args: argparse.Namespace) -> int:
     return 0 if comparison.is_on_track else 1
 
 
+def cmd_jira(args: argparse.Namespace) -> int:
+    """Generate Jira issues from a plan — mock preview by default, real behind a gate."""
+    from app.config import get_settings
+
+    plan_path = Path(args.plan)
+    if not plan_path.is_file():
+        print(f"error: {plan_path} not found", file=sys.stderr)
+        return 2
+
+    plan = Plan.model_validate_json(plan_path.read_text())
+    schedule = schedule_plan(plan, start_date=date.fromisoformat(args.start_date))
+    settings = get_settings()
+    project = args.project or settings.jira_project_key
+    gen = build_generation_plan(plan, schedule, project_key=project)
+    only = {s.strip() for s in args.only.split(",")} if args.only else None
+
+    if not args.real:
+        # Mock: preview exactly what real mode would do — no credentials, no writes.
+        result = execute_generation(gen, MockJiraTarget(project_key=project), only=only)
+        print(gen.render())
+        print(
+            f"\n[mock] would create {len(result.created)}, update {len(result.updated)}, "
+            f"link {result.linked} — no writes. Re-run with --real --confirm to apply."
+        )
+        return 0
+
+    # Real mode: gated on credentials and an explicit --confirm.
+    if not settings.has_jira_credentials:
+        print(
+            "error: real mode needs LPA_JIRA_BASE_URL, LPA_JIRA_EMAIL, LPA_JIRA_API_TOKEN",
+            file=sys.stderr,
+        )
+        return 2
+    if not args.confirm:
+        print(
+            "refusing to write to Jira without --confirm (real mode creates issues).",
+            file=sys.stderr,
+        )
+        return 2
+
+    from app.jira_client import RealJiraTarget
+
+    target = RealJiraTarget(
+        base_url=settings.jira_base_url,
+        email=settings.jira_email,
+        api_token=settings.jira_api_token,
+    )
+    try:
+        result = execute_generation(gen, target, only=only)
+    finally:
+        target.close()
+
+    updated = apply_keys_to_plan(plan, result.key_by_local_id)
+    out_path = Path(args.out) if args.out else plan_path
+    out_path.write_text(updated.model_dump_json(indent=2) + "\n")
+    print(
+        f"[real] created {len(result.created)}, updated {len(result.updated)}, "
+        f"link {result.linked}"
+    )
+    print(f"wrote {out_path} with jira_key mappings (idempotent on re-run)")
+    return 0
+
+
 def content_hash_of(plan: Plan) -> str:
     from planner_core import content_hash
 
@@ -671,6 +738,25 @@ def main(argv: list[str] | None = None) -> int:
     )
     variance.add_argument("--start-date", required=True, help="Project start date (YYYY-MM-DD).")
     variance.set_defaults(func=cmd_variance)
+
+    # --- Jira ticket generation (RC1-193) ---
+    jira = sub.add_parser(
+        "jira", help="Generate Jira issues from a plan (mock preview by default)."
+    )
+    jira.add_argument("plan", help="Path to a scheduled plan.json.")
+    jira.add_argument("--start-date", required=True, help="Project start date (YYYY-MM-DD).")
+    jira.add_argument("--project", help="Jira project key (default: LPA_JIRA_PROJECT_KEY).")
+    jira.add_argument(
+        "--only", metavar="IDS", help="Comma-separated entity ids to include (partial approval)."
+    )
+    jira.add_argument(
+        "--real", action="store_true", help="Write to Jira (needs credentials + --confirm)."
+    )
+    jira.add_argument(
+        "--confirm", action="store_true", help="Required with --real to actually create issues."
+    )
+    jira.add_argument("--out", help="Where to write the plan with jira_key mappings (real mode).")
+    jira.set_defaults(func=cmd_jira)
 
     args = parser.parse_args(argv)
     return args.func(args)

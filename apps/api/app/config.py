@@ -35,9 +35,19 @@ class Settings(BaseSettings):
     plan_path: str = "fixtures/jira-cloud-migration/golden/expected-plan.json"
     project_start_date: str = "2026-08-03"  # a Monday
 
+    # Jira export (P3.1) — all optional; real mode is unreachable without them.
+    jira_base_url: str | None = None  # e.g. https://your-site.atlassian.net
+    jira_email: str | None = Field(default=None, repr=False)
+    jira_api_token: str | None = Field(default=None, repr=False)
+    jira_project_key: str = "PMA"  # the scratch project real mode writes to
+
     @property
     def has_llm_credentials(self) -> bool:
         return bool(self.anthropic_api_key)
+
+    @property
+    def has_jira_credentials(self) -> bool:
+        return bool(self.jira_base_url and self.jira_email and self.jira_api_token)
 
     @property
     def sqlite_path(self) -> str:

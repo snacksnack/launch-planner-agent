@@ -35,6 +35,17 @@ from planner_core.diff import (
     PlanDiff,
     diff_plans,
 )
+from planner_core.jira_export import (
+    ExecutionResult,
+    GenerationPlan,
+    IssueOp,
+    JiraTarget,
+    LinkOp,
+    MockJiraTarget,
+    apply_keys_to_plan,
+    build_generation_plan,
+    execute_generation,
+)
 from planner_core.models import (
     Constraint,
     ConstraintType,
@@ -221,5 +232,15 @@ __all__ = [
     # baselines & plan-vs-actual (RC1-192)
     "BaselineComparison",
     "compare_versions",
+    # Jira ticket generation (RC1-193)
+    "ExecutionResult",
+    "GenerationPlan",
+    "IssueOp",
+    "JiraTarget",
+    "LinkOp",
+    "MockJiraTarget",
+    "apply_keys_to_plan",
+    "build_generation_plan",
+    "execute_generation",
 ]
 
