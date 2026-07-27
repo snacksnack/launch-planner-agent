@@ -55,6 +55,18 @@ in the task column — the "honest gaps" cue. For a committed snapshot the recor
 the one persisted at commit time; for a raw plan file (the golden) the recomputable
 half is rebuilt server-side from plan + PRD.
 
+## Baseline / plan-vs-actual (RC1-192)
+
+The **Baseline** toolbar button compares the current plan against the committed
+baseline (`GET /api/baseline`). It renders the current bars over a **ghost of the
+baseline** (the same overlay as the simulator), a banner with the launch-date
+variance, and a panel listing the **tasks that drifted** (finish variance) and the
+**structural changes** (estimates/edits) since the baseline. If no baseline exists
+yet, it prompts you to set one with `plan baseline <plan> --by <you> --note "…"`.
+Passing explicit `?baseline=&current=` refs turns the same endpoint into the
+"what changed between any two versions" feed. **Reset** (or Escape) returns to the
+plain view.
+
 ## RAID log (RC1-191)
 
 The **RAID** toolbar button opens the Risks / Assumptions / Issues / Decisions log

@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 import pytest
 from app.store import SQLiteEventStore
 from planner_core import (
+    CommitRejected,
     Confidence,
     InMemoryPlanRepository,
     Plan,
@@ -21,6 +22,7 @@ from planner_core import (
     Task,
     TeamMember,
     ThreePointEstimate,
+    commit_baseline,
     commit_plan,
     record_proposal,
 )
@@ -88,6 +90,40 @@ def test_repository_contract_persists_the_decision_record(repo):
 def test_repository_contract_decision_record_is_optional(repo):
     committed = commit_plan(repo, _valid_plan(), approved_by="Reid", now=NOW)
     assert repo.get_by_version(committed.version).decision_record is None
+
+
+# --- baselines (RC1-192) ---------------------------------------------------
+
+
+def test_baseline_is_recorded_and_is_the_latest_of_record(repo):
+    commit_plan(repo, _valid_plan("v1"), approved_by="Reid", now=NOW)
+    base = commit_baseline(repo, _valid_plan("v2"), approved_by="Reid", note="initial", now=NOW)
+
+    assert base.kind is SnapshotKind.BASELINE
+    assert base.message == "initial"
+    assert repo.latest_baseline().version == base.version
+    assert repo.latest_of_record().version == base.version  # a baseline is a record
+    # A later ordinary commit becomes the newest record but not the baseline.
+    later = commit_plan(repo, _valid_plan("v3"), approved_by="Reid", now=NOW)
+    assert repo.latest_of_record().version == later.version
+    assert repo.latest_baseline().version == base.version
+
+
+def test_rebaseline_takes_the_latest_baseline(repo):
+    first = commit_baseline(repo, _valid_plan("a"), approved_by="R", note="first", now=NOW)
+    second = commit_baseline(repo, _valid_plan("b"), approved_by="R", note="re-baseline", now=NOW)
+    assert repo.latest_baseline().version == second.version
+    assert first.version != second.version
+
+
+def test_baseline_requires_a_note(repo):
+    with pytest.raises(CommitRejected, match="note"):
+        commit_baseline(repo, _valid_plan(), approved_by="Reid", note="  ", now=NOW)
+
+
+def test_baseline_still_gated_on_validation_and_approver(repo):
+    with pytest.raises(CommitRejected, match="approver"):
+        commit_baseline(repo, _valid_plan(), approved_by="", note="x", now=NOW)
 
 
 # --- SQLite-specific: immutability enforced by the database ----------------

@@ -10,9 +10,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from planner_core import (
     DecisionRecord,
     Plan,
+    PlanDiff,
     Scenario,
     Snapshot,
     build_decision_record,
+    compare_versions,
     schedule_plan,
     simulate,
 )
@@ -172,7 +174,81 @@ def create_app() -> FastAPI:
         finally:
             store.close()
 
+    @app.get("/api/baseline", tags=["plan"])
+    def api_baseline(
+        start: str | None = Query(default=None, description="Project start (YYYY-MM-DD)."),
+        current: str | None = Query(
+            default=None, description="Current plan ref (version/hash); default the plan file."
+        ),
+        baseline: str | None = Query(
+            default=None, description="Baseline ref (version/hash); default the latest baseline."
+        ),
+        plan: str | None = Query(default=None, description="Plan file for the current version."),
+    ) -> dict[str, object]:
+        """Compare a current plan against a baseline: baseline + current Gantt
+        payloads and the structural + schedule variance (RC1-192).
+
+        Returns ``{"baseline": null}`` when no baseline has been set, so the UI can
+        prompt for one rather than error.
+        """
+        store = SQLiteEventStore(settings.sqlite_path)
+        try:
+            base_snap = (
+                store.get_by_version(int(baseline))
+                if baseline and baseline.isdigit()
+                else store.get_by_hash(baseline)
+                if baseline
+                else store.latest_baseline()
+            )
+            if base_snap is None:
+                return {"baseline": None}
+            if current is not None:
+                cur_plan = _load_snapshot(settings.sqlite_path, current).plan
+            else:
+                cur_plan, _, _ = _load_request_plan(plan, None)
+        finally:
+            store.close()
+
+        start_date = _request_start_date(start)
+        comparison = compare_versions(base_snap.plan, cur_plan, start_date=start_date)
+        return {
+            "baseline": {
+                "version": base_snap.version,
+                "note": base_snap.message,
+                "approved_by": base_snap.approved_by,
+                "created_at": base_snap.created_at.isoformat(),
+                "payload": build_gantt_payload(
+                    base_snap.plan, schedule_plan(base_snap.plan, start_date=start_date)
+                ),
+            },
+            "current": {
+                "payload": build_gantt_payload(
+                    cur_plan, schedule_plan(cur_plan, start_date=start_date)
+                ),
+            },
+            "comparison": {
+                "is_on_track": comparison.is_on_track,
+                "plan_diff": _plan_diff_payload(comparison.plan_diff),
+                "schedule_delta": comparison.schedule_delta.model_dump(mode="json"),
+            },
+        }
+
     return app
+
+
+def _plan_diff_payload(diff: PlanDiff) -> list[dict[str, object]]:
+    """Serialize a structural PlanDiff for the API."""
+    return [
+        {
+            "kind": e.kind,
+            "key": e.key,
+            "change": e.change,
+            "fields": [
+                {"field": f.field, "before": f.before, "after": f.after} for f in e.fields
+            ],
+        }
+        for e in diff.entities
+    ]
 
 
 def _load_snapshot(sqlite_path: str, ref: str) -> Snapshot:

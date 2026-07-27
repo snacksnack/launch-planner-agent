@@ -34,6 +34,16 @@ let simActive = false;
 let simResult = null; // { baseline, simulated, delta, warnings }
 let scenarioChanges = []; // the what-if changes being composed
 
+// Baseline / plan-vs-actual (RC1-192) state.
+let baselineActive = false;
+let baselineResult = null; // { baseline, current, comparison }
+
+// Both simulate and baseline render current bars over ghosted reference bars, and
+// both take over the right rail — so bar/row clicks defer to their panels.
+function inOverlayMode() {
+  return simActive || baselineActive;
+}
+
 init();
 
 async function init() {
@@ -157,7 +167,14 @@ function renderGantt(viewMode) {
   requestAnimationFrame(() => {
     renderTaskColumn();
     drawScheduleOverlays();
-    if (simActive && simResult) drawGhostOverlay();
+    if (simActive && simResult) {
+      drawGhostOverlay(simResult.baseline.tasks, simResult.delta.task_shifts);
+    } else if (baselineActive && baselineResult) {
+      drawGhostOverlay(
+        baselineResult.baseline.payload.tasks,
+        baselineResult.comparison.schedule_delta.task_shifts,
+      );
+    }
   });
 }
 
@@ -190,7 +207,7 @@ function renderTaskColumn() {
       `<span class="task-name">${escapeHtml(r.name)}</span>` +
       (lowConf ? `<span class="low-conf-flag" title="low-confidence extraction">⚑</span>` : "");
     row.addEventListener("click", () => {
-      if (!simActive) showDetail(r.id); // in sim mode the scenario panel owns the rail
+      if (!inOverlayMode()) showDetail(r.id); // overlay modes own the rail
     });
     inner.appendChild(row);
   }
@@ -608,6 +625,7 @@ function toggleSimMode() {
 }
 
 function enterSimMode() {
+  if (baselineActive) exitBaselineMode();
   simActive = true;
   simResult = null;
   scenarioChanges = [];
@@ -805,18 +823,18 @@ function renderImpact() {
   return `<h3>Impact</h3>${body}`;
 }
 
-// Draw a faint "ghost" of each moved task's baseline position behind the
-// simulated bar, with a connector showing the shift. Uses the same date->x
-// calibration as the deadline/freeze overlays.
-function drawGhostOverlay() {
+// Draw a faint "ghost" of each moved task's reference position (baseline plan, or
+// the pre-what-if schedule) behind the current bar, with a connector showing the
+// shift. Uses the same date->x calibration as the deadline/freeze overlays.
+function drawGhostOverlay(referenceTasks, taskShifts) {
   try {
     const svg = document.querySelector("#gantt svg");
-    if (!svg || !simResult) return;
+    if (!svg) return;
     const map = calibrateDateToX();
     if (!map) return;
     const ns = "http://www.w3.org/2000/svg";
-    const baseById = new Map(simResult.baseline.tasks.map((t) => [t.id, t]));
-    for (const shift of simResult.delta.task_shifts) {
+    const baseById = new Map(referenceTasks.map((t) => [t.id, t]));
+    for (const shift of taskShifts) {
       const base = baseById.get(shift.task_id);
       const barRect = document.querySelector(
         `.bar-wrapper[data-id="${cssEscape(shift.task_id)}"] .bar`,
@@ -855,6 +873,139 @@ function drawGhostOverlay() {
   }
 }
 
+// --- baseline / plan-vs-actual (RC1-192) -----------------------------------
+
+function toggleBaselineMode() {
+  if (baselineActive) exitBaselineMode();
+  else enterBaselineMode();
+}
+
+async function enterBaselineMode() {
+  if (simActive) exitSimMode();
+  let data;
+  try {
+    const resp = await fetch(`${API_BASE}/api/baseline`);
+    if (!resp.ok) throw new Error(`API ${resp.status}`);
+    data = await resp.json();
+  } catch (err) {
+    baselineActive = true;
+    document.querySelector("#baseline-btn").classList.add("active");
+    document.querySelector("#detail").innerHTML =
+      `<button class="detail-close" title="Close">×</button><h2>Baseline</h2>` +
+      `<p class="hint">Couldn't load the baseline: ${escapeHtml(err.message)}</p>`;
+    document.querySelector("#detail .detail-close").addEventListener("click", exitBaselineMode);
+    return;
+  }
+
+  baselineActive = true;
+  document.querySelector("#baseline-btn").classList.add("active");
+
+  if (!data.baseline) {
+    // No baseline committed yet — prompt rather than error.
+    baselineResult = null;
+    const banner = document.querySelector("#sim-banner");
+    banner.hidden = false;
+    banner.className = "";
+    document.querySelector("#sim-banner-text").textContent =
+      "No baseline set yet — commit one to measure drift against.";
+    renderBaselinePanel(null);
+    return;
+  }
+
+  baselineResult = data;
+  view = data.current.payload; // render current bars; ghost the baseline underneath
+  index();
+  renderGantt(currentViewMode);
+  updateBaselineBanner();
+  renderBaselinePanel(data);
+}
+
+function exitBaselineMode() {
+  baselineActive = false;
+  baselineResult = null;
+  document.querySelector("#baseline-btn").classList.remove("active");
+  document.querySelector("#sim-banner").hidden = true;
+  view = payload;
+  index();
+  renderGantt(currentViewMode);
+  clearDetail();
+}
+
+function updateBaselineBanner() {
+  const banner = document.querySelector("#sim-banner");
+  const text = document.querySelector("#sim-banner-text");
+  const d = baselineResult.comparison.schedule_delta;
+  const onTrack = baselineResult.comparison.is_on_track;
+  const missed = d.deadline_flips.some((f) => f.met_before && !f.met_after);
+  banner.hidden = false;
+  banner.className = onTrack ? "ok" : missed ? "miss" : "slip";
+  const v = baselineResult.baseline.version;
+  text.innerHTML = `<strong>vs baseline v${v}</strong> — ${escapeHtml(d.headline)}`;
+}
+
+function renderBaselinePanel(data) {
+  setPanelCollapsed(false);
+  const el = document.querySelector("#detail");
+  for (const sel of document.querySelectorAll(".selected")) sel.classList.remove("selected");
+
+  if (!data) {
+    el.innerHTML =
+      `<button class="detail-close" aria-label="Close" title="Close">×</button>` +
+      `<h2>Baseline</h2>` +
+      `<p class="hint">No baseline has been committed yet. Set one from a committed plan with <code>plan baseline &lt;plan&gt; --by &lt;you&gt; --note "initial"</code>, then edits show up here as drift.</p>`;
+    el.querySelector(".detail-close").addEventListener("click", exitBaselineMode);
+    return;
+  }
+
+  const b = data.baseline;
+  const d = data.comparison.schedule_delta;
+  const structural = data.comparison.plan_diff;
+  const parts = [];
+
+  if (d.notes.length) {
+    parts.push(
+      `<ul class="sim-notes">${d.notes.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul>`,
+    );
+  }
+
+  const moved = d.task_shifts.filter((s) => s.finish_shift_days !== 0);
+  if (moved.length) {
+    const rows = moved
+      .slice()
+      .sort((a, b2) => b2.finish_shift_days - a.finish_shift_days)
+      .map(
+        (s) =>
+          `<li><span class="sim-moved-name">${escapeHtml(s.task_name)}</span><span class="sim-shift">${signed(s.finish_shift_days)}d</span></li>`,
+      )
+      .join("");
+    parts.push(`<h3>Tasks drifted (${moved.length})</h3><ul class="sim-moved">${rows}</ul>`);
+  }
+
+  if (structural.length) {
+    const symbol = { added: "+", removed: "−", modified: "~" };
+    const rows = structural
+      .map((e) => {
+        const fields = e.fields
+          .map((f) => `${escapeHtml(f.field)}: ${escapeHtml(String(f.before))} → ${escapeHtml(String(f.after))}`)
+          .join("<br>");
+        return `<li><div class="dec-head"><span class="dec-code">${symbol[e.change] ?? "~"} ${escapeHtml(e.kind)}</span> ${escapeHtml(byId.get(e.key)?.name ?? e.key)}</div>${fields ? `<p class="dec-reason">${fields}</p>` : ""}</li>`;
+      })
+      .join("");
+    parts.push(`<h3>Structural changes (${structural.length})</h3><ul class="dec-list">${rows}</ul>`);
+  }
+
+  const body = parts.length
+    ? parts.join("")
+    : `<p class="hint">On track — no drift from the baseline.</p>`;
+
+  el.innerHTML =
+    `<button class="detail-close" aria-label="Close" title="Close">×</button>` +
+    `<h2>Plan vs baseline</h2>` +
+    `<p class="reasoning">Baseline <strong>v${b.version}</strong>${b.note ? ` — ${escapeHtml(b.note)}` : ""}${b.created_at ? ` · ${escapeHtml(b.created_at.slice(0, 10))}` : ""}. Current bars are shown over a ghost of the baseline.</p>` +
+    body;
+  el.querySelector(".detail-close").addEventListener("click", exitBaselineMode);
+}
+
 // --- controls --------------------------------------------------------------
 
 function wireControls() {
@@ -887,25 +1038,33 @@ function wireControls() {
   raidBtn.addEventListener("click", showRaid);
   // The slippage simulator (RC1-190).
   document.querySelector("#simulate-btn").addEventListener("click", toggleSimMode);
-  document.querySelector("#sim-reset").addEventListener("click", exitSimMode);
+  // The baseline / plan-vs-actual view (RC1-192).
+  document.querySelector("#baseline-btn").addEventListener("click", toggleBaselineMode);
+  // The banner's Reset exits whichever overlay mode is active.
+  document.querySelector("#sim-reset").addEventListener("click", exitOverlayMode);
   // Own the click handling via delegation rather than frappe's on_click (which
   // is unreliable across versions). #gantt persists across re-renders.
   document.querySelector("#gantt").addEventListener("click", (e) => {
     const wrapper = e.target.closest(".bar-wrapper");
     // In simulate mode the scenario panel owns the rail; don't hijack it.
-    if (wrapper && !simActive) showDetail(wrapper.getAttribute("data-id"));
+    if (wrapper && !inOverlayMode()) showDetail(wrapper.getAttribute("data-id"));
   });
   // Keep the left task column in vertical lockstep with the chart.
   wrap.addEventListener("scroll", () => {
     document.querySelector("#task-column-inner").style.transform =
       `translateY(${-wrap.scrollTop}px)`;
   });
-  // Escape exits simulate mode, else closes the detail panel.
+  // Escape exits an overlay mode, else closes the detail panel.
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
-    if (simActive) exitSimMode();
+    if (inOverlayMode()) exitOverlayMode();
     else clearDetail();
   });
+}
+
+function exitOverlayMode() {
+  if (baselineActive) exitBaselineMode();
+  else exitSimMode();
 }
 
 // --- helpers ---------------------------------------------------------------

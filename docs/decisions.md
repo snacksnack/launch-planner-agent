@@ -12,6 +12,48 @@ to).
 
 ---
 
+## ADR-0017 — Baselines & plan-vs-actual: a baseline snapshot kind, variance by composing existing diffs
+
+**Date:** 2026-07-27 · **Ticket:** RC1-192 (P2.3) · **Status:** Accepted
+
+**Context.** The phase-2 capstone is the drift view Jira's timeline lacks:
+baseline the committed plan and show how the current plan has moved against it.
+Almost every ingredient already existed — the event-sourced snapshot store
+(RC1-189), the structural `diff_plans` (RC1-189), the schedule `ScheduleDelta`
+and ghost-overlay renderer (RC1-190). The questions were how to model a
+"baseline" distinct from an ordinary commit, and how to assemble the variance.
+
+**Explanation.** *A baseline is a first-class snapshot kind.* Rather than a flag
+on a commit or an implicit "first commit wins", `SnapshotKind.BASELINE` joins
+`PROPOSAL`/`COMMIT` in the append-only log. `commit_baseline` reuses the commit
+gate but **requires a note** (why this baseline — "initial plan", "re-baseline
+after approved scope change"); re-baselining is just appending another baseline,
+and `latest_baseline()` wins. This makes baselines visible in history, supports
+multiple baselines for free, and keeps the note trail the spec asked for. A new
+`latest_of_record()` returns the newest commit-or-baseline so the event chain
+links across both. *Variance is composition, not new math.* `compare_versions`
+schedules both plans on the same calendar and bundles `diff_plans` (structural:
+what tasks/deps/estimates changed) with `diff_schedules` (the simulator's
+`ScheduleDelta`: per-task finish/float drift, milestone drift, critical-path
+changes, projected-finish variance). Same start date on both sides, so the
+variance reflects plan changes rather than a shifted origin. *One endpoint, two
+jobs.* `GET /api/baseline` takes optional `current`/`baseline` refs — with
+defaults it drives the UI overlay (current bars over a ghost of the baseline,
+reusing RC1-190's renderer verbatim); with explicit refs it is the
+**"what changed between any two versions"** feed the Phase 3 Status Agent will
+consume, so we didn't build a second diff endpoint. It returns `{"baseline":
+null}` when none is set, so the UI prompts rather than errors.
+
+**Consequences.** The whole ticket is a thin layer over existing parts: no new
+scheduling or diff algorithms, just the baseline kind, the `compare_versions`
+composition, an endpoint, CLI `baseline`/`variance`, and a baseline overlay mode
+that shares the simulator's ghost machinery. Actuals are a *current plan version*
+today (a manual edit); a Jira-synced-actuals source can feed the same comparison
+later. The credential-free golden has an empty store on first run, so the UI
+shows a "no baseline yet" prompt until one is committed.
+
+---
+
 ## ADR-0016 — RAID agent: dual-source evidence (PRD quote or schedule fact), fed by a deterministic analyzer
 
 **Date:** 2026-07-27 · **Ticket:** RC1-191 (P2.2) · **Status:** Accepted

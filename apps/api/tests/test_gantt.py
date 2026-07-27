@@ -147,6 +147,46 @@ def test_api_simulate_absorbed_slip_reports_zero_impact():
     assert "absorbed by available float" in body["delta"]["headline"]
 
 
+def test_api_baseline_reports_no_baseline_on_an_empty_store(tmp_path, monkeypatch):
+    monkeypatch.setenv("LPA_DATABASE_URL", f"sqlite:///{tmp_path / 'empty.db'}")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    try:
+        resp = TestClient(create_app()).get("/api/baseline")
+        assert resp.status_code == 200
+        assert resp.json() == {"baseline": None}
+    finally:
+        get_settings.cache_clear()
+
+
+def test_api_baseline_returns_variance_against_a_seeded_baseline(tmp_path, monkeypatch):
+    from datetime import UTC, datetime
+
+    monkeypatch.setenv("LPA_DATABASE_URL", f"sqlite:///{tmp_path / 'plans.db'}")
+    from app.config import get_settings
+    from app.store import SQLiteEventStore
+    from planner_core import Plan, commit_baseline
+
+    get_settings.cache_clear()
+    try:
+        # Baseline the golden; the "current" (default plan file) is the same golden,
+        # so an unedited plan is on track (variance = zero).
+        golden = Plan.model_validate_json(GOLDEN.read_text())
+        store = SQLiteEventStore(str(tmp_path / "plans.db"))
+        commit_baseline(store, golden, approved_by="Reid", note="initial", now=datetime.now(UTC))
+        store.close()
+
+        body = TestClient(create_app()).get("/api/baseline").json()
+        assert body["baseline"]["note"] == "initial"
+        assert body["baseline"]["payload"]["tasks"]
+        assert body["current"]["payload"]["tasks"]
+        assert body["comparison"]["is_on_track"] is True
+        assert body["comparison"]["plan_diff"] == []
+    finally:
+        get_settings.cache_clear()
+
+
 def test_default_plan_resolves_regardless_of_cwd(tmp_path, monkeypatch):
     # uvicorn is often launched from apps/api, not the repo root — the default
     # relative plan_path must still resolve (via the repo-root fallback).
