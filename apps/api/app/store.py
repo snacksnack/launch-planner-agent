@@ -111,10 +111,20 @@ class SQLiteEventStore:
             return [_row_to_snapshot(row) for row in cur.fetchall()]
 
     def latest_commit(self) -> Snapshot | None:
+        return self._latest_of_kinds((SnapshotKind.COMMIT,))
+
+    def latest_baseline(self) -> Snapshot | None:
+        return self._latest_of_kinds((SnapshotKind.BASELINE,))
+
+    def latest_of_record(self) -> Snapshot | None:
+        return self._latest_of_kinds((SnapshotKind.COMMIT, SnapshotKind.BASELINE))
+
+    def _latest_of_kinds(self, kinds: tuple[SnapshotKind, ...]) -> Snapshot | None:
+        placeholders = ", ".join("?" for _ in kinds)
         row = self._one(
-            "SELECT " + _COLUMNS + " FROM snapshots WHERE kind = ? "
+            "SELECT " + _COLUMNS + f" FROM snapshots WHERE kind IN ({placeholders}) "
             "ORDER BY version DESC LIMIT 1",
-            (SnapshotKind.COMMIT.value,),
+            tuple(k.value for k in kinds),
         )
         return _row_to_snapshot(row) if row else None
 

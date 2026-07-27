@@ -7,6 +7,10 @@ in the loop. The `agents` package depends on this one, never the reverse — a
 rule enforced in CI by import-linter.
 """
 
+from planner_core.baseline import (
+    BaselineComparison,
+    compare_versions,
+)
 from planner_core.decision_record import (
     CycleBreakEntry,
     DecisionRecord,
@@ -52,6 +56,7 @@ from planner_core.plan_store import (
     Snapshot,
     SnapshotKind,
     blocking_errors,
+    commit_baseline,
     commit_plan,
     content_hash,
     record_proposal,
@@ -210,7 +215,11 @@ __all__ = [
     "SnapshotKind",
     "blocking_errors",
     "commit_plan",
+    "commit_baseline",
     "content_hash",
     "record_proposal",
+    # baselines & plan-vs-actual (RC1-192)
+    "BaselineComparison",
+    "compare_versions",
 ]
 

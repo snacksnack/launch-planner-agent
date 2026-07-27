@@ -34,6 +34,11 @@ from planner_core.validation import ValidationIssue, build_report
 class SnapshotKind(StrEnum):
     PROPOSAL = "proposal"  # an agent's original output, stored for the audit diff
     COMMIT = "commit"  # a human-reviewed, approved plan of record
+    BASELINE = "baseline"  # a commit designated as a measurement reference (RC1-192)
+
+
+# The snapshot kinds that are a plan of record (measurable versions), newest first.
+_RECORD_KINDS = (SnapshotKind.COMMIT, SnapshotKind.BASELINE)
 
 
 class Snapshot(BaseModel):
@@ -80,6 +85,14 @@ class PlanRepository(Protocol):
 
     def latest_commit(self) -> Snapshot | None: ...
 
+    def latest_baseline(self) -> Snapshot | None:
+        """The most recent snapshot designated as a baseline (RC1-192)."""
+        ...
+
+    def latest_of_record(self) -> Snapshot | None:
+        """The most recent plan-of-record snapshot (a commit or a baseline)."""
+        ...
+
 
 class InMemoryPlanRepository:
     """Reference implementation + test double for `PlanRepository`."""
@@ -108,6 +121,14 @@ class InMemoryPlanRepository:
         return next(
             (s for s in reversed(self._snapshots) if s.kind is SnapshotKind.COMMIT), None
         )
+
+    def latest_baseline(self) -> Snapshot | None:
+        return next(
+            (s for s in reversed(self._snapshots) if s.kind is SnapshotKind.BASELINE), None
+        )
+
+    def latest_of_record(self) -> Snapshot | None:
+        return next((s for s in reversed(self._snapshots) if s.kind in _RECORD_KINDS), None)
 
 
 class CommitRejected(Exception):
@@ -171,16 +192,8 @@ def commit_plan(
     `decision_record`, when supplied, freezes the build-time audit (rejected and
     cycle-broken edges) onto the immutable snapshot.
     """
-    if not approved_by or not approved_by.strip():
-        raise CommitRejected("an approver is required to commit a plan of record")
-
-    errors = blocking_errors(plan)
-    if errors:
-        raise CommitRejected(
-            f"plan has {len(errors)} validation error(s); fix them before committing", errors
-        )
-
-    parent = repo.latest_commit()
+    _gate(plan, approved_by)
+    parent = repo.latest_of_record()
     snapshot = Snapshot(
         content_hash=content_hash(plan),
         kind=SnapshotKind.COMMIT,
@@ -189,6 +202,49 @@ def commit_plan(
         source_proposal_hash=source_proposal_hash,
         approved_by=approved_by.strip(),
         message=message,
+        created_at=now,
+        decision_record=decision_record,
+    )
+    return repo.append(snapshot)
+
+
+def _gate(plan: Plan, approved_by: str) -> None:
+    """Shared commit gate: an approver is required and the plan must validate."""
+    if not approved_by or not approved_by.strip():
+        raise CommitRejected("an approver is required to commit a plan of record")
+    errors = blocking_errors(plan)
+    if errors:
+        raise CommitRejected(
+            f"plan has {len(errors)} validation error(s); fix them before committing", errors
+        )
+
+
+def commit_baseline(
+    repo: PlanRepository,
+    plan: Plan,
+    *,
+    approved_by: str,
+    note: str,
+    now: datetime,
+    decision_record: DecisionRecord | None = None,
+) -> Snapshot:
+    """Commit a plan and designate it a **baseline** — the reference to measure drift
+    against (RC1-192). Like `commit_plan` but requires a `note` (why this baseline,
+    e.g. "initial plan" or "re-baseline after approved scope change"). Re-baselining
+    is simply appending another baseline; the latest one wins.
+    """
+    _gate(plan, approved_by)
+    if not note or not note.strip():
+        raise CommitRejected("a baseline requires a note (why it is being set)")
+
+    parent = repo.latest_of_record()
+    snapshot = Snapshot(
+        content_hash=content_hash(plan),
+        kind=SnapshotKind.BASELINE,
+        plan=plan,
+        parent_hash=parent.content_hash if parent else None,
+        approved_by=approved_by.strip(),
+        message=note.strip(),
         created_at=now,
         decision_record=decision_record,
     )

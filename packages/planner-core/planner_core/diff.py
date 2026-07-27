@@ -44,11 +44,11 @@ class PlanDiff:
     def of_kind(self, kind: str) -> list[EntityDiff]:
         return [e for e in self.entities if e.kind == kind]
 
-    def render(self) -> str:
+    def render(self, source: str = "the agent proposal") -> str:
         if self.is_empty:
-            return "No changes from the agent proposal."
+            return f"No changes from {source}."
         symbol = {"added": "+", "removed": "-", "modified": "~"}
-        lines = [f"{len(self.entities)} change(s) from the agent proposal:"]
+        lines = [f"{len(self.entities)} change(s) from {source}:"]
         for e in self.entities:
             lines.append(f"  {symbol[e.change]} {e.kind} {e.key}")
             for fc in e.fields:

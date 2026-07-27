@@ -826,3 +826,13 @@ blockquote {
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   color: var(--text);
 }
+
+/* inline command hint (e.g. the "no baseline yet" prompt) */
+.hint code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.82em;
+  padding: 0.05rem 0.3rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}

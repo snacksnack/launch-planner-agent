@@ -39,7 +39,9 @@ from planner_core import (
     build_decision_record,
     build_dependency_report,
     build_report,
+    commit_baseline,
     commit_plan,
+    compare_versions,
     diff_plans,
     record_proposal,
     schedule_plan,
@@ -487,6 +489,58 @@ def cmd_diff(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_baseline(args: argparse.Namespace) -> int:
+    """Commit a plan and designate it the baseline to measure drift against."""
+    plan_path = Path(args.plan)
+    plan = Plan.model_validate_json(plan_path.read_text())
+    store = _open_store()
+    try:
+        snap = commit_baseline(
+            store,
+            plan,
+            approved_by=args.by,
+            note=args.note,
+            now=datetime.now(UTC),
+            decision_record=load_decision_record(plan_path),
+        )
+    except CommitRejected as exc:
+        print(f"baseline rejected: {exc.reason}", file=sys.stderr)
+        for issue in exc.issues:
+            print(f"  ✗ [{issue.code}] {issue.message}", file=sys.stderr)
+        return 1
+    print(f"baselined v{snap.version} ({snap.content_hash[:12]}) — {snap.message}")
+    return 0
+
+
+def cmd_variance(args: argparse.Namespace) -> int:
+    """Show a current plan's drift against a baseline (structure + schedule)."""
+    store = _open_store()
+    try:
+        current = _resolve_ref(store, args.current)
+    except KeyError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    if args.baseline:
+        try:
+            baseline = _resolve_ref(store, args.baseline)
+        except KeyError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+    else:
+        snap = store.latest_baseline()
+        if snap is None:
+            print("error: no baseline set — run `plan baseline` first", file=sys.stderr)
+            return 2
+        baseline = snap.plan
+
+    comparison = compare_versions(
+        baseline, current, start_date=date.fromisoformat(args.start_date)
+    )
+    print(comparison.render())
+    return 0 if comparison.is_on_track else 1
+
+
 def content_hash_of(plan: Plan) -> str:
     from planner_core import content_hash
 
@@ -596,6 +650,27 @@ def main(argv: list[str] | None = None) -> int:
     diff.add_argument("base", help="Base ref (version, hash, or file) — e.g. the agent proposal.")
     diff.add_argument("revised", help="Revised ref (version, hash, or file) — e.g. the commit.")
     diff.set_defaults(func=cmd_diff)
+
+    # --- baselines & plan-vs-actual (RC1-192) ---
+    baseline = sub.add_parser(
+        "baseline", help="Commit a plan and designate it the baseline to measure against."
+    )
+    baseline.add_argument("plan", help="Path to the reviewed plan.json.")
+    baseline.add_argument("--by", required=True, help="Approver name (the human sign-off).")
+    baseline.add_argument(
+        "--note", required=True, help="Why this baseline (e.g. 'initial plan', 're-baseline: ...')."
+    )
+    baseline.set_defaults(func=cmd_baseline)
+
+    variance = sub.add_parser(
+        "variance", help="Show a plan's drift against a baseline (structure + schedule)."
+    )
+    variance.add_argument("current", help="Current plan ref (version, hash, or file).")
+    variance.add_argument(
+        "--baseline", metavar="REF", help="Baseline ref (default: the latest baseline)."
+    )
+    variance.add_argument("--start-date", required=True, help="Project start date (YYYY-MM-DD).")
+    variance.set_defaults(func=cmd_variance)
 
     args = parser.parse_args(argv)
     return args.func(args)
