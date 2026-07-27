@@ -27,6 +27,7 @@ from pydantic import BaseModel, ConfigDict
 from planner_core.decision_record import DecisionRecord
 from planner_core.dependencies import build_dependency_report
 from planner_core.models import Plan
+from planner_core.raid_analysis import build_raid_report
 from planner_core.validation import ValidationIssue, build_report
 
 
@@ -121,10 +122,15 @@ class CommitRejected(Exception):
 def blocking_errors(plan: Plan) -> list[ValidationIssue]:
     """Error-level issues that must be clear before a plan can be committed.
 
-    Runs both validators for their errors — unknown owners/epics, and dangling
-    or cyclic dependencies. Warnings (low confidence, coverage gaps) do not block.
+    Runs every validator for its errors — unknown owners/epics, dangling or
+    cyclic dependencies, and RAID errors (unknown owner, duplicate id). Warnings
+    (low confidence, coverage gaps) do not block.
     """
-    return build_report(plan, "").errors + build_dependency_report(plan, "").errors
+    return (
+        build_report(plan, "").errors
+        + build_dependency_report(plan, "").errors
+        + build_raid_report(plan, "").errors
+    )
 
 
 def record_proposal(

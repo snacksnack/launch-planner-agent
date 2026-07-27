@@ -458,6 +458,148 @@ function provenanceBlock(title, prov) {
   `;
 }
 
+// --- RAID log (RC1-191) ----------------------------------------------------
+
+let raidFilter = "all"; // all | risk | assumption | issue | decision
+
+function raidCount() {
+  return payload?.raid?.length ?? 0;
+}
+
+const RAID_LABEL = { risk: "Risk", assumption: "Assumption", issue: "Issue", decision: "Decision" };
+
+function severityBand(sev) {
+  if (sev == null) return null;
+  if (sev >= 15) return "high";
+  if (sev >= 8) return "med";
+  return "low";
+}
+
+// Render the RAID log into the detail panel: filter chips by type, sorted by
+// severity, each item with its evidence (PRD quote or schedule fact).
+function showRaid() {
+  setPanelCollapsed(false);
+  const el = document.querySelector("#detail");
+  for (const sel of document.querySelectorAll(".selected")) sel.classList.remove("selected");
+  const items = payload?.raid ?? [];
+
+  const counts = items.reduce((m, r) => ((m[r.type] = (m[r.type] || 0) + 1), m), {});
+  const chip = (key, label, n) =>
+    `<button class="raid-chip${raidFilter === key ? " active" : ""}" data-filter="${key}">${label}${n != null ? ` <span class="raid-n">${n}</span>` : ""}</button>`;
+  const chips = [
+    chip("all", "All", items.length),
+    ...["risk", "assumption", "issue", "decision"]
+      .filter((t) => counts[t])
+      .map((t) => chip(t, RAID_LABEL[t], counts[t])),
+  ].join("");
+
+  el.innerHTML =
+    `<button class="detail-close" aria-label="Close" title="Close">×</button>` +
+    `<h2>RAID log</h2>` +
+    `<p class="reasoning">Risks, assumptions, issues, and decisions — each traceable to a PRD quote or a computed schedule fact.</p>` +
+    `<div class="raid-toolbar"><div class="raid-chips">${chips}</div><button id="raid-export" class="toolbtn">Copy as Markdown</button></div>` +
+    `<div id="raid-list">${renderRaidList()}</div>`;
+
+  el.querySelector(".detail-close").addEventListener("click", clearDetail);
+  for (const b of el.querySelectorAll("[data-filter]")) {
+    b.addEventListener("click", () => {
+      raidFilter = b.dataset.filter;
+      showRaid();
+    });
+  }
+  el.querySelector("#raid-export").addEventListener("click", copyRaidMarkdown);
+}
+
+function filteredRaid() {
+  const items = (payload?.raid ?? []).filter((r) => raidFilter === "all" || r.type === raidFilter);
+  // Risks first (by severity desc), then the rest in a stable type order.
+  const order = { risk: 0, issue: 1, assumption: 2, decision: 3 };
+  return items.slice().sort((a, b) => {
+    if (a.type !== b.type) return order[a.type] - order[b.type];
+    return (b.severity ?? 0) - (a.severity ?? 0);
+  });
+}
+
+function renderRaidList() {
+  const items = filteredRaid();
+  if (!items.length) return `<p class="hint">No items for this filter.</p>`;
+  return items.map(raidCard).join("");
+}
+
+function raidCard(r) {
+  const band = severityBand(r.severity);
+  const sev =
+    r.severity != null
+      ? `<span class="raid-sev raid-sev-${band}">P×I ${r.severity}</span>`
+      : "";
+  const ev = r.provenance.evidence;
+  const evidence =
+    ev.kind === "prd"
+      ? `<blockquote>${escapeHtml(ev.source_quote)}</blockquote>`
+      : `<p class="raid-fact">⛓ ${escapeHtml(ev.statement)}</p>`;
+  const owner = r.suggested_owner_name
+    ? `<div class="raid-meta"><dt>Owner</dt><dd>${escapeHtml(r.suggested_owner_name)}</dd></div>`
+    : "";
+  const action =
+    r.type === "risk" && r.mitigation
+      ? `<div class="raid-meta"><dt>Mitigation</dt><dd>${escapeHtml(r.mitigation)}</dd></div>`
+      : r.type === "decision" && r.rationale
+        ? `<div class="raid-meta"><dt>Rationale</dt><dd>${escapeHtml(r.rationale)}</dd></div>`
+        : "";
+  return `
+    <div class="raid-card">
+      <div class="raid-head">
+        <span class="raid-type raid-type-${r.type}">${RAID_LABEL[r.type]}</span>
+        <strong>${escapeHtml(r.title)}</strong>
+        ${sev}
+      </div>
+      <p class="raid-desc">${escapeHtml(r.description)}</p>
+      ${owner}
+      ${action}
+      ${evidence}
+      <p class="prov-meta">
+        <span class="conf conf-${r.provenance.confidence}">${r.provenance.confidence}</span>
+        · ${ev.kind === "prd" ? escapeHtml(ev.source_section ?? "PRD") : escapeHtml(ev.fact_code)}
+      </p>
+    </div>`;
+}
+
+// Export the (filtered) RAID log as Markdown to the clipboard.
+function raidMarkdown() {
+  const items = filteredRaid();
+  const lines = [`# RAID log — ${payload.project.name}`, ""];
+  for (const r of items) {
+    const sev = r.severity != null ? ` (P×I ${r.severity})` : "";
+    lines.push(`## [${RAID_LABEL[r.type]}] ${r.title}${sev}`);
+    lines.push("");
+    lines.push(r.description);
+    if (r.suggested_owner_name) lines.push(`- **Owner:** ${r.suggested_owner_name}`);
+    if (r.type === "risk" && r.mitigation) lines.push(`- **Mitigation:** ${r.mitigation}`);
+    if (r.type === "decision" && r.rationale) lines.push(`- **Rationale:** ${r.rationale}`);
+    const ev = r.provenance.evidence;
+    lines.push(
+      ev.kind === "prd"
+        ? `- **Evidence (PRD):** "${ev.source_quote}"`
+        : `- **Evidence (schedule):** ${ev.statement}`,
+    );
+    lines.push(`- **Confidence:** ${r.provenance.confidence}`);
+    lines.push("");
+  }
+  return lines.join("\n");
+}
+
+async function copyRaidMarkdown() {
+  const btn = document.querySelector("#raid-export");
+  try {
+    await navigator.clipboard.writeText(raidMarkdown());
+    const prev = btn.textContent;
+    btn.textContent = "Copied ✓";
+    setTimeout(() => (btn.textContent = prev), 1500);
+  } catch {
+    btn.textContent = "Copy failed";
+  }
+}
+
 // --- slippage simulator (RC1-190) ------------------------------------------
 
 function toggleSimMode() {
@@ -738,6 +880,11 @@ function wireControls() {
   const n = decisionCount();
   if (n) decBtn.innerHTML = `Decisions <span class="count">${n}</span>`;
   decBtn.addEventListener("click", showDecisions);
+  // The RAID log (RC1-191).
+  const raidBtn = document.querySelector("#raid-btn");
+  const rn = raidCount();
+  if (rn) raidBtn.innerHTML = `RAID <span class="count">${rn}</span>`;
+  raidBtn.addEventListener("click", showRaid);
   // The slippage simulator (RC1-190).
   document.querySelector("#simulate-btn").addEventListener("click", toggleSimMode);
   document.querySelector("#sim-reset").addEventListener("click", exitSimMode);

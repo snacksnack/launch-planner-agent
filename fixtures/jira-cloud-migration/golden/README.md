@@ -18,6 +18,10 @@ are measured against.
   `dep-decom-msdecom`) so the scheduler can project the milestone dates (RC1-198).
 - **4 milestones** (pilot / bulk / go-live / decommission) and **6 constraints**
   (mirrored from `../constraints.json`).
+- **5 RAID items** (RC1-191): two risks, an issue, an assumption, a decision. One
+  risk is **schedule-derived** (`raid-single-owner` — the critical path runs
+  through one engineer, cited via a `single-owner-critical-path` schedule fact);
+  the other four cite verbatim PRD quotes. This exercises both evidence kinds.
 
 ## The judgment calls a reviewer should sanity-check
 

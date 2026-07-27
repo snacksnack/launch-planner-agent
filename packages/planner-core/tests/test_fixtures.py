@@ -104,9 +104,17 @@ def test_referential_integrity(fixture: Path):
         ("milestones", plan.milestones),
         ("constraints", plan.constraints),
         ("team", plan.team),
+        ("raid", plan.raid),
     ]:
         ids = [x.id for x in items]
         assert len(ids) == len(set(ids)), f"duplicate id in {label}"
+
+    # RAID suggested owners resolve to the team.
+    for item in plan.raid:
+        if item.suggested_owner_id is not None:
+            assert item.suggested_owner_id in member_ids, (
+                f"{item.id} -> unknown owner {item.suggested_owner_id}"
+            )
 
     for task in plan.tasks:
         if task.epic_id is not None:
@@ -156,3 +164,13 @@ def test_provenance_quotes_are_verbatim_from_the_prd(fixture: Path):
         if _normalize(entity.provenance.source_quote) not in prd
     ]
     assert not misses, f"source_quote(s) not found verbatim in prd.md: {misses}"
+
+    # RAID items with PRD evidence must also quote verbatim (schedule-evidence
+    # items derive from the computed schedule, so they carry no PRD quote).
+    raid_misses = [
+        (item.id, item.provenance.evidence.source_quote)
+        for item in plan.raid
+        if item.provenance.evidence.kind == "prd"
+        and _normalize(item.provenance.evidence.source_quote) not in prd
+    ]
+    assert not raid_misses, f"RAID source_quote(s) not verbatim in prd.md: {raid_misses}"

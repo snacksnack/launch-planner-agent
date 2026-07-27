@@ -11,11 +11,15 @@ from planner_core import (
 )
 
 from agents.dependency import DependencyAgent, DependencyResult
+from agents.raid import RaidAgent
 from agents.schema import (
     ProposedDependencies,
     ProposedDependency,
     ProposedEpic,
     ProposedProvenance,
+    ProposedRaidItem,
+    ProposedRaidLog,
+    ProposedRaidProvenance,
     ProposedTask,
     ProposedWorkBreakdown,
 )
@@ -28,6 +32,7 @@ __all__ = [
     "WorkBreakdownAgent",
     "DependencyAgent",
     "DependencyResult",
+    "RaidAgent",
     "build_user_prompt",
     "ProposedEpic",
     "ProposedProvenance",
@@ -35,4 +40,7 @@ __all__ = [
     "ProposedWorkBreakdown",
     "ProposedDependency",
     "ProposedDependencies",
+    "ProposedRaidItem",
+    "ProposedRaidLog",
+    "ProposedRaidProvenance",
 ]

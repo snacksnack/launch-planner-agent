@@ -23,6 +23,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from planner_core.provenance import ProvenancedModel
+from planner_core.raid import RaidItem
 
 
 class DependencyType(StrEnum):
@@ -184,6 +185,7 @@ class Plan(BaseModel):
     dependencies: list[Dependency] = Field(default_factory=list)
     milestones: list[Milestone] = Field(default_factory=list)
     constraints: list[Constraint] = Field(default_factory=list)
+    raid: list[RaidItem] = Field(default_factory=list, description="RAID log (RC1-191).")
 
 
 class WorkBreakdown(BaseModel):

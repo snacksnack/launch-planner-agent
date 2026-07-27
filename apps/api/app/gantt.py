@@ -100,6 +100,15 @@ def build_gantt_payload(plan: Plan, schedule: Schedule) -> dict[str, Any]:
         for check in schedule.deadline_checks
     ]
 
+    raid = [
+        {
+            **item.model_dump(mode="json"),
+            "severity": item.severity,
+            "suggested_owner_name": owner_names.get(item.suggested_owner_id),
+        }
+        for item in plan.raid
+    ]
+
     return {
         "project": {
             "name": plan.name,
@@ -118,5 +127,6 @@ def build_gantt_payload(plan: Plan, schedule: Schedule) -> dict[str, Any]:
         "tasks": tasks,
         "milestones": milestones,
         "deadlines": deadlines,
+        "raid": raid,
         "freezes": [],  # populated once blackout windows land (RC1-196)
     }

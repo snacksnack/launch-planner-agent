@@ -61,6 +61,21 @@ from planner_core.provenance import (
     Provenance,
     ProvenancedModel,
 )
+from planner_core.raid import (
+    Evidence,
+    PrdEvidence,
+    RaidItem,
+    RaidProvenance,
+    RaidType,
+    ScheduleEvidence,
+)
+from planner_core.raid_analysis import (
+    RaidReport,
+    ScheduleFact,
+    analyze_schedule_risks,
+    build_raid_report,
+    format_schedule_facts,
+)
 from planner_core.scheduling import (
     CPMResult,
     DeadlineCheck,
@@ -107,6 +122,18 @@ __all__ = [
     "Confidence",
     "Provenance",
     "ProvenancedModel",
+    # RAID (risks / assumptions / issues / decisions)
+    "Evidence",
+    "PrdEvidence",
+    "RaidItem",
+    "RaidProvenance",
+    "RaidType",
+    "ScheduleEvidence",
+    "RaidReport",
+    "ScheduleFact",
+    "analyze_schedule_risks",
+    "build_raid_report",
+    "format_schedule_facts",
     # domain models
     "Constraint",
     "ConstraintType",

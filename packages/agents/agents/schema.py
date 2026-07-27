@@ -12,7 +12,7 @@ is friendly to strict structured-output decoding while still allowing nulls.
 
 from __future__ import annotations
 
-from planner_core import Confidence, DependencyType, ThreePointEstimate
+from planner_core import Confidence, DependencyType, Evidence, RaidType, ThreePointEstimate
 from pydantic import BaseModel, ConfigDict
 
 
@@ -71,3 +71,37 @@ class ProposedDependencies(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     dependencies: list[ProposedDependency]
+
+
+class ProposedRaidProvenance(BaseModel):
+    """RAID provenance the model fills: reasoning, confidence, and the source
+    evidence (a PRD quote *or* a schedule fact). Run facts are stamped by Python."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    reasoning: str
+    confidence: Confidence
+    evidence: Evidence  # discriminated union: PrdEvidence | ScheduleEvidence
+
+
+class ProposedRaidItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    type: RaidType
+    title: str
+    description: str
+    # Risk scoring (null for non-risks). 1..5 scales.
+    probability: int | None
+    impact: int | None
+    mitigation: str | None
+    suggested_owner_id: str | None
+    # Decision rationale (null for non-decisions; `decided_on` is a human placeholder).
+    rationale: str | None
+    provenance: ProposedRaidProvenance
+
+
+class ProposedRaidLog(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[ProposedRaidItem]
