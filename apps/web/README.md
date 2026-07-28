@@ -55,6 +55,17 @@ in the task column — the "honest gaps" cue. For a committed snapshot the recor
 the one persisted at commit time; for a raw plan file (the golden) the recomputable
 half is rebuilt server-side from plan + PRD.
 
+## Status update (RC1-194)
+
+The **Status** toolbar button shows the weekly exec update vs the committed
+baseline (`GET /api/status`): a **health badge** (green/yellow/red) set by rule —
+not the LLM — with its reasons, an executive summary, and the "what changed since
+last week" list, all derived deterministically from the RC1-192 changed-since
+diff. **Copy as Markdown** exports it; the API also returns the HTML email body.
+The narrative here is the credential-free deterministic fallback; the LLM writes it
+via the gated `plan status` CLI when a key is set. Sending + weekly scheduling are
+a deploy concern (RC1-195) — this previews only.
+
 ## Generate Jira (RC1-193)
 
 The **Jira** toolbar button opens a **mock preview** (`GET /api/jira`) of exactly

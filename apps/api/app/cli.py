@@ -38,6 +38,7 @@ from planner_core import (
     TeamMember,
     WorkBreakdown,
     apply_keys_to_plan,
+    assemble_status,
     build_decision_record,
     build_dependency_report,
     build_generation_plan,
@@ -47,7 +48,10 @@ from planner_core import (
     compare_versions,
     diff_plans,
     execute_generation,
+    fallback_narrative,
     record_proposal,
+    render_html,
+    render_markdown,
     schedule_plan,
     simulate,
 )
@@ -545,6 +549,62 @@ def cmd_variance(args: argparse.Namespace) -> int:
     return 0 if comparison.is_on_track else 1
 
 
+def cmd_status(args: argparse.Namespace) -> int:
+    """Weekly status update: assemble facts from the changed-since diff, then narrate."""
+    from datetime import date as _date
+
+    store = _open_store()
+    try:
+        current = _resolve_ref(store, args.current)
+    except KeyError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    baseline_snap = None
+    if args.baseline:
+        try:
+            baseline_plan = _resolve_ref(store, args.baseline)
+        except KeyError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+    else:
+        baseline_snap = store.latest_baseline()
+        if baseline_snap is None:
+            print("error: no baseline set — run `plan baseline` first", file=sys.stderr)
+            return 2
+        baseline_plan = baseline_snap.plan
+
+    comparison = compare_versions(
+        baseline_plan, current, start_date=date.fromisoformat(args.start_date)
+    )
+    facts = assemble_status(
+        comparison,
+        baseline_raid=baseline_plan.raid,
+        current_raid=current.raid,
+        period_label=args.period or f"as of {_date.today().isoformat()}",
+        baseline_version=baseline_snap.version if baseline_snap else None,
+    )
+
+    # LLM narrative when credentials are configured; deterministic fallback otherwise.
+    from app.config import get_settings
+
+    settings = get_settings()
+    if settings.anthropic_api_key:
+        import anthropic
+        from agents import StatusAgent
+
+        agent = StatusAgent(
+            model=args.model or settings.anthropic_model,
+            client=anthropic.Anthropic(api_key=settings.anthropic_api_key),
+        )
+        narrative = agent.run(facts)
+    else:
+        narrative = fallback_narrative(facts)
+
+    print(render_html(facts, narrative) if args.html else render_markdown(facts, narrative))
+    return 0 if facts.is_on_track else 1
+
+
 def cmd_jira(args: argparse.Namespace) -> int:
     """Generate Jira issues from a plan — mock preview by default, real behind a gate."""
     from app.config import get_settings
@@ -738,6 +798,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     variance.add_argument("--start-date", required=True, help="Project start date (YYYY-MM-DD).")
     variance.set_defaults(func=cmd_variance)
+
+    # --- weekly status update (RC1-194) ---
+    status = sub.add_parser(
+        "status", help="Weekly exec status update from the changed-since diff (Markdown/HTML)."
+    )
+    status.add_argument("current", help="Current plan ref (version, hash, or file).")
+    status.add_argument("--start-date", required=True, help="Project start date (YYYY-MM-DD).")
+    status.add_argument("--baseline", metavar="REF", help="Baseline ref (default: latest).")
+    status.add_argument("--period", help="Period label (default: 'as of <today>').")
+    status.add_argument("--html", action="store_true", help="Render HTML instead of Markdown.")
+    status.add_argument("--model", help="Override the Anthropic model id (LLM narrative).")
+    status.set_defaults(func=cmd_status)
 
     # --- Jira ticket generation (RC1-193) ---
     jira = sub.add_parser(

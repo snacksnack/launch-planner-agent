@@ -23,6 +23,7 @@ from agents.schema import (
     ProposedTask,
     ProposedWorkBreakdown,
 )
+from agents.status import StatusAgent
 from agents.work_breakdown import WorkBreakdownAgent, build_user_prompt
 
 __version__ = "0.1.0"
@@ -33,6 +34,7 @@ __all__ = [
     "DependencyAgent",
     "DependencyResult",
     "RaidAgent",
+    "StatusAgent",
     "build_user_prompt",
     "ProposedEpic",
     "ProposedProvenance",

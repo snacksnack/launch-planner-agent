@@ -919,3 +919,52 @@ blockquote {
   color: #eef2f8;
   border-radius: var(--radius-sm);
 }
+
+/* --- weekly status update (RC1-194) --- */
+
+.status-health {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.55rem 0.75rem;
+  margin: 0.5rem 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+.status-health.status-green { background: var(--success-bg); border-color: color-mix(in srgb, var(--success) 35%, var(--border)); }
+.status-health.status-yellow { background: var(--caution-bg); border-color: color-mix(in srgb, var(--caution) 35%, var(--border)); }
+.status-health.status-red { background: color-mix(in srgb, var(--crit) 10%, var(--bg)); border-color: color-mix(in srgb, var(--crit) 35%, var(--border)); }
+.status-badge {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  color: #fff;
+}
+.status-green .status-badge { background: var(--success); }
+.status-yellow .status-badge { background: var(--caution); }
+.status-red .status-badge { background: var(--crit); }
+.status-reasons {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.status-summary {
+  font-size: 0.92rem;
+  line-height: 1.5;
+  margin: 0.6rem 0;
+}
+.status-points {
+  list-style: none;
+  margin: 0.25rem 0 0.75rem;
+  padding: 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.status-points li {
+  padding: 0.2rem 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}

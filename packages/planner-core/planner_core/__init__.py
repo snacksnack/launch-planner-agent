@@ -120,6 +120,19 @@ from planner_core.simulation import (
     diff_schedules,
     simulate,
 )
+from planner_core.status import (
+    Breach,
+    Health,
+    MilestoneDrift,
+    NamedChange,
+    RaidChange,
+    StatusFacts,
+    StatusNarrative,
+    assemble_status,
+    fallback_narrative,
+    render_html,
+    render_markdown,
+)
 from planner_core.validation import (
     BreakdownReport,
     Severity,
@@ -232,6 +245,18 @@ __all__ = [
     # baselines & plan-vs-actual (RC1-192)
     "BaselineComparison",
     "compare_versions",
+    # weekly status (RC1-194)
+    "Breach",
+    "Health",
+    "MilestoneDrift",
+    "NamedChange",
+    "RaidChange",
+    "StatusFacts",
+    "StatusNarrative",
+    "assemble_status",
+    "fallback_narrative",
+    "render_html",
+    "render_markdown",
     # Jira ticket generation (RC1-193)
     "ExecutionResult",
     "GenerationPlan",
