@@ -162,6 +162,52 @@ def test_api_jira_returns_the_mock_generation_plan():
     assert "Reasoning:" in story["description"]  # provenance travels in
 
 
+def test_api_status_reports_no_baseline_on_an_empty_store(tmp_path, monkeypatch):
+    monkeypatch.setenv("LPA_DATABASE_URL", f"sqlite:///{tmp_path / 'empty.db'}")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    try:
+        assert TestClient(create_app()).get("/api/status").json() == {"baseline": None}
+    finally:
+        get_settings.cache_clear()
+
+
+def test_api_status_returns_facts_health_and_rendered_report(tmp_path, monkeypatch):
+    from datetime import UTC, datetime
+
+    monkeypatch.setenv("LPA_DATABASE_URL", f"sqlite:///{tmp_path / 'plans.db'}")
+    from app.config import get_settings
+    from app.store import SQLiteEventStore
+    from planner_core import Plan, ThreePointEstimate, commit_baseline
+
+    get_settings.cache_clear()
+    try:
+        # Baseline is an optimistic version; the current golden reads as drift.
+        golden = Plan.model_validate_json(GOLDEN.read_text())
+        base = golden.model_copy(deep=True)
+        for t in base.tasks:
+            if t.id == "task-bulk-migration":
+                e = t.estimate
+                t.estimate = ThreePointEstimate(
+                    optimistic=max(1, e.optimistic - 8), likely=max(1, e.likely - 8),
+                    pessimistic=max(1, e.pessimistic - 8),
+                )
+        store = SQLiteEventStore(str(tmp_path / "plans.db"))
+        commit_baseline(store, base, approved_by="R", note="initial", now=datetime.now(UTC))
+        store.close()
+
+        body = TestClient(create_app()).get("/api/status").json()
+        assert body["baseline"]["version"] == 1
+        assert body["facts"]["health"] in {"yellow", "red"}  # the current plan drifted
+        assert body["facts"]["launch_shift_days"] > 0
+        assert body["narrative"]["exec_summary"]
+        assert "Status update" in body["markdown"]
+        assert "<div" in body["html"]
+    finally:
+        get_settings.cache_clear()
+
+
 def test_api_baseline_reports_no_baseline_on_an_empty_store(tmp_path, monkeypatch):
     monkeypatch.setenv("LPA_DATABASE_URL", f"sqlite:///{tmp_path / 'empty.db'}")
     from app.config import get_settings

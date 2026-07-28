@@ -12,6 +12,42 @@ to).
 
 ---
 
+## ADR-0019 — Status agent: deterministic facts + rule-based health, LLM phrases but never decides
+
+**Date:** 2026-07-28 · **Ticket:** RC1-194 (P3.2) · **Status:** Accepted
+
+**Context.** The weekly exec update is the last agent and the one most tempting to
+hand to an LLM wholesale. But an exec update that invents status, or whose "health"
+is a model's vibe, is worse than none — and the acceptance bar is explicit: every
+statement must trace to a diff entry, and a week with critical-path slippage must
+flip the health indicator *by rule*.
+
+**Explanation.** *The LLM phrases; it never decides.* `assemble_status`
+(planner_core) reads the RC1-192 changed-since diff and produces `StatusFacts` —
+launch shift vs baseline, slipped tasks, newly-critical, milestone drift, missed
+deadlines, RAID added/removed, structural-change count — every field traceable to
+a `ScheduleDelta` / `PlanDiff` / RAID entry. The **health signal is a pure rule**
+(`_health`): a missed deadline or a launch slip ≥ 10 working days is red; any slip,
+a newly-critical task, or a new risk is yellow; otherwise green — with a
+machine-generated reason list. The `StatusAgent` receives *only* the facts and is
+instructed to write from them, so its prose can be checked against ground truth;
+it never sees the raw plan and never sets the health. *It always renders.* A
+deterministic `fallback_narrative` produces a serviceable exec summary + bullets
+with no LLM, so the API and UI work credential-free; the LLM narrative is the
+gated `plan status` CLI path when a key is set. *Two output formats* (`render_html`
+/ `render_markdown`) as the ticket asked. *Preview, don't send.* The tooling
+renders and previews the update; actual email sending and the weekly schedule are
+deploy concerns (RC1-195) — nothing here sends anything.
+
+**Consequences.** The status update is honest by construction: health is a rule,
+facts are diff-derived, and the narrative is grounded in the facts. It reuses
+RC1-192's comparison verbatim (a status report *is* a narrated baseline diff).
+"Completed" work is intentionally absent — we don't track actuals/progress yet, so
+reporting it would be invented; that's a clean follow-up once a progress field
+exists. Sending + scheduling are deferred to the deploy ticket.
+
+---
+
 ## ADR-0018 — Jira generation: one generation plan drives both mock and real, behind a gate
 
 **Date:** 2026-07-27 · **Ticket:** RC1-193 (P3.1) · **Status:** Accepted

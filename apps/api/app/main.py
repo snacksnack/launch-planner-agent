@@ -13,9 +13,13 @@ from planner_core import (
     PlanDiff,
     Scenario,
     Snapshot,
+    assemble_status,
     build_decision_record,
     build_generation_plan,
     compare_versions,
+    fallback_narrative,
+    render_html,
+    render_markdown,
     schedule_plan,
     simulate,
 )
@@ -255,6 +259,57 @@ def create_app() -> FastAPI:
                 "plan_diff": _plan_diff_payload(comparison.plan_diff),
                 "schedule_delta": comparison.schedule_delta.model_dump(mode="json"),
             },
+        }
+
+    @app.get("/api/status", tags=["plan"])
+    def api_status(
+        start: str | None = Query(default=None, description="Project start (YYYY-MM-DD)."),
+        current: str | None = Query(default=None, description="Current plan ref (version/hash)."),
+        baseline: str | None = Query(default=None, description="Baseline ref (default: latest)."),
+        period: str | None = Query(default=None, description="Period label."),
+        plan: str | None = Query(default=None, description="Plan file for the current version."),
+    ) -> dict[str, object]:
+        """The weekly status update: deterministic facts + health + a rule-written
+        narrative, plus rendered Markdown/HTML (RC1-194). Read-only; never sends.
+
+        The narrative here is the deterministic fallback (credential-free); the LLM
+        narrative is produced by the gated `plan status` CLI when a key is set.
+        Returns ``{"baseline": null}`` when no baseline exists.
+        """
+        store = SQLiteEventStore(settings.sqlite_path)
+        try:
+            base_snap = (
+                store.get_by_version(int(baseline))
+                if baseline and baseline.isdigit()
+                else store.get_by_hash(baseline)
+                if baseline
+                else store.latest_baseline()
+            )
+            if base_snap is None:
+                return {"baseline": None}
+            if current is not None:
+                cur_plan = _load_snapshot(settings.sqlite_path, current).plan
+            else:
+                cur_plan, _, _ = _load_request_plan(plan, None)
+        finally:
+            store.close()
+
+        start_date = _request_start_date(start)
+        comparison = compare_versions(base_snap.plan, cur_plan, start_date=start_date)
+        facts = assemble_status(
+            comparison,
+            baseline_raid=base_snap.plan.raid,
+            current_raid=cur_plan.raid,
+            period_label=period or "This week",
+            baseline_version=base_snap.version,
+        )
+        narrative = fallback_narrative(facts)
+        return {
+            "baseline": {"version": base_snap.version, "note": base_snap.message},
+            "facts": facts.model_dump(mode="json"),
+            "narrative": narrative.model_dump(mode="json"),
+            "markdown": render_markdown(facts, narrative),
+            "html": render_html(facts, narrative),
         }
 
     return app

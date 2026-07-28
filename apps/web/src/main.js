@@ -722,6 +722,81 @@ async function copyJiraCommand() {
   }
 }
 
+// --- weekly status update (RC1-194) ----------------------------------------
+
+const STATUS_LABEL = { green: "On track", yellow: "At risk", red: "Off track" };
+let statusMarkdown = "";
+
+async function showStatus() {
+  setPanelCollapsed(false);
+  const el = document.querySelector("#detail");
+  for (const sel of document.querySelectorAll(".selected")) sel.classList.remove("selected");
+  el.innerHTML =
+    `<button class="detail-close" title="Close">×</button><h2>Status update</h2>` +
+    `<p class="hint">Loading…</p>`;
+  el.querySelector(".detail-close").addEventListener("click", clearDetail);
+
+  let data;
+  try {
+    const resp = await fetch(`${API_BASE}/api/status`);
+    if (!resp.ok) throw new Error(`API ${resp.status}`);
+    data = await resp.json();
+  } catch (err) {
+    el.innerHTML =
+      `<button class="detail-close" title="Close">×</button><h2>Status update</h2>` +
+      `<p class="hint">Couldn't load: ${escapeHtml(err.message)}</p>`;
+    el.querySelector(".detail-close").addEventListener("click", clearDetail);
+    return;
+  }
+
+  if (!data.baseline) {
+    el.innerHTML =
+      `<button class="detail-close" title="Close">×</button><h2>Status update</h2>` +
+      `<p class="hint">No baseline set yet. Commit one with <code>plan baseline &lt;plan&gt; --by &lt;you&gt; --note "initial"</code>; the weekly status is measured against it.</p>`;
+    el.querySelector(".detail-close").addEventListener("click", clearDetail);
+    return;
+  }
+  renderStatusPanel(data);
+}
+
+function renderStatusPanel(data) {
+  const el = document.querySelector("#detail");
+  const f = data.facts;
+  const n = data.narrative;
+  statusMarkdown = data.markdown;
+
+  const changed = n.points.length
+    ? `<ul class="status-points">${n.points.map((p) => `<li>${escapeHtml(p)}</li>`).join("")}</ul>`
+    : `<p class="hint">No material changes since the baseline.</p>`;
+
+  el.innerHTML =
+    `<button class="detail-close" aria-label="Close" title="Close">×</button>` +
+    `<h2>Status update</h2>` +
+    `<p class="reasoning">${escapeHtml(f.period_label)} · vs baseline v${data.baseline.version}. Health is set by rule, not the LLM.</p>` +
+    `<div class="status-health status-${f.health}">
+       <span class="status-badge">${STATUS_LABEL[f.health]}</span>
+       <span class="status-reasons">${escapeHtml(f.health_reasons.join("; "))}</span>
+     </div>` +
+    `<p class="status-summary">${escapeHtml(n.exec_summary)}</p>` +
+    `<h3>What changed since last week</h3>${changed}` +
+    `<button id="status-copy" class="toolbtn">Copy as Markdown</button>`;
+
+  el.querySelector(".detail-close").addEventListener("click", clearDetail);
+  el.querySelector("#status-copy").addEventListener("click", copyStatusMarkdown);
+}
+
+async function copyStatusMarkdown() {
+  const btn = document.querySelector("#status-copy");
+  try {
+    await navigator.clipboard.writeText(statusMarkdown);
+    const prev = btn.textContent;
+    btn.textContent = "Copied ✓";
+    setTimeout(() => (btn.textContent = prev), 1500);
+  } catch {
+    btn.textContent = "Copy failed";
+  }
+}
+
 // --- slippage simulator (RC1-190) ------------------------------------------
 
 function toggleSimMode() {
@@ -1147,6 +1222,8 @@ function wireControls() {
   document.querySelector("#baseline-btn").addEventListener("click", toggleBaselineMode);
   // The Jira generation preview (RC1-193).
   document.querySelector("#jira-btn").addEventListener("click", showJira);
+  // The weekly status update (RC1-194).
+  document.querySelector("#status-btn").addEventListener("click", showStatus);
   // The banner's Reset exits whichever overlay mode is active.
   document.querySelector("#sim-reset").addEventListener("click", exitOverlayMode);
   // Own the click handling via delegation rather than frappe's on_click (which
