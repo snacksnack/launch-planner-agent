@@ -23,7 +23,7 @@ not a black box.
 
 ```text
 apps/
-  web/            # Gantt UI (Vite; grows into the dashboard in P1.7)
+  web/            # Gantt UI + dashboard (Vite): decisions, RAID, simulate, baseline, status, Jira
   api/            # FastAPI: ingestion, agent orchestration, persistence
 packages/
   planner-core/   # task graph, CPM/critical path, validation, plan-store models — ZERO LLM deps
@@ -51,6 +51,11 @@ uv run python -m app          # config sanity check (no credentials required)
 uv run uvicorn app.main:app --reload   # serve the API (GET /healthz)
 ```
 
+Then run the UI and open the demo — **see the [HOWTO](docs/HOWTO.md)** for the
+two-terminal quick start, a tour of every UI panel, and worked examples for every
+CLI verb. It all runs credential-free against the flagship golden plan. There's
+also a one-page [visual quick-start](https://claude.ai/code/artifact/89cfe001-3652-4ffd-85f1-815836d83031).
+
 ### Checks
 
 ```bash
@@ -61,6 +66,10 @@ uv run pytest                 # tests across all packages
 
 ## Status
 
-Phase 1 (demoable core) in progress — see epic **RC1-181**. This is the
-scaffold (**P1.1**); the domain model, agents, scheduling engine, and Gantt UI
-follow.
+Phases 1–3 built (epic **RC1-181**): the domain model + provenance, the four
+agents (work breakdown, dependency, RAID, status), the deterministic CPM engine,
+the interactive Gantt with a decisions/RAID/simulate/baseline/status/Jira
+dashboard, the event-sourced plan store with baselines, and gated Jira ticket
+generation. Remaining: deploy + audit-trail viewer & demo polish (**RC1-195**).
+See the [HOWTO](docs/HOWTO.md) to run it and the [decision log](docs/decisions.md)
+for the reasoning.
