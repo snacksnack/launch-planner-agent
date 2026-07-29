@@ -26,7 +26,16 @@ def _provenance(prov: Provenance) -> dict[str, Any]:
     }
 
 
-def build_gantt_payload(plan: Plan, schedule: Schedule) -> dict[str, Any]:
+def _jira_url(base_url: str | None, key: str | None) -> str | None:
+    """The browse URL for a Jira issue, if we have both a key and a base URL."""
+    if base_url and key:
+        return f"{base_url.rstrip('/')}/browse/{key}"
+    return None
+
+
+def build_gantt_payload(
+    plan: Plan, schedule: Schedule, *, jira_base_url: str | None = None
+) -> dict[str, Any]:
     """Transform a plan + its CPM schedule into a Gantt-ready payload."""
     epic_names = {e.id: e.name for e in plan.epics}
     owner_names = {m.id: m.name for m in plan.team}
@@ -70,6 +79,8 @@ def build_gantt_payload(plan: Plan, schedule: Schedule) -> dict[str, Any]:
                 "is_critical": ts.is_critical,
                 "predecessors": predecessors[task.id],
                 "provenance": _provenance(task.provenance),
+                "jira_key": task.jira_key,
+                "jira_url": _jira_url(jira_base_url, task.jira_key),
             }
         )
 
@@ -123,7 +134,15 @@ def build_gantt_payload(plan: Plan, schedule: Schedule) -> dict[str, Any]:
             "critical_chains": schedule.critical_chains,
             "meets_all_deadlines": schedule.meets_all_deadlines,
         },
-        "epics": [{"id": e.id, "name": e.name} for e in plan.epics],
+        "epics": [
+            {
+                "id": e.id,
+                "name": e.name,
+                "jira_key": e.jira_key,
+                "jira_url": _jira_url(jira_base_url, e.jira_key),
+            }
+            for e in plan.epics
+        ],
         "tasks": tasks,
         "milestones": milestones,
         "deadlines": deadlines,

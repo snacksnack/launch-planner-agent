@@ -1002,3 +1002,13 @@ blockquote {
 .audit-hash {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.7rem; color: var(--muted);
 }
+
+/* Jira link-out in the detail panel (RC1-200) */
+.jira-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+.jira-link:hover {
+  text-decoration: underline;
+}
