@@ -213,8 +213,39 @@ All settings are env-backed with the `LPA_` prefix (see `apps/api/app/config.py`
 | `LPA_JIRA_BASE_URL` / `LPA_JIRA_EMAIL` / `LPA_JIRA_API_TOKEN` | — | Real-mode Jira. |
 | `LPA_JIRA_PROJECT_KEY` | `PMA` | The scratch project real mode writes to. |
 
+Deploy-only settings: `LPA_PUBLIC_DEMO` (read-only demo: seeds a history on first
+boot, enables rate limiting), `LPA_WEB_DIST` (serve the built web same-origin),
+`LPA_RATE_LIMIT_PER_MINUTE` (per-IP cap on `/api/*`, demo only).
+
 `GET /api/plan?plan=…&start=YYYY-MM-DD` renders any plan file; `?snapshot=<version>`
 renders a committed snapshot.
+
+---
+
+## 7. Deploy
+
+One container (`Dockerfile`): Node builds the web app, Python serves it same-origin
+with the API. Run it locally exactly as it runs in production:
+
+```bash
+docker build -t launch-planner .
+docker run -p 8080:8080 -v lp:/data launch-planner   # → http://localhost:8080
+```
+
+The image sets `LPA_PUBLIC_DEMO=true`, so it **seeds** a proposal → commit →
+baseline history on first boot (the Baseline/Status/audit views have data), serves
+the built UI same-origin (no CORS), and **rate-limits** `/api/*`. The API has no
+LLM or write endpoints — agents and real Jira writes are CLI-only — so the public
+demo is read-only by construction; `GET /api/info` reports the posture.
+
+**Fly.io** (config in `fly.toml`, with a persistent volume for the SQLite store):
+
+```bash
+fly launch --no-deploy                 # create the app (first time)
+fly volumes create planner_data --size 1
+fly deploy
+fly certs add planner.hihelloreid.com  # then CNAME the subdomain to the Fly app
+```
 
 ---
 

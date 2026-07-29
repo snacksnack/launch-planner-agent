@@ -39,6 +39,43 @@ reference LLM code. This import direction is enforced in CI. See
 [docs/architecture.md](docs/architecture.md) and the running
 [decision log](docs/decisions.md) for why things are the way they are.
 
+## Architecture — agents vs. the engine
+
+```text
+  PRD ─▶  ┌─────────────── agents (LLM, schema-forced) ───────────────┐
+          │  Work Breakdown → Dependency → RAID → Status              │
+          │  each output: reasoning + verbatim quote + confidence     │
+          └──────────────────────────┬───────────────────────────────┘
+                     proposes         │        (never decides the math)
+                                      ▼
+          ┌──────────── planner-core (deterministic Python) ──────────┐
+          │  CPM / float / critical path · cycle detection · schedule │
+          │  diff · simulation · validation · event-sourced store     │
+          └──────────────────────────┬───────────────────────────────┘
+                     validates        │        (cannot import the agents)
+                                      ▼
+                          human reviews & commits  ─▶  Gantt · RAID · Simulate
+                                                        Baseline · Status · Jira
+```
+
+**Provenance is the spine.** Every agent-produced entity — epic, task, dependency,
+milestone, RAID item — carries a mandatory provenance block: *why* it was proposed,
+the *verbatim quote* from the PRD that justifies it, *which agent/model* produced it
+*when*, and a *confidence*. A `Plan` literally cannot be constructed with an
+agent-generated entity that lacks provenance. That's what makes the plan an audit
+trail: the **"How this plan was made"** view reconstructs the whole chain — agents
+proposed → Python validated (what it dropped, cut, or flagged) → human approved.
+
+**Why it's hard.** Anyone can ask an LLM to draft a project plan. The difficulty is
+making it *trustworthy*: the critical-path math and the approval gates are
+deterministic and provable (hallucinated dependencies can't reach the schedule),
+the audit trail is first-class rather than bolted on, and side effects (Jira writes,
+status emails) are gated behind explicit human approval. The LLM proposes; it never
+gets to decide whether the launch date is real.
+
+**Positioning.** One of three delivery-intelligence tools: the **planner creates**
+the plan → a **drift detector watches** it → the **status agent reports** on it.
+
 ## Getting started
 
 Requires [uv](https://docs.astral.sh/uv/) and Python 3.12 (uv will fetch it).
@@ -63,6 +100,23 @@ uv run ruff check .           # lint
 uv run lint-imports           # enforce planner-core has no LLM/app deps
 uv run pytest                 # tests across all packages
 ```
+
+## Deploy
+
+A single container (`Dockerfile`): Node builds the web app, Python serves it
+same-origin with the API — no separate web server, no CORS in production. The
+public demo is **read-only by construction** (the API has no LLM or write
+endpoints; agents and commits are CLI-only), seeds a proposal → commit → baseline
+history on first boot (`LPA_PUBLIC_DEMO`), and rate-limits the compute endpoints.
+
+```bash
+docker build -t launch-planner . && docker run -p 8080:8080 -v lp:/data launch-planner
+# → http://localhost:8080  (full UI + API, seeded, one service)
+```
+
+Fly.io config is in `fly.toml` (persistent volume for the SQLite store, `/healthz`
+check). See the **[Deploy section of the HOWTO](docs/HOWTO.md#7-deploy)** for the
+`fly launch` / `fly deploy` / custom-domain steps.
 
 ## Status
 

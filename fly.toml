@@ -1,0 +1,40 @@
+# Fly.io deploy for the public demo (RC1-195).
+#   fly launch --no-deploy    # first time: creates the app + volume
+#   fly volumes create planner_data --size 1
+#   fly deploy
+# Then point planner.hihelloreid.com at the app (fly certs add + a CNAME).
+app = "launch-planner-agent"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  LPA_PUBLIC_DEMO = "true"
+  LPA_WEB_DIST = "/app/web-dist"
+  LPA_DATABASE_URL = "sqlite:////data/launch_planner.db"
+  LPA_ENVIRONMENT = "production"
+  LPA_RATE_LIMIT_PER_MINUTE = "60"
+
+# Persist the SQLite plan store across deploys/restarts.
+[mounts]
+  source = "planner_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/healthz"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

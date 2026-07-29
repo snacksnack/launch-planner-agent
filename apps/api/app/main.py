@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import time
+from collections import defaultdict, deque
 from datetime import date
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from planner_core import (
     DecisionRecord,
     Plan,
@@ -75,6 +79,14 @@ def _decisions_for(
 
 def create_app() -> FastAPI:
     settings = get_settings()
+
+    # The public demo needs a snapshot history to show Baseline/Status/audit — the
+    # read-only API can't create one — so seed it once from the flagship golden.
+    if settings.public_demo:
+        from app.seed_demo import seed_if_empty
+
+        seed_if_empty(settings.sqlite_path)
+
     app = FastAPI(
         title=settings.app_name,
         version=__version__,
@@ -89,6 +101,29 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Per-IP sliding-window rate limit on the compute/API endpoints (RC1-195).
+    # The public demo is read-only, but the CPM/diff endpoints still cost CPU, so
+    # cap anonymous traffic. Simple in-memory window — fine for a single instance.
+    _hits: dict[str, deque[float]] = defaultdict(deque)
+
+    @app.middleware("http")
+    async def _rate_limit(request: Request, call_next):
+        limit = settings.rate_limit_per_minute
+        # Only throttle the shared public demo; local/dev runs are unlimited.
+        if settings.public_demo and limit and request.url.path.startswith("/api/"):
+            now = time.monotonic()
+            client = request.client.host if request.client else "?"
+            window = _hits[client]
+            while window and window[0] < now - 60:
+                window.popleft()
+            if len(window) >= limit:
+                return JSONResponse(
+                    status_code=429,
+                    content={"detail": "rate limit exceeded — this is a shared demo"},
+                )
+            window.append(now)
+        return await call_next(request)
+
     @app.get("/healthz", tags=["ops"])
     def healthz() -> dict[str, object]:
         return {
@@ -96,6 +131,19 @@ def create_app() -> FastAPI:
             "app": settings.app_name,
             "version": __version__,
             "environment": settings.environment,
+        }
+
+    @app.get("/api/info", tags=["ops"])
+    def api_info() -> dict[str, object]:
+        """What this instance exposes — the public demo is read-only by design."""
+        return {
+            "app": settings.app_name,
+            "version": __version__,
+            "public_demo": settings.public_demo,
+            # The API has no LLM or write endpoints; agents + commits are CLI-only.
+            "writes_enabled": False,
+            "agent_endpoints": False,
+            "rate_limit_per_minute": settings.rate_limit_per_minute,
         }
 
     def _load_request_plan(
@@ -261,6 +309,77 @@ def create_app() -> FastAPI:
             },
         }
 
+    @app.get("/api/audit", tags=["plan"])
+    def api_audit(
+        start: str | None = Query(default=None, description="Project start (YYYY-MM-DD)."),
+        plan: str | None = Query(default=None, description="Path to a plan.json."),
+        snapshot: str | None = Query(default=None, description="A committed snapshot ref."),
+    ) -> dict[str, object]:
+        """"How this plan was made" — the reasoning chain for the flagship plan:
+        which agents produced what, the deterministic validation actions taken on
+        top, and the human review/commit history (RC1-195). Read-only."""
+        parsed, plan_path, persisted = _load_request_plan(plan, snapshot)
+
+        # 1. The agent runs, reconstructed from per-entity provenance.
+        from collections import defaultdict
+
+        groups: dict[str, dict] = defaultdict(
+            lambda: {"model": None, "count": 0, "kinds": defaultdict(int), "timestamp": None}
+        )
+        buckets = [
+            ("epic", parsed.epics),
+            ("task", parsed.tasks),
+            ("dependency", parsed.dependencies),
+            ("milestone", parsed.milestones),
+        ]
+        for kind, items in buckets:
+            for item in items:
+                prov = item.provenance
+                g = groups[prov.agent]
+                g["model"] = prov.model
+                g["count"] += 1
+                g["kinds"][kind] += 1
+                g["timestamp"] = prov.timestamp.isoformat()
+        for raid in parsed.raid:
+            prov = raid.provenance
+            g = groups[prov.agent]
+            g["model"] = prov.model
+            g["count"] += 1
+            g["kinds"]["raid"] += 1
+            g["timestamp"] = prov.timestamp.isoformat()
+        agents = [
+            {
+                "agent": name,
+                "model": g["model"],
+                "count": g["count"],
+                "kinds": dict(g["kinds"]),
+                "timestamp": g["timestamp"],
+            }
+            for name, g in sorted(groups.items(), key=lambda kv: kv[1]["timestamp"] or "")
+        ]
+
+        # 2. The deterministic validation actions.
+        decisions = _decisions_for(parsed, plan_path, persisted).model_dump()
+
+        # 3. The human review / commit history.
+        store = SQLiteEventStore(settings.sqlite_path)
+        try:
+            history = [
+                {
+                    "version": s.version,
+                    "kind": s.kind.value,
+                    "content_hash": s.content_hash[:12],
+                    "approved_by": s.approved_by,
+                    "message": s.message,
+                    "created_at": s.created_at.isoformat(),
+                }
+                for s in store.history()
+            ]
+        finally:
+            store.close()
+
+        return {"agents": agents, "decisions": decisions, "history": history}
+
     @app.get("/api/status", tags=["plan"])
     def api_status(
         start: str | None = Query(default=None, description="Project start (YYYY-MM-DD)."),
@@ -311,6 +430,14 @@ def create_app() -> FastAPI:
             "markdown": render_markdown(facts, narrative),
             "html": render_html(facts, narrative),
         }
+
+    # In production, serve the built web app same-origin so there's one service
+    # and no CORS. Mounted last so /api/* and /healthz win. `html=True` serves
+    # index.html at "/". Skipped in dev (Vite serves the web itself).
+    if settings.web_dist:
+        dist = Path(settings.web_dist)
+        if dist.is_dir():
+            app.mount("/", StaticFiles(directory=str(dist), html=True), name="web")
 
     return app
 
