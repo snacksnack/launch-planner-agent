@@ -475,6 +475,95 @@ function provenanceBlock(title, prov) {
   `;
 }
 
+// --- audit trail: "How this plan was made" (RC1-195) -----------------------
+
+const AGENT_LABEL = {
+  "work-breakdown": "Work Breakdown agent",
+  dependency: "Dependency agent",
+  raid: "RAID agent",
+  status: "Status agent",
+};
+const KIND_LABEL = { epic: "epic", task: "task", dependency: "dependency", milestone: "milestone", raid: "RAID item" };
+const SNAP_LABEL = { proposal: "Agent proposal", commit: "Committed", baseline: "Baseline set" };
+
+function plural(n, word) {
+  if (n === 1) return `${n} ${word}`;
+  const p = /[^aeiou]y$/.test(word) ? `${word.slice(0, -1)}ies` : `${word}s`;
+  return `${n} ${p}`;
+}
+
+async function showAudit() {
+  setPanelCollapsed(false);
+  const el = document.querySelector("#detail");
+  for (const sel of document.querySelectorAll(".selected")) sel.classList.remove("selected");
+  el.innerHTML =
+    `<button class="detail-close" title="Close">×</button><h2>How this plan was made</h2>` +
+    `<p class="hint">Loading…</p>`;
+  el.querySelector(".detail-close").addEventListener("click", clearDetail);
+
+  let data;
+  try {
+    const resp = await fetch(`${API_BASE}/api/audit`);
+    if (!resp.ok) throw new Error(`API ${resp.status}`);
+    data = await resp.json();
+  } catch (err) {
+    el.innerHTML =
+      `<button class="detail-close" title="Close">×</button><h2>How this plan was made</h2>` +
+      `<p class="hint">Couldn't load: ${escapeHtml(err.message)}</p>`;
+    el.querySelector(".detail-close").addEventListener("click", clearDetail);
+    return;
+  }
+  renderAuditPanel(data);
+}
+
+function renderAuditPanel(data) {
+  const el = document.querySelector("#detail");
+  const d = data.decisions;
+
+  const agentRows = data.agents
+    .map((a) => {
+      const kinds = Object.entries(a.kinds)
+        .map(([k, n]) => plural(n, KIND_LABEL[k] ?? k))
+        .join(" · ");
+      return `<li><div class="audit-head"><strong>${escapeHtml(AGENT_LABEL[a.agent] ?? a.agent)}</strong>
+        <span class="audit-model">${escapeHtml(a.model)}</span></div>
+        <p class="audit-detail">proposed ${escapeHtml(kinds)}</p></li>`;
+    })
+    .join("");
+
+  const dropped = (d.rejected_edges?.length ?? 0) + (d.cycle_breaks?.length ?? 0);
+  const valBits = [
+    plural(d.flagged?.length ?? 0, "flag"),
+    `${dropped} edge${dropped === 1 ? "" : "s"} dropped/cut`,
+    plural(d.coverage_gaps?.length ?? 0, "PRD section") + " uncited",
+  ];
+
+  const timeline = data.history.length
+    ? `<ul class="audit-timeline">${data.history
+        .map(
+          (h) =>
+            `<li><span class="audit-snap audit-snap-${h.kind}">${SNAP_LABEL[h.kind] ?? h.kind}</span>
+              <div><strong>v${h.version}</strong>${h.approved_by ? ` · ${escapeHtml(h.approved_by)}` : ""}
+              <span class="audit-hash">${escapeHtml(h.content_hash)}</span>
+              ${h.message ? `<div class="audit-detail">${escapeHtml(h.message)}</div>` : ""}</div></li>`,
+        )
+        .join("")}</ul>`
+    : `<p class="hint">No committed history on this instance yet.</p>`;
+
+  el.innerHTML =
+    `<button class="detail-close" aria-label="Close" title="Close">×</button>` +
+    `<h2>How this plan was made</h2>` +
+    `<p class="reasoning">The reasoning chain, end to end: agents proposed, Python validated, a human approved — every step inspectable.</p>` +
+    `<h3>1 · Agents proposed</h3><ul class="audit-list">${agentRows}</ul>` +
+    `<h3>2 · Python validated</h3>` +
+    `<p class="audit-detail">${valBits.join(" · ")}. <a href="#" id="audit-to-decisions">See the decisions →</a></p>` +
+    `<h3>3 · Human approved</h3>${timeline}`;
+
+  el.querySelector(".detail-close").addEventListener("click", clearDetail);
+  const toDec = el.querySelector("#audit-to-decisions");
+  if (toDec) toDec.addEventListener("click", (e) => { e.preventDefault(); showDecisions(); });
+}
+
 // --- RAID log (RC1-191) ----------------------------------------------------
 
 let raidFilter = "all"; // all | risk | assumption | issue | decision
@@ -1211,6 +1300,8 @@ function wireControls() {
   const n = decisionCount();
   if (n) decBtn.innerHTML = `Decisions <span class="count">${n}</span>`;
   decBtn.addEventListener("click", showDecisions);
+  // The audit trail — "How this plan was made" (RC1-195).
+  document.querySelector("#audit-btn").addEventListener("click", showAudit);
   // The RAID log (RC1-191).
   const raidBtn = document.querySelector("#raid-btn");
   const rn = raidCount();

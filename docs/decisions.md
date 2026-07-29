@@ -12,6 +12,45 @@ to).
 
 ---
 
+## ADR-0020 — Deploy: one read-only-by-construction container, seeded, same-origin
+
+**Date:** 2026-07-29 · **Ticket:** RC1-195 (P3.3) · **Status:** Accepted
+
+**Context.** The finale ships a public demo a recruiter can click without setup.
+The hard constraints: no public traffic can trigger LLM calls or burn API budget;
+no anonymous write can mutate anything; and the Baseline/Status/audit views need a
+history to be interesting — but the demo has no way to *create* one.
+
+**Explanation.** *Read-only by construction, not by guard.* The crucial discovery
+is that the **API already has no LLM or write endpoints** — every agent and every
+commit is CLI-only; the HTTP surface is deterministic reads plus the mock Jira
+preview. So "disable agent endpoints for anonymous visitors" is satisfied by the
+architecture, not by auth middleware. We made it *explicit* — an `LPA_PUBLIC_DEMO`
+flag, an `/api/info` that reports `writes_enabled: false / agent_endpoints: false`,
+and a per-IP rate limit on `/api/*` (demo-only, so tests and local dev are
+unthrottled) — rather than bolting on a permission layer the surface doesn't need.
+*One container, same-origin.* A multi-stage image builds the web with Node and
+serves it from FastAPI (`StaticFiles`, mounted last so `/api/*` wins), so
+production is a single service with no CORS; the web is built with an empty
+`VITE_API_BASE` so fetches are relative. *Seed on first boot.* Because the
+read-only API can't create snapshots, `seed_if_empty` plants a realistic
+proposal → commit → baseline history from the flagship golden at startup (only in
+demo mode, only if the store is empty) — so Baseline, Status, and the audit view
+have real data on a fresh volume. *The audit view is assembly, not new data.*
+`/api/audit` reconstructs "how this plan was made" from what already exists:
+per-entity provenance (grouped into agent runs), the decision record (validation
+actions), and the snapshot history (human review) — the reasoning trail as a
+browsable artifact.
+
+**Consequences.** `docker build` produces a self-contained image (verified locally,
+container and all); Fly.io config (`fly.toml`) mounts a volume for the SQLite store.
+The actual `fly deploy`, the `planner.hihelloreid.com` CNAME/cert, and the
+resume-site project card are operator/other-repo steps, not code here. The status
+email *send* and weekly schedule remain deferred — the tooling renders and previews;
+delivery is a scheduling concern a deploy can add later.
+
+---
+
 ## ADR-0019 — Status agent: deterministic facts + rule-based health, LLM phrases but never decides
 
 **Date:** 2026-07-28 · **Ticket:** RC1-194 (P3.2) · **Status:** Accepted

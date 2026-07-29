@@ -968,3 +968,37 @@ blockquote {
   padding: 0.2rem 0;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
 }
+
+/* --- audit trail: "How this plan was made" (RC1-195) --- */
+
+.audit-list { list-style: none; margin: 0.25rem 0 0.5rem; padding: 0; }
+.audit-list li {
+  padding: 0.5rem 0; border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+}
+.audit-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; font-size: 0.9rem; }
+.audit-model {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.68rem; color: var(--muted); background: var(--panel);
+  padding: 0.05rem 0.35rem; border-radius: var(--radius-sm); border: 1px solid var(--border);
+}
+.audit-detail { margin: 0.2rem 0 0; font-size: 0.82rem; color: var(--muted); }
+
+.audit-timeline { list-style: none; margin: 0.25rem 0; padding: 0; }
+.audit-timeline li {
+  display: flex; gap: 0.6rem; align-items: flex-start; padding: 0.45rem 0;
+  border-left: 2px solid var(--border); padding-left: 0.85rem; margin-left: 0.35rem; position: relative;
+}
+.audit-timeline li::before {
+  content: ""; position: absolute; left: -5px; top: 0.7rem; width: 8px; height: 8px;
+  border-radius: 50%; background: var(--accent);
+}
+.audit-snap {
+  flex-shrink: 0; font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em;
+  padding: 0.12rem 0.45rem; border-radius: var(--radius-sm); align-self: center;
+}
+.audit-snap-proposal { background: var(--info-bg); color: var(--info); }
+.audit-snap-commit { background: var(--success-bg); color: var(--success); }
+.audit-snap-baseline { background: var(--caution-bg); color: var(--caution); }
+.audit-hash {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.7rem; color: var(--muted);
+}

@@ -1,0 +1,18 @@
+# keep the build context small and deterministic
+.git
+.venv
+**/__pycache__
+**/*.pyc
+**/node_modules
+apps/web/dist
+**/*.db
+.env
+.env.*
+!apps/web/.env.production
+docs
+tests
+**/tests
+.ruff_cache
+.pytest_cache
+*.md
+!fixtures/**/*.md

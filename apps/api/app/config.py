@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     jira_api_token: str | None = Field(default=None, repr=False)
     jira_project_key: str = "PMA"  # the scratch project real mode writes to
 
+    # Deploy (P3.3). The public demo is read-only by construction (the API has no
+    # LLM/write endpoints); this flag makes that explicit and enables rate limiting.
+    public_demo: bool = False
+    web_dist: str | None = None  # path to the built web app to serve as static files
+    rate_limit_per_minute: int = 60  # per-IP cap on compute endpoints (0 = off)
+
     @property
     def has_llm_credentials(self) -> bool:
         return bool(self.anthropic_api_key)
