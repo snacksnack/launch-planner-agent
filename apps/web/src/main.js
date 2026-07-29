@@ -416,6 +416,16 @@ function setPanelCollapsed(collapsed) {
   btn.title = collapsed ? "Show details panel" : "Hide details panel";
 }
 
+// A "Jira" row once a task has been pushed to the board (RC1-200): a clickable
+// link when we know the site URL, or the bare key otherwise.
+function jiraRow(t) {
+  if (!t.jira_key) return "";
+  const value = t.jira_url
+    ? `<a class="jira-link" href="${escapeHtml(t.jira_url)}" target="_blank" rel="noopener">${escapeHtml(t.jira_key)} ↗</a>`
+    : escapeHtml(t.jira_key);
+  return `<dt>Jira</dt><dd>${value}</dd>`;
+}
+
 function taskDetail(t) {
   const est = t.estimate;
   return `
@@ -426,6 +436,7 @@ function taskDetail(t) {
       <dt>Dates</dt><dd>${t.start} → ${t.end}</dd>
       <dt>Estimate</dt><dd>${est.optimistic} / ${est.likely} / ${est.pessimistic} days (o/l/p)</dd>
       <dt>Float</dt><dd>total ${t.total_float}, free ${t.free_float}${t.is_critical ? " · <span class=\"crit\">critical</span>" : ""}</dd>
+      ${jiraRow(t)}
     </dl>
     ${provenanceBlock("Why this task", t.provenance)}
     ${dependencyBlock(t.predecessors)}

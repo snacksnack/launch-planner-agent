@@ -46,6 +46,31 @@ def test_tasks_carry_dates_epic_owner_and_provenance():
     assert task["provenance"]["confidence"] in {"high", "medium", "low"}
 
 
+def test_jira_key_and_url_surface_once_a_task_is_pushed():
+    """RC1-200: a task with a jira_key gets a clickable browse URL in the payload."""
+    plan = Plan.model_validate_json(GOLDEN.read_text())
+    plan.tasks[0].jira_key = "PMA-42"
+    plan.epics[0].jira_key = "PMA-1"
+    schedule = schedule_plan(plan, start_date=MONDAY)
+
+    # With a site URL, the key becomes a browse link.
+    payload = build_gantt_payload(
+        plan, schedule, jira_base_url="https://acme.atlassian.net/"
+    )
+    pushed = next(t for t in payload["tasks"] if t["id"] == plan.tasks[0].id)
+    assert pushed["jira_key"] == "PMA-42"
+    assert pushed["jira_url"] == "https://acme.atlassian.net/browse/PMA-42"
+    assert payload["epics"][0]["jira_url"] == "https://acme.atlassian.net/browse/PMA-1"
+    # An un-pushed task carries no key or link.
+    other = next(t for t in payload["tasks"] if t["id"] == plan.tasks[1].id)
+    assert other["jira_key"] is None and other["jira_url"] is None
+
+    # Without a site URL configured, the key shows but there's no link.
+    no_base = build_gantt_payload(plan, schedule)
+    assert no_base["tasks"][0]["jira_key"] == "PMA-42"
+    assert no_base["tasks"][0]["jira_url"] is None
+
+
 def test_critical_path_tasks_are_flagged():
     payload = _golden_payload()
     critical_ids = set(payload["project"]["critical_path_ids"])

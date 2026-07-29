@@ -183,7 +183,7 @@ def create_app() -> FastAPI:
         parsed, plan_path, persisted_record = _load_request_plan(plan, snapshot)
         start_date = _request_start_date(start)
         schedule = schedule_plan(parsed, start_date=start_date)
-        payload = build_gantt_payload(parsed, schedule)
+        payload = build_gantt_payload(parsed, schedule, jira_base_url=settings.jira_base_url)
         payload["decisions"] = _decisions_for(parsed, plan_path, persisted_record).model_dump()
         return payload
 
