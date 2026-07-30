@@ -583,8 +583,22 @@ blockquote {
   background: var(--success-bg);
   border-bottom-color: color-mix(in srgb, var(--success) 40%, var(--border));
 }
+/* neutral ground while viewing the baseline half of the A/B (RC1-203) */
+#sim-banner.baseline-view {
+  background: var(--surface-2, var(--panel));
+  border-bottom-color: var(--sep);
+}
 #sim-banner-text {
   min-width: 0;
+}
+.sim-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+.sim-reset[hidden] {
+  display: none;
 }
 .sim-reset {
   flex-shrink: 0;
