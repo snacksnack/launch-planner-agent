@@ -120,7 +120,11 @@ flipping than by overlay — without clearing the scenario or the impact summary
 
 - Library choice (frappe-gantt vs vis-timeline) is recorded in
   `docs/decisions.md` (ADR-0011).
-- The frontend is not part of the Python CI matrix; it's verified in the browser.
+- The frontend's pure logic (formatting, ghost-overlay geometry, dependency-flag
+  naming — extracted into `src/lib.js`) has a **Vitest** suite: `npm test` in
+  `apps/web` (RC1-205). DOM-heavy rendering (frappe-gantt, SVG overlays) is not
+  unit-tested — it's verified in the browser. The frontend is separate from the
+  Python `uv run pytest` matrix; run both to check everything.
 - Freeze-window shading renders any `blackout` constraint's window (RC1-196) — on
   the flagship it sits past the finish, so slip work into it (Simulate) to see the
   band; milestones show projected dates once linked into the graph (RC1-198).

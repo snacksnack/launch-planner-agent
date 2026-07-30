@@ -1,0 +1,108 @@
+// Pure helpers for the Gantt UI — no DOM, no module state, so they can be
+// unit-tested headlessly (RC1-205). main.js imports these and passes its state
+// (the byId/depById maps, the measured bar positions, etc.) in as arguments.
+
+export function escapeHtml(value) {
+  return String(value).replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+  );
+}
+
+export function signed(n) {
+  return n > 0 ? `+${n}` : `${n}`;
+}
+
+// Days since the Unix epoch (UTC), so date arithmetic ignores timezones.
+export function day(dateStr) {
+  return Math.round(new Date(`${dateStr}T00:00:00Z`).getTime() / 86400000);
+}
+
+export function plural(n, word) {
+  if (n === 1) return `${n} ${word}`;
+  const p = /[^aeiou]y$/.test(word) ? `${word.slice(0, -1)}ies` : `${word}s`;
+  return `${n} ${p}`;
+}
+
+// Risk severity (probability × impact, 1..25) → a colour band, or null if unscored.
+export function severityBand(sev) {
+  if (sev == null) return null;
+  if (sev >= 15) return "high";
+  if (sev >= 8) return "med";
+  return "low";
+}
+
+// A task's predecessor edges → Map(depId → {from, to}), so a flag on a dependency
+// can be shown as its endpoint names instead of an opaque id.
+export function buildDepIndex(tasks) {
+  const deps = new Map();
+  for (const t of tasks) {
+    for (const p of t.predecessors ?? []) deps.set(p.id, { from: p.from, to: t.id });
+  }
+  return deps;
+}
+
+export function nameFor(id, byId) {
+  return byId.get(id)?.name ?? id;
+}
+
+// A flag's entity id → a human, clickable subject: a task/milestone name, a
+// dependency's "Predecessor → Successor" names, or the raw id as a fallback.
+export function flagSubject(entityId, byId, depById) {
+  if (!entityId) return "";
+  if (byId.has(entityId)) {
+    return `<a href="#" data-jump="${escapeHtml(entityId)}">${escapeHtml(nameFor(entityId, byId))}</a>`;
+  }
+  const edge = depById.get(entityId);
+  if (edge) {
+    return `<a href="#" data-jump="${escapeHtml(edge.to)}">${escapeHtml(nameFor(edge.from, byId))} → ${escapeHtml(nameFor(edge.to, byId))}</a>`;
+  }
+  return escapeHtml(entityId);
+}
+
+// A single what-if change → plain text. `nameOf` resolves an id to a display name.
+export function describeChange(c, nameOf) {
+  if (c.kind === "delay_task") return `${nameOf(c.task_id)} slips ${c.days}d`;
+  const verb = c.kind === "add_dependency" ? "add" : "remove";
+  return `${verb} ${nameOf(c.predecessor_id)} → ${nameOf(c.successor_id)}`;
+}
+
+export function describeScenario(changes, nameOf) {
+  return changes.map((c) => describeChange(c, nameOf)).join("; ");
+}
+
+// Fit x = a·day + b from measured bars [{date, x}] and return a date→x function
+// (null if fewer than two distinct dates are available to solve the line).
+export function calibrate(bars) {
+  const pts = bars.filter(Boolean);
+  if (pts.length < 2) return null;
+  pts.sort((p, q) => day(p.date) - day(q.date));
+  const lo = pts[0];
+  const hi = pts[pts.length - 1];
+  const span = day(hi.date) - day(lo.date);
+  if (span === 0) return null;
+  const a = (hi.x - lo.x) / span;
+  const b = lo.x - a * day(lo.date);
+  return (dateStr) => a * day(dateStr) + b;
+}
+
+// Geometry for one ghost bar: given the date→x `map`, the baseline task's
+// {start, end}, and the simulated bar's y/height/x, return the ghost rect and an
+// optional connector line to the shifted bar (omitted when they barely differ).
+export function ghostRect(map, base, y, h, simX) {
+  const x1 = map(base.start);
+  const x2 = map(base.end);
+  const gx = Math.min(x1, x2);
+  const gw = Math.max(2, Math.abs(x2 - x1));
+  const rect = { x: gx, y, width: gw, height: h };
+  const connector =
+    Math.abs(simX - (gx + gw)) > 1 ? { x1: gx + gw, x2: simX, cy: y + h / 2 } : null;
+  return { rect, connector };
+}
+
+// The gated CLI command to apply the selected Jira issues (partial → `--only`).
+export function jiraCommand(gen, selectedIds, startDate) {
+  const partial = selectedIds.length < gen.issues.length;
+  const only = partial ? ` --only ${selectedIds.join(",")}` : "";
+  return `plan jira <plan.json> --start-date ${startDate} --project ${gen.project_key}${only} --real --confirm`;
+}

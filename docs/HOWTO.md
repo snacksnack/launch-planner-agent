@@ -41,7 +41,8 @@ key is needed — the UI reads the pre-scheduled golden from `GET /api/plan`.
 ```bash
 uv run ruff check .          # lint
 uv run lint-imports          # enforce: planner-core imports no LLM/app code
-uv run pytest                # the full test suite
+uv run pytest                # the Python test suite
+(cd apps/web && npm test)    # the frontend unit tests (Vitest)
 ```
 
 ---

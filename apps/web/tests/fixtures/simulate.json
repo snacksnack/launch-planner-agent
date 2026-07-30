@@ -1,0 +1,423 @@
+{
+  "baseline": {
+    "project": {
+      "name": "Demo plan",
+      "start_date": "2026-08-03",
+      "finish_date": "2026-08-14",
+      "duration_working_days": 10.0,
+      "critical_path_ids": [
+        "task-a",
+        "task-b",
+        "task-c"
+      ],
+      "critical_chains": [
+        [
+          "task-a",
+          "task-b",
+          "task-c"
+        ]
+      ],
+      "meets_all_deadlines": true
+    },
+    "epics": [
+      {
+        "id": "epic-1",
+        "name": "Data Migration",
+        "jira_key": null,
+        "jira_url": null
+      }
+    ],
+    "tasks": [
+      {
+        "id": "task-a",
+        "name": "Inventory projects",
+        "epic_id": "epic-1",
+        "epic_name": "Data Migration",
+        "start": "2026-08-03",
+        "end": "2026-08-07",
+        "owner_id": "tm-1",
+        "owner_name": "Ada Okoro",
+        "estimate": {
+          "optimistic": 5.0,
+          "likely": 5.0,
+          "pessimistic": 5.0
+        },
+        "total_float": 0.0,
+        "free_float": 0.0,
+        "is_critical": true,
+        "predecessors": [],
+        "provenance": {
+          "reasoning": "because it's needed",
+          "source_quote": "inventory all projects",
+          "source_section": "Scope",
+          "confidence": "high",
+          "agent": "work-breakdown",
+          "model": "claude-sonnet-5",
+          "timestamp": "2026-07-20T00:00:00+00:00"
+        },
+        "jira_key": null,
+        "jira_url": null
+      },
+      {
+        "id": "task-b",
+        "name": "Migrate users",
+        "epic_id": "epic-1",
+        "epic_name": "Data Migration",
+        "start": "2026-08-10",
+        "end": "2026-08-12",
+        "owner_id": "tm-1",
+        "owner_name": "Ada Okoro",
+        "estimate": {
+          "optimistic": 3.0,
+          "likely": 3.0,
+          "pessimistic": 3.0
+        },
+        "total_float": 0.0,
+        "free_float": 0.0,
+        "is_critical": true,
+        "predecessors": [
+          {
+            "id": "dep-ab",
+            "from": "task-a",
+            "type": "finish_to_start",
+            "lag": 0.0,
+            "provenance": {
+              "reasoning": "A must finish before B",
+              "source_quote": "A before B",
+              "source_section": null,
+              "confidence": "medium",
+              "agent": "dependency",
+              "model": "claude-sonnet-5",
+              "timestamp": "2026-07-20T00:00:00+00:00"
+            }
+          }
+        ],
+        "provenance": {
+          "reasoning": "because it's needed",
+          "source_quote": "inventory all projects",
+          "source_section": "Scope",
+          "confidence": "high",
+          "agent": "work-breakdown",
+          "model": "claude-sonnet-5",
+          "timestamp": "2026-07-20T00:00:00+00:00"
+        },
+        "jira_key": null,
+        "jira_url": null
+      },
+      {
+        "id": "task-c",
+        "name": "Cutover",
+        "epic_id": "epic-1",
+        "epic_name": "Data Migration",
+        "start": "2026-08-13",
+        "end": "2026-08-14",
+        "owner_id": "tm-1",
+        "owner_name": "Ada Okoro",
+        "estimate": {
+          "optimistic": 2.0,
+          "likely": 2.0,
+          "pessimistic": 2.0
+        },
+        "total_float": 0.0,
+        "free_float": 0.0,
+        "is_critical": true,
+        "predecessors": [
+          {
+            "id": "dep-bc",
+            "from": "task-b",
+            "type": "finish_to_start",
+            "lag": 0.0,
+            "provenance": {
+              "reasoning": "A must finish before B",
+              "source_quote": "A before B",
+              "source_section": null,
+              "confidence": "medium",
+              "agent": "dependency",
+              "model": "claude-sonnet-5",
+              "timestamp": "2026-07-20T00:00:00+00:00"
+            }
+          }
+        ],
+        "provenance": {
+          "reasoning": "because it's needed",
+          "source_quote": "inventory all projects",
+          "source_section": "Scope",
+          "confidence": "high",
+          "agent": "work-breakdown",
+          "model": "claude-sonnet-5",
+          "timestamp": "2026-07-20T00:00:00+00:00"
+        },
+        "jira_key": null,
+        "jira_url": null
+      }
+    ],
+    "milestones": [],
+    "deadlines": [],
+    "raid": [
+      {
+        "id": "raid-1",
+        "type": "risk",
+        "title": "Key-person risk",
+        "description": "single owner",
+        "probability": 3,
+        "impact": 4,
+        "mitigation": "cross-train",
+        "suggested_owner_id": "tm-1",
+        "decided_on": null,
+        "rationale": null,
+        "provenance": {
+          "reasoning": "single owner",
+          "confidence": "high",
+          "evidence": {
+            "kind": "prd",
+            "source_quote": "inventory all projects",
+            "source_section": null
+          },
+          "agent": "raid",
+          "model": "claude-sonnet-5",
+          "timestamp": "2026-07-20T00:00:00Z"
+        },
+        "severity": 12,
+        "suggested_owner_name": "Ada Okoro"
+      }
+    ],
+    "freezes": []
+  },
+  "simulated": {
+    "project": {
+      "name": "Demo plan",
+      "start_date": "2026-08-03",
+      "finish_date": "2026-08-20",
+      "duration_working_days": 14.0,
+      "critical_path_ids": [
+        "task-a",
+        "task-b",
+        "task-c"
+      ],
+      "critical_chains": [
+        [
+          "task-a",
+          "task-b",
+          "task-c"
+        ]
+      ],
+      "meets_all_deadlines": true
+    },
+    "epics": [
+      {
+        "id": "epic-1",
+        "name": "Data Migration",
+        "jira_key": null,
+        "jira_url": null
+      }
+    ],
+    "tasks": [
+      {
+        "id": "task-a",
+        "name": "Inventory projects",
+        "epic_id": "epic-1",
+        "epic_name": "Data Migration",
+        "start": "2026-08-03",
+        "end": "2026-08-13",
+        "owner_id": "tm-1",
+        "owner_name": "Ada Okoro",
+        "estimate": {
+          "optimistic": 5.0,
+          "likely": 9.0,
+          "pessimistic": 9.0
+        },
+        "total_float": 0.0,
+        "free_float": 0.0,
+        "is_critical": true,
+        "predecessors": [],
+        "provenance": {
+          "reasoning": "because it's needed",
+          "source_quote": "inventory all projects",
+          "source_section": "Scope",
+          "confidence": "high",
+          "agent": "work-breakdown",
+          "model": "claude-sonnet-5",
+          "timestamp": "2026-07-20T00:00:00+00:00"
+        },
+        "jira_key": null,
+        "jira_url": null
+      },
+      {
+        "id": "task-b",
+        "name": "Migrate users",
+        "epic_id": "epic-1",
+        "epic_name": "Data Migration",
+        "start": "2026-08-14",
+        "end": "2026-08-18",
+        "owner_id": "tm-1",
+        "owner_name": "Ada Okoro",
+        "estimate": {
+          "optimistic": 3.0,
+          "likely": 3.0,
+          "pessimistic": 3.0
+        },
+        "total_float": 0.0,
+        "free_float": 0.0,
+        "is_critical": true,
+        "predecessors": [
+          {
+            "id": "dep-ab",
+            "from": "task-a",
+            "type": "finish_to_start",
+            "lag": 0.0,
+            "provenance": {
+              "reasoning": "A must finish before B",
+              "source_quote": "A before B",
+              "source_section": null,
+              "confidence": "medium",
+              "agent": "dependency",
+              "model": "claude-sonnet-5",
+              "timestamp": "2026-07-20T00:00:00+00:00"
+            }
+          }
+        ],
+        "provenance": {
+          "reasoning": "because it's needed",
+          "source_quote": "inventory all projects",
+          "source_section": "Scope",
+          "confidence": "high",
+          "agent": "work-breakdown",
+          "model": "claude-sonnet-5",
+          "timestamp": "2026-07-20T00:00:00+00:00"
+        },
+        "jira_key": null,
+        "jira_url": null
+      },
+      {
+        "id": "task-c",
+        "name": "Cutover",
+        "epic_id": "epic-1",
+        "epic_name": "Data Migration",
+        "start": "2026-08-19",
+        "end": "2026-08-20",
+        "owner_id": "tm-1",
+        "owner_name": "Ada Okoro",
+        "estimate": {
+          "optimistic": 2.0,
+          "likely": 2.0,
+          "pessimistic": 2.0
+        },
+        "total_float": 0.0,
+        "free_float": 0.0,
+        "is_critical": true,
+        "predecessors": [
+          {
+            "id": "dep-bc",
+            "from": "task-b",
+            "type": "finish_to_start",
+            "lag": 0.0,
+            "provenance": {
+              "reasoning": "A must finish before B",
+              "source_quote": "A before B",
+              "source_section": null,
+              "confidence": "medium",
+              "agent": "dependency",
+              "model": "claude-sonnet-5",
+              "timestamp": "2026-07-20T00:00:00+00:00"
+            }
+          }
+        ],
+        "provenance": {
+          "reasoning": "because it's needed",
+          "source_quote": "inventory all projects",
+          "source_section": "Scope",
+          "confidence": "high",
+          "agent": "work-breakdown",
+          "model": "claude-sonnet-5",
+          "timestamp": "2026-07-20T00:00:00+00:00"
+        },
+        "jira_key": null,
+        "jira_url": null
+      }
+    ],
+    "milestones": [],
+    "deadlines": [],
+    "raid": [
+      {
+        "id": "raid-1",
+        "type": "risk",
+        "title": "Key-person risk",
+        "description": "single owner",
+        "probability": 3,
+        "impact": 4,
+        "mitigation": "cross-train",
+        "suggested_owner_id": "tm-1",
+        "decided_on": null,
+        "rationale": null,
+        "provenance": {
+          "reasoning": "single owner",
+          "confidence": "high",
+          "evidence": {
+            "kind": "prd",
+            "source_quote": "inventory all projects",
+            "source_section": null
+          },
+          "agent": "raid",
+          "model": "claude-sonnet-5",
+          "timestamp": "2026-07-20T00:00:00Z"
+        },
+        "severity": 12,
+        "suggested_owner_name": "Ada Okoro"
+      }
+    ],
+    "freezes": []
+  },
+  "delta": {
+    "finish_before": "2026-08-14",
+    "finish_after": "2026-08-20",
+    "finish_shift_days": 4,
+    "task_shifts": [
+      {
+        "task_id": "task-a",
+        "task_name": "Inventory projects",
+        "start_before": "2026-08-03",
+        "start_after": "2026-08-03",
+        "finish_before": "2026-08-07",
+        "finish_after": "2026-08-13",
+        "finish_shift_days": 4,
+        "total_float_before": 0.0,
+        "total_float_after": 0.0,
+        "became_critical": false,
+        "left_critical": false
+      },
+      {
+        "task_id": "task-b",
+        "task_name": "Migrate users",
+        "start_before": "2026-08-10",
+        "start_after": "2026-08-14",
+        "finish_before": "2026-08-12",
+        "finish_after": "2026-08-18",
+        "finish_shift_days": 4,
+        "total_float_before": 0.0,
+        "total_float_after": 0.0,
+        "became_critical": false,
+        "left_critical": false
+      },
+      {
+        "task_id": "task-c",
+        "task_name": "Cutover",
+        "start_before": "2026-08-13",
+        "start_after": "2026-08-19",
+        "finish_before": "2026-08-14",
+        "finish_after": "2026-08-20",
+        "finish_shift_days": 4,
+        "total_float_before": 0.0,
+        "total_float_after": 0.0,
+        "became_critical": false,
+        "left_critical": false
+      }
+    ],
+    "milestone_shifts": [],
+    "critical_joined": [],
+    "critical_left": [],
+    "deadline_flips": [],
+    "headline": "Launch slips 4 working day(s): 2026-08-14 \u2192 2026-08-20.",
+    "notes": []
+  },
+  "warnings": []
+}
