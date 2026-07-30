@@ -33,6 +33,7 @@ let currentViewMode = "Week";
 let simActive = false;
 let simResult = null; // { baseline, simulated, delta, warnings }
 let scenarioChanges = []; // the what-if changes being composed
+let simShowBaseline = false; // A/B toggle: show the baseline schedule, not the simulated one (RC1-203)
 
 // Baseline / plan-vs-actual (RC1-192) state.
 let baselineActive = false;
@@ -167,7 +168,9 @@ function renderGantt(viewMode) {
   requestAnimationFrame(() => {
     renderTaskColumn();
     drawScheduleOverlays();
-    if (simActive && simResult) {
+    if (simActive && simResult && !simShowBaseline) {
+      // Ghosts compare against the baseline; showing the baseline itself, there's
+      // nothing to overlay (RC1-203).
       drawGhostOverlay(simResult.baseline.tasks, simResult.delta.task_shifts);
     } else if (baselineActive && baselineResult) {
       drawGhostOverlay(
@@ -909,6 +912,7 @@ function enterSimMode() {
   simActive = true;
   simResult = null;
   scenarioChanges = [];
+  simShowBaseline = false;
   document.querySelector("#simulate-btn").classList.add("active");
   updateSimBanner();
   renderSimPanel();
@@ -918,6 +922,7 @@ function exitSimMode() {
   simActive = false;
   simResult = null;
   scenarioChanges = [];
+  simShowBaseline = false;
   document.querySelector("#simulate-btn").classList.remove("active");
   document.querySelector("#sim-banner").hidden = true;
   view = payload;
@@ -961,6 +966,7 @@ async function runSimulation() {
       `<p class="hint">Simulation failed: ${escapeHtml(err.message)}</p>`;
     return;
   }
+  simShowBaseline = false; // a fresh result always lands on the simulated view
   view = simResult.simulated;
   index();
   renderGantt(currentViewMode); // rAF draws the ghost baseline overlay
@@ -968,9 +974,21 @@ async function runSimulation() {
   renderSimPanel();
 }
 
+// Flip the timeline baseline <-> simulated without touching the composed scenario
+// (RC1-203) — the impact panel and chips stay put; only the rendered bars swap.
+function toggleSimView() {
+  if (!simResult) return;
+  simShowBaseline = !simShowBaseline;
+  view = simShowBaseline ? simResult.baseline : simResult.simulated;
+  index();
+  renderGantt(currentViewMode);
+  updateSimBanner();
+}
+
 function updateSimBanner() {
   const banner = document.querySelector("#sim-banner");
   const text = document.querySelector("#sim-banner-text");
+  const toggle = document.querySelector("#sim-view-toggle");
   if (!simActive) {
     banner.hidden = true;
     return;
@@ -978,13 +996,25 @@ function updateSimBanner() {
   banner.hidden = false;
   if (!simResult) {
     banner.className = "";
+    toggle.hidden = true;
     text.textContent = "Simulate mode — compose a what-if in the panel to see its impact.";
     return;
   }
   const d = simResult.delta;
-  const missed = d.deadline_flips.some((f) => f.met_before && !f.met_after);
-  banner.className = missed ? "miss" : d.finish_shift_days > 0 ? "slip" : "ok";
-  text.innerHTML = `<strong>${escapeHtml(describeScenario())}</strong> — ${escapeHtml(d.headline)}`;
+  // The A/B toggle is available once a scenario is composed.
+  toggle.hidden = false;
+  toggle.textContent = simShowBaseline ? "Show simulated" : "Show baseline";
+  if (simShowBaseline) {
+    // Neutral banner while viewing the baseline, so the active view is obvious.
+    banner.className = "baseline-view";
+    text.innerHTML =
+      `<strong>Baseline</strong> — the plan before "${escapeHtml(describeScenario())}"`;
+  } else {
+    const missed = d.deadline_flips.some((f) => f.met_before && !f.met_after);
+    banner.className = missed ? "miss" : d.finish_shift_days > 0 ? "slip" : "ok";
+    text.innerHTML =
+      `<strong>${escapeHtml(describeScenario())}</strong> — ${escapeHtml(d.headline)}`;
+  }
 }
 
 function renderSimPanel() {
@@ -1186,6 +1216,7 @@ async function enterBaselineMode() {
     const banner = document.querySelector("#sim-banner");
     banner.hidden = false;
     banner.className = "";
+    document.querySelector("#sim-view-toggle").hidden = true; // sim-only control
     document.querySelector("#sim-banner-text").textContent =
       "No baseline set yet — commit one to measure drift against.";
     renderBaselinePanel(null);
@@ -1219,6 +1250,7 @@ function updateBaselineBanner() {
   const missed = d.deadline_flips.some((f) => f.met_before && !f.met_after);
   banner.hidden = false;
   banner.className = onTrack ? "ok" : missed ? "miss" : "slip";
+  document.querySelector("#sim-view-toggle").hidden = true; // sim-only control
   const v = baselineResult.baseline.version;
   text.innerHTML = `<strong>vs baseline v${v}</strong> — ${escapeHtml(d.headline)}`;
 }
@@ -1328,6 +1360,8 @@ function wireControls() {
   document.querySelector("#status-btn").addEventListener("click", showStatus);
   // The banner's Reset exits whichever overlay mode is active.
   document.querySelector("#sim-reset").addEventListener("click", exitOverlayMode);
+  // The A/B toggle flips the timeline baseline<->simulated (RC1-203).
+  document.querySelector("#sim-view-toggle").addEventListener("click", toggleSimView);
   // Own the click handling via delegation rather than frappe's on_click (which
   // is unreliable across versions). #gantt persists across re-renders.
   document.querySelector("#gantt").addEventListener("click", (e) => {

@@ -111,7 +111,10 @@ position as a faint dashed "ghost"** behind it, with a connector showing the
 shift. A full-width banner states the launch impact in plain language (amber for a
 slip, red when a deadline is breached, green when the change is absorbed by
 float), and the panel lists critical-path joiners/leavers, breached deadlines, and
-the tasks that moved. **Reset** (or Escape) exits back to the baseline.
+the tasks that moved. **Show baseline** (RC1-203) flips the timeline between the
+simulated and baseline schedules — for reviewers who read movement better by
+flipping than by overlay — without clearing the scenario or the impact summary.
+**Reset** (or Escape) exits back to the baseline.
 
 ## Notes
 
