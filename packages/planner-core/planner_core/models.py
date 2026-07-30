@@ -40,6 +40,7 @@ class ConstraintType(StrEnum):
 
     HARD_DATE = "hard_date"  # a task/milestone must land on/by a fixed calendar date
     GATE = "gate"  # a qualitative gate that must clear (e.g. "SRE review before prod")
+    BLACKOUT = "blackout"  # a date range in which no work may happen (e.g. a Q4 freeze)
 
 
 class ThreePointEstimate(BaseModel):
@@ -151,6 +152,12 @@ class Constraint(ProvenancedModel):
     gate: str | None = Field(
         None, description="Required for GATE constraints; what must clear (e.g. 'SRE review')."
     )
+    window_start: date | None = Field(
+        None, description="Required for BLACKOUT constraints; first frozen day (inclusive)."
+    )
+    window_end: date | None = Field(
+        None, description="Required for BLACKOUT constraints; last frozen day (inclusive)."
+    )
     applies_to: list[str] = Field(
         default_factory=list,
         description="Ids of tasks/milestones this constraint binds.",
@@ -162,7 +169,18 @@ class Constraint(ProvenancedModel):
             raise ValueError("a HARD_DATE constraint requires 'hard_date'")
         if self.type is ConstraintType.GATE and not self.gate:
             raise ValueError("a GATE constraint requires 'gate'")
+        if self.type is ConstraintType.BLACKOUT:
+            if self.window_start is None or self.window_end is None:
+                raise ValueError("a BLACKOUT constraint requires 'window_start' and 'window_end'")
+            if self.window_start > self.window_end:
+                raise ValueError("a BLACKOUT window must have window_start <= window_end")
         return self
+
+    def covers(self, day: date) -> bool:
+        """True when `day` falls inside this blackout window (False for non-blackouts)."""
+        if self.type is not ConstraintType.BLACKOUT:
+            return False
+        return self.window_start <= day <= self.window_end
 
 
 class Plan(BaseModel):

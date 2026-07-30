@@ -320,6 +320,32 @@ class Schedule:
         return "\n".join(lines)
 
 
+def blackout_windows(plan: Plan) -> tuple[tuple[date, date], ...]:
+    """The date ranges the plan's BLACKOUT constraints freeze (RC1-196)."""
+    return tuple(
+        (con.window_start, con.window_end)
+        for con in plan.constraints
+        if con.type is ConstraintType.BLACKOUT
+        and con.window_start is not None
+        and con.window_end is not None
+    )
+
+
+def in_blackout(plan: Plan, day: date, entity_id: str | None = None) -> bool:
+    """Is `day` inside a blackout — for a specific entity, or for anyone?
+
+    A blackout binds `entity_id` when its `applies_to` names that entity, or when
+    `applies_to` is empty (a plan-wide freeze). With no `entity_id`, any blackout
+    covering the day counts.
+    """
+    for con in plan.constraints:
+        if con.type is not ConstraintType.BLACKOUT or not con.covers(day):
+            continue
+        if entity_id is None or not con.applies_to or entity_id in con.applies_to:
+            return True
+    return False
+
+
 def schedule_plan(
     plan: Plan,
     *,
@@ -332,8 +358,13 @@ def schedule_plan(
     Milestones are included as zero-duration nodes; a milestone is only reported
     as *scheduled* when a dependency edge actually reaches it (on today's plans
     milestones are typically unlinked, so they carry only their target date).
+
+    Blackout windows from the plan's BLACKOUT constraints are treated as
+    non-working days (the schedule routes around them), unioned with any passed in
+    explicitly. They apply schedule-wide — a conservative reading of a freeze.
     """
-    calendar = WorkingCalendar(start_date=start_date, weekend=weekend, blackouts=blackouts)
+    all_blackouts = tuple(blackouts) + blackout_windows(plan)
+    calendar = WorkingCalendar(start_date=start_date, weekend=weekend, blackouts=all_blackouts)
 
     durations: dict[str, float] = {t.id: t.estimate.likely for t in plan.tasks}
     for milestone in plan.milestones:

@@ -184,6 +184,39 @@ def test_unlinked_milestone_is_reported_but_not_scheduled():
     assert m.projected_date is None and m.slack_working_days is None
 
 
+def _blackout(cid: str, start: date, end: date, applies_to: list[str] | None = None) -> Constraint:
+    return Constraint(
+        id=cid, type=ConstraintType.BLACKOUT, description="freeze",
+        window_start=start, window_end=end, applies_to=applies_to or [], provenance=_prov(),
+    )
+
+
+def test_blackout_window_pushes_work_past_the_freeze():
+    # A 3-day task from Mon; a freeze Wed–next-Mon forces its finish out.
+    task = _task("A", 3)
+    freeze = _blackout("con-f", date(2026, 8, 5), date(2026, 8, 10))  # Wed → next Mon
+    plan = Plan(id="p", name="p", tasks=[task], constraints=[freeze])
+
+    baseline = schedule_plan(Plan(id="p", name="p", tasks=[_task("A", 3)]), start_date=MONDAY)
+    frozen = schedule_plan(plan, start_date=MONDAY)
+    assert baseline.tasks["A"].early_finish_date == date(2026, 8, 5)  # Mon,Tue,Wed
+    # Wed–Mon are non-working: Mon, Tue, then Tue 08-11 for the 3rd day.
+    assert frozen.tasks["A"].early_finish_date == date(2026, 8, 11)
+
+
+def test_blackout_windows_and_in_blackout_query():
+    from planner_core import blackout_windows, in_blackout
+
+    freeze = _blackout("con-f", date(2026, 11, 15), date(2027, 1, 4), applies_to=["A"])
+    plan = Plan(id="p", name="p", tasks=[_task("A", 1), _task("B", 1)], constraints=[freeze])
+
+    assert blackout_windows(plan) == ((date(2026, 11, 15), date(2027, 1, 4)),)
+    assert in_blackout(plan, date(2026, 12, 1)) is True  # global query
+    assert in_blackout(plan, date(2026, 12, 1), "A") is True  # A is frozen
+    assert in_blackout(plan, date(2026, 12, 1), "B") is False  # B is not in applies_to
+    assert in_blackout(plan, date(2026, 10, 1)) is False  # outside the window
+
+
 def test_hard_date_deadline_negative_float_when_plan_misses():
     task = _task("A", 5)  # finishes Fri 2026-08-07
     late = Constraint(
