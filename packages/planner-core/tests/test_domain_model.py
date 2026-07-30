@@ -195,6 +195,25 @@ def test_gate_constraint_requires_a_gate():
         Constraint(id="c", type=ConstraintType.GATE, description="x", provenance=_prov())
 
 
+def test_blackout_constraint_requires_a_valid_window():
+    from datetime import date
+
+    with pytest.raises(ValidationError, match="window_start"):
+        Constraint(id="c", type=ConstraintType.BLACKOUT, description="freeze", provenance=_prov())
+    with pytest.raises(ValidationError, match="window_start <= window_end"):
+        Constraint(
+            id="c", type=ConstraintType.BLACKOUT, description="freeze",
+            window_start=date(2027, 1, 4), window_end=date(2026, 11, 15), provenance=_prov(),
+        )
+
+    freeze = Constraint(
+        id="c", type=ConstraintType.BLACKOUT, description="freeze",
+        window_start=date(2026, 11, 15), window_end=date(2027, 1, 4), provenance=_prov(),
+    )
+    assert freeze.covers(date(2026, 12, 1)) is True
+    assert freeze.covers(date(2026, 10, 1)) is False
+
+
 def test_extra_fields_are_forbidden():
     with pytest.raises(ValidationError):
         TeamMember(id="tm", name="Grace", unexpected="nope")

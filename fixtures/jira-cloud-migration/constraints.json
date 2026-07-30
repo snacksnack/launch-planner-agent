@@ -35,10 +35,12 @@
   },
   {
     "id": "con-freeze",
-    "type": "gate",
-    "description": "Q4 change freeze: no production migration activity permitted in the window 2026-11-15 to 2027-01-04. Prep and non-production work may continue. NOTE: modeled as a gate because the P1.2 Constraint has a single hard_date, not a blackout window — see fixtures README.",
+    "type": "blackout",
+    "description": "Q4 change freeze: no production migration activity permitted during the window. Prep and non-production work may continue.",
     "hard_date": null,
-    "gate": "No production migration during Q4 freeze (2026-11-15 to 2027-01-04)",
+    "gate": null,
+    "window_start": "2026-11-15",
+    "window_end": "2027-01-04",
     "applies_to": ["task-bulk-migration", "task-user-migration", "task-prod-cutover"],
     "provenance": {
       "reasoning": "Explicit company-wide freeze window during which no production migration activity is allowed; a hard scheduling blackout the plan must route around.",

@@ -118,5 +118,6 @@ the tasks that moved. **Reset** (or Escape) exits back to the baseline.
 - Library choice (frappe-gantt vs vis-timeline) is recorded in
   `docs/decisions.md` (ADR-0011).
 - The frontend is not part of the Python CI matrix; it's verified in the browser.
-- Freeze-window shading is wired but inert until blackout windows land (RC1-196);
-  milestones show projected dates once linked into the graph (RC1-198).
+- Freeze-window shading renders any `blackout` constraint's window (RC1-196) — on
+  the flagship it sits past the finish, so slip work into it (Simulate) to see the
+  band; milestones show projected dates once linked into the graph (RC1-198).

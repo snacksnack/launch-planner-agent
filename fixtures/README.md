@@ -54,13 +54,14 @@ In these hand-authored fixtures:
   spelled out, `medium`/`low` when a competent TPM would infer it (e.g. a cutover
   rehearsal, a project closeout).
 
-## Known modeling limitation: blackout windows
+## Blackout windows (RC1-196)
 
-The P1.2 `Constraint` has a single `hard_date`, not a date *range*. The
-jira-cloud-migration Q4 change freeze (2026-11-15 → 2027-01-04) is therefore
-modeled as a **gate** with the window carried in the `gate`/`description` text
-(`con-freeze`). A first-class blackout-window constraint is a candidate
-enhancement for a later scheduling ticket.
+Freeze windows are first-class: a `Constraint` of type `blackout` carries a
+machine-readable `window_start` / `window_end`. The jira-cloud-migration Q4 change
+freeze (`con-freeze`, 2026-11-15 → 2027-01-04) uses it — the scheduler treats those
+days as non-working and routes work around them, and the Gantt shades the window.
+*(Earlier fixtures modeled the freeze as a gate with the dates in free text; that
+workaround is gone.)*
 
 ## Validation
 

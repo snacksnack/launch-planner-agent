@@ -67,6 +67,20 @@ def test_inputs_load_through_the_model(fixture: Path):
     assert constraints, "constraints.json should not be empty"
 
 
+def test_flagship_freeze_is_a_machine_readable_blackout_window():
+    """RC1-196: con-freeze parses as a BLACKOUT with real start/end, not free text."""
+    from datetime import date
+
+    from planner_core import ConstraintType
+
+    plan = _load_plan(FIXTURES_DIR / "jira-cloud-migration")
+    freeze = next(c for c in plan.constraints if c.id == "con-freeze")
+    assert freeze.type is ConstraintType.BLACKOUT
+    assert freeze.window_start == date(2026, 11, 15)
+    assert freeze.window_end == date(2027, 1, 4)
+    assert freeze.covers(date(2026, 12, 1)) and not freeze.covers(date(2026, 10, 1))
+
+
 @pytest.mark.parametrize("fixture", FIXTURE_DIRS, ids=FIXTURE_IDS)
 def test_golden_plan_round_trips(fixture: Path):
     plan = _load_plan(fixture)

@@ -109,6 +109,15 @@ def test_payload_carries_the_raid_log_with_severity_and_evidence():
     assert "no direct Cloud equivalent" in plugin["provenance"]["evidence"]["source_quote"]
 
 
+def test_freeze_window_surfaces_in_the_payload():
+    """RC1-196: the Q4 blackout renders as a freeze band, machine-readable."""
+    payload = _golden_payload()
+    (freeze,) = payload["freezes"]
+    assert freeze["id"] == "con-freeze"
+    assert freeze["start"] == "2026-11-15"
+    assert freeze["end"] == "2027-01-04"
+
+
 def test_deadline_check_present_for_hard_date_constraint():
     payload = _golden_payload()
     checks = {c["task_id"]: c for c in payload["deadlines"]}

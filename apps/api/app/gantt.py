@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from planner_core import Plan, Provenance, Schedule
+from planner_core import ConstraintType, Plan, Provenance, Schedule
 
 
 def _provenance(prov: Provenance) -> dict[str, Any]:
@@ -147,5 +147,16 @@ def build_gantt_payload(
         "milestones": milestones,
         "deadlines": deadlines,
         "raid": raid,
-        "freezes": [],  # populated once blackout windows land (RC1-196)
+        "freezes": [
+            {
+                "id": con.id,
+                "start": con.window_start.isoformat(),
+                "end": con.window_end.isoformat(),
+                "label": con.gate or con.description,
+            }
+            for con in plan.constraints
+            if con.type is ConstraintType.BLACKOUT
+            and con.window_start is not None
+            and con.window_end is not None
+        ],
     }

@@ -12,6 +12,43 @@ to).
 
 ---
 
+## ADR-0021 — Blackout windows: a first-class date-range constraint, schedule-wide
+
+**Date:** 2026-07-30 · **Ticket:** RC1-196 · **Status:** Accepted (supersedes the
+blackout-window limitation noted in ADR-0007 and `fixtures/README.md`)
+
+**Context.** The P1.2 `Constraint` had a single `hard_date` or a qualitative
+`gate`, but no way to express a *range* nobody may work through — the flagship's Q4
+change freeze. It was modeled as a gate with the dates in free text, so the engine
+couldn't route around it and the Gantt's freeze shading stayed inert.
+
+**Explanation.** *A blackout is a constraint, not a new concept.* We added
+`ConstraintType.BLACKOUT` with `window_start` / `window_end` (validated
+start ≤ end) rather than a separate `BlackoutWindow` model — it slots into the
+existing `constraints` list, provenance and all, and carries `applies_to` like any
+constraint. *The engine already understood freezes.* `WorkingCalendar` treated
+blackout days as non-working since P1.6; the only missing wire was deriving the
+windows from the plan. `schedule_plan` now unions the `BLACKOUT` constraints'
+windows with any passed explicitly, so a plan routes around its own freeze
+automatically — and the slippage simulator inherits it (slip work into the freeze
+and it extends past it). *Schedule-wide routing, per-entity query.* Routing applies
+the freeze to the whole schedule — a conservative reading ("pause everything"),
+and moot on the golden since its work finishes before the freeze. The **query**
+side is precise, though: `in_blackout(plan, day, entity_id)` respects `applies_to`
+(a task not named by the freeze isn't frozen), satisfying "is date D inside a
+blackout for entity X?" Per-entity *routing* (prep work continues while production
+work pauses) would need per-task calendars — deferred; the schedule-wide version is
+safe (never schedules work in a freeze), just occasionally pessimistic.
+*Gantt lights up.* `build_gantt_payload` emits the windows as `freezes`, so the
+existing SVG overlay shades them — visible the moment work reaches the window.
+
+**Consequences.** The freeze round-trips with machine-readable dates; `con-freeze`
+dropped its free-text workaround (fixtures updated in lockstep). Scheduling and the
+simulator honour it. The one accepted simplification is schedule-wide routing;
+`applies_to` is honoured by the query and available for a later per-entity pass.
+
+---
+
 ## ADR-0020 — Deploy: one read-only-by-construction container, seeded, same-origin
 
 **Date:** 2026-07-29 · **Ticket:** RC1-195 (P3.3) · **Status:** Accepted

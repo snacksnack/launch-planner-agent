@@ -100,8 +100,10 @@ from planner_core.scheduling import (
     Schedule,
     TaskSchedule,
     WorkingCalendar,
+    blackout_windows,
     compute_cpm,
     critical_paths,
+    in_blackout,
     schedule_plan,
 )
 from planner_core.simulation import (
@@ -208,8 +210,10 @@ __all__ = [
     "Schedule",
     "TaskSchedule",
     "WorkingCalendar",
+    "blackout_windows",
     "compute_cpm",
     "critical_paths",
+    "in_blackout",
     "schedule_plan",
     # slippage simulator (what-if analysis)
     "AddDependency",
