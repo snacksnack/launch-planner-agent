@@ -8,6 +8,20 @@
 import Gantt from "frappe-gantt";
 import "frappe-gantt/dist/frappe-gantt.css";
 import "./style.css";
+import {
+  buildDepIndex,
+  calibrate,
+  describeChange as libDescribeChange,
+  describeScenario as libDescribeScenario,
+  escapeHtml,
+  flagSubject as libFlagSubject,
+  ghostRect,
+  jiraCommand as libJiraCommand,
+  nameFor as libNameFor,
+  plural,
+  severityBand,
+  signed,
+} from "./lib.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
 // Subtle blue-family palette for epic identity (bars + legend + column accents).
@@ -71,10 +85,7 @@ function index() {
   for (const m of view.milestones) byId.set(m.id, { ...m, kind: "milestone" });
   // dep id -> its endpoints, so a flag on a dependency can read as "A → B"
   // (task names) instead of an opaque id like "dep-plan-tooling".
-  depById = new Map();
-  for (const t of view.tasks) {
-    for (const p of t.predecessors) depById.set(p.id, { from: p.from, to: t.id });
-  }
+  depById = buildDepIndex(view.tasks);
 }
 
 function renderHeader() {
@@ -260,22 +271,12 @@ function drawScheduleOverlays() {
 
 // Read two rendered bars, solve x = a*days + b, return a date->x function.
 function calibrateDateToX() {
-  const bars = view.tasks
-    .map((t) => {
-      const rect = document.querySelector(`.bar-wrapper[data-id="${cssEscape(t.id)}"] .bar`);
-      return rect ? { date: t.start, x: Number(rect.getAttribute("x")) } : null;
-    })
-    .filter(Boolean);
-  if (bars.length < 2) return null;
-
-  bars.sort((p, q) => day(p.date) - day(q.date));
-  const lo = bars[0];
-  const hi = bars[bars.length - 1];
-  const span = day(hi.date) - day(lo.date);
-  if (span === 0) return null;
-  const a = (hi.x - lo.x) / span;
-  const b = lo.x - a * day(lo.date);
-  return (dateStr) => a * day(dateStr) + b;
+  // Measure the rendered bars (DOM), then solve the date->x line purely (lib).
+  const bars = view.tasks.map((t) => {
+    const rect = document.querySelector(`.bar-wrapper[data-id="${cssEscape(t.id)}"] .bar`);
+    return rect ? { date: t.start, x: Number(rect.getAttribute("x")) } : null;
+  });
+  return calibrate(bars);
 }
 
 // --- detail panel ----------------------------------------------------------
@@ -325,23 +326,13 @@ const FLAG_LABELS = {
   "unknown-epic": "Unknown epic",
 };
 
+// Thin wrappers over the pure lib helpers, binding this module's state.
 function nameFor(id) {
-  return byId.get(id)?.name ?? id;
+  return libNameFor(id, byId);
 }
 
-// Turn a flag's entity id into a human, clickable subject: a task/milestone name
-// (jumps to its detail), or a dependency's "Predecessor → Successor" names
-// (jumps to the successor, whose panel lists the edge). Falls back to the raw id.
 function flagSubject(entityId) {
-  if (!entityId) return "";
-  if (byId.has(entityId)) {
-    return `<a href="#" data-jump="${escapeHtml(entityId)}">${escapeHtml(nameFor(entityId))}</a>`;
-  }
-  const edge = depById.get(entityId);
-  if (edge) {
-    return `<a href="#" data-jump="${escapeHtml(edge.to)}">${escapeHtml(nameFor(edge.from))} → ${escapeHtml(nameFor(edge.to))}</a>`;
-  }
-  return escapeHtml(entityId);
+  return libFlagSubject(entityId, byId, depById);
 }
 
 // Render the decision record into the detail panel: dropped/cut edges, the
@@ -500,11 +491,6 @@ const AGENT_LABEL = {
 const KIND_LABEL = { epic: "epic", task: "task", dependency: "dependency", milestone: "milestone", raid: "RAID item" };
 const SNAP_LABEL = { proposal: "Agent proposal", commit: "Committed", baseline: "Baseline set" };
 
-function plural(n, word) {
-  if (n === 1) return `${n} ${word}`;
-  const p = /[^aeiou]y$/.test(word) ? `${word.slice(0, -1)}ies` : `${word}s`;
-  return `${n} ${p}`;
-}
 
 async function showAudit() {
   setPanelCollapsed(false);
@@ -587,13 +573,6 @@ function raidCount() {
 }
 
 const RAID_LABEL = { risk: "Risk", assumption: "Assumption", issue: "Issue", decision: "Decision" };
-
-function severityBand(sev) {
-  if (sev == null) return null;
-  if (sev >= 15) return "high";
-  if (sev >= 8) return "med";
-  return "low";
-}
 
 // Render the RAID log into the detail panel: filter chips by type, sorted by
 // severity, each item with its evidence (PRD quote or schedule fact).
@@ -803,9 +782,7 @@ function renderJiraPanel(data) {
 }
 
 function jiraCommand() {
-  const partial = jiraSelected.size < jiraGen.issues.length;
-  const only = partial ? ` --only ${[...jiraSelected].join(",")}` : "";
-  return `plan jira <plan.json> --start-date ${payload.project.start_date} --project ${jiraGen.project_key}${only} --real --confirm`;
+  return libJiraCommand(jiraGen, [...jiraSelected], payload.project.start_date);
 }
 
 function updateJiraCommand() {
@@ -932,13 +909,11 @@ function exitSimMode() {
 }
 
 function describeChange(c) {
-  if (c.kind === "delay_task") return `${nameFor(c.task_id)} slips ${c.days}d`;
-  const verb = c.kind === "add_dependency" ? "add" : "remove";
-  return `${verb} ${nameFor(c.predecessor_id)} → ${nameFor(c.successor_id)}`;
+  return libDescribeChange(c, nameFor);
 }
 
 function describeScenario() {
-  return scenarioChanges.map(describeChange).join("; ");
+  return libDescribeScenario(scenarioChanges, nameFor);
 }
 
 // POST the composed scenario, swap the rendered view to the simulated schedule,
@@ -1152,28 +1127,24 @@ function drawGhostOverlay(referenceTasks, taskShifts) {
       if (!base || !barRect) continue;
       const y = Number(barRect.getAttribute("y"));
       const h = Number(barRect.getAttribute("height"));
-      const x1 = map(base.start);
-      const x2 = map(base.end);
-      const gx = Math.min(x1, x2);
-      const gw = Math.max(2, Math.abs(x2 - x1));
+      const simX = Number(barRect.getAttribute("x"));
+      const { rect: g, connector } = ghostRect(map, base, y, h, simX);
 
       const rect = document.createElementNS(ns, "rect");
-      rect.setAttribute("x", gx);
-      rect.setAttribute("y", y);
-      rect.setAttribute("width", gw);
-      rect.setAttribute("height", h);
+      rect.setAttribute("x", g.x);
+      rect.setAttribute("y", g.y);
+      rect.setAttribute("width", g.width);
+      rect.setAttribute("height", g.height);
       rect.setAttribute("rx", 3);
       rect.setAttribute("class", "ghost-bar");
       svg.appendChild(rect);
 
-      const simX = Number(barRect.getAttribute("x"));
-      if (Math.abs(simX - (gx + gw)) > 1) {
+      if (connector) {
         const line = document.createElementNS(ns, "line");
-        const cy = y + h / 2;
-        line.setAttribute("x1", gx + gw);
-        line.setAttribute("x2", simX);
-        line.setAttribute("y1", cy);
-        line.setAttribute("y2", cy);
+        line.setAttribute("x1", connector.x1);
+        line.setAttribute("x2", connector.x2);
+        line.setAttribute("y1", connector.cy);
+        line.setAttribute("y2", connector.cy);
         line.setAttribute("class", "ghost-connector");
         svg.appendChild(line);
       }
@@ -1388,22 +1359,9 @@ function exitOverlayMode() {
 }
 
 // --- helpers ---------------------------------------------------------------
-
-function day(dateStr) {
-  return Math.round(new Date(`${dateStr}T00:00:00Z`).getTime() / 86400000);
-}
-
-function signed(n) {
-  return n > 0 ? `+${n}` : `${n}`;
-}
+// (Pure formatters — escapeHtml, signed, day, plural, severityBand, calibrate,
+// ghostRect, flagSubject, describe* — live in ./lib.js and are unit-tested.)
 
 function cssEscape(value) {
   return window.CSS && CSS.escape ? CSS.escape(value) : value;
-}
-
-function escapeHtml(value) {
-  return String(value).replace(
-    /[&<>"']/g,
-    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
-  );
 }

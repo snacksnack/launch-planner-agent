@@ -98,7 +98,8 @@ also a one-page [visual quick-start](https://claude.ai/code/artifact/89cfe001-36
 ```bash
 uv run ruff check .           # lint
 uv run lint-imports           # enforce planner-core has no LLM/app deps
-uv run pytest                 # tests across all packages
+uv run pytest                 # Python tests across all packages
+(cd apps/web && npm test)     # frontend unit tests (Vitest) for the UI's pure logic
 ```
 
 ## Deploy
