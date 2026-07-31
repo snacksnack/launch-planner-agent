@@ -12,6 +12,45 @@ to).
 
 ---
 
+## ADR-0022 — Monte Carlo launch forecast: Beta-PERT sampling, seeded and engine-side
+
+**Date:** 2026-07-31 · **Ticket:** RC1-201 · **Status:** Accepted
+
+**Context.** The deterministic CPM schedule reports one launch date from each task's
+*likely* estimate. But the estimates are three-point ranges, and the critical path
+can shift when durations move — so the single date reads as more certain than it is.
+RC1-190 shipped the deterministic what-if (one scenario, one answer); this is its
+probabilistic complement: sample the estimates, re-run CPM many times, and report the
+launch date as a **distribution**, not a point.
+
+**Explanation.** *Beta-PERT for the sampler.* Each task's duration is drawn from a
+Beta-PERT distribution parameterized by (optimistic, likely, pessimistic) — the
+standard three-point model, which concentrates mass near the mode while honouring the
+bounds, over the cruder triangular alternative. Degenerate ranges (o = p) collapse to
+a constant, so zero-variance tasks and milestones cost nothing. *Reuse the CPM engine,
+don't fork it.* `monte_carlo` builds the edge list and `WorkingCalendar` **once**, then
+each iteration only samples a `durations` dict and calls the existing `compute_cpm` —
+1,000 runs over the golden land in ~0.1 s, no plan deep-copies. The per-task
+**criticality index** falls straight out: count how often each node comes back
+`is_critical`. *Deterministic, engine-side randomness.* The RNG is seeded and passed in
+like `start_date`; a fixed seed reproduces a run exactly (tested), and **no randomness
+reaches the frontend** — the browser just GETs `/api/forecast` and renders. This keeps
+the "Python computes, deterministically" property the whole system leans on. *Percentiles
+by nearest-rank* on the sorted finish durations, then mapped to calendar dates through
+the same working-day convention as `schedule_plan`, so the point estimate the panel
+shows equals the deterministic CPM finish exactly.
+
+**Consequences.** A new pure `planner_core.monte_carlo` module (no LLM, no app deps —
+contract intact), a `plan forecast` CLI verb, a read-only `/api/forecast` endpoint, and
+a **Forecast** UI panel: a P50/P80/P90 confidence band over a finish-date histogram plus
+the criticality index. The value it surfaces on the golden: the deterministic plan lands
+Oct 12, but only ~19% of runs hit it — 80% confidence is Oct 23. Sampling is
+distribution-simple by design; correlated estimate risk (one slip implies another) is
+not modeled — a possible later refinement, called out here so the independence
+assumption is on the record.
+
+---
+
 ## ADR-0021 — Blackout windows: a first-class date-range constraint, schedule-wide
 
 **Date:** 2026-07-30 · **Ticket:** RC1-196 · **Status:** Accepted (supersedes the

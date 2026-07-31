@@ -60,6 +60,12 @@ from planner_core.models import (
     WorkBreakdown,
     plan_json_schema,
 )
+from planner_core.monte_carlo import (
+    MonteCarloResult,
+    TaskCriticality,
+    monte_carlo,
+    sample_pert,
+)
 from planner_core.plan_store import (
     CommitRejected,
     InMemoryPlanRepository,
@@ -230,6 +236,11 @@ __all__ = [
     "apply_scenario",
     "diff_schedules",
     "simulate",
+    # Monte Carlo (launch-date confidence band)
+    "MonteCarloResult",
+    "TaskCriticality",
+    "monte_carlo",
+    "sample_pert",
     # plan diff (human-vs-agent audit trail)
     "EntityDiff",
     "FieldChange",

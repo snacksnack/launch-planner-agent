@@ -15,8 +15,10 @@ import {
   describeScenario as libDescribeScenario,
   escapeHtml,
   flagSubject as libFlagSubject,
+  forecastBand,
   ghostRect,
   jiraCommand as libJiraCommand,
+  longDate,
   nameFor as libNameFor,
   plural,
   severityBand,
@@ -877,6 +879,130 @@ async function copyStatusMarkdown() {
   }
 }
 
+// --- Monte Carlo launch forecast (RC1-201) ---------------------------------
+
+async function showForecast() {
+  setPanelCollapsed(false);
+  const el = document.querySelector("#detail");
+  for (const sel of document.querySelectorAll(".selected")) sel.classList.remove("selected");
+  const shell = (body) =>
+    `<button class="detail-close" title="Close">×</button><h2>Launch forecast</h2>${body}`;
+  el.innerHTML = shell(`<p class="hint">Running the Monte Carlo…</p>`);
+  el.querySelector(".detail-close").addEventListener("click", clearDetail);
+
+  let data;
+  try {
+    const resp = await fetch(`${API_BASE}/api/forecast`);
+    if (!resp.ok) throw new Error(`API ${resp.status}`);
+    data = await resp.json();
+  } catch (err) {
+    el.innerHTML = shell(`<p class="hint">Couldn't load: ${escapeHtml(err.message)}</p>`);
+    el.querySelector(".detail-close").addEventListener("click", clearDetail);
+    return;
+  }
+  renderForecastPanel(data);
+}
+
+// The share of runs that finish on or before the deterministic (likely) estimate —
+// "the plan says Oct 12, but only NN% of runs actually hit it".
+function pointConfidence(data) {
+  const det = data.deterministic_finish;
+  if (!det || !data.iterations) return null;
+  const met = data.distribution
+    .filter((b) => b.date <= det) // ISO dates sort chronologically
+    .reduce((s, b) => s + b.count, 0);
+  return Math.round((100 * met) / data.iterations);
+}
+
+function forecastBandSvg(band) {
+  if (!band.bars.length) return "";
+  const W = 1000;
+  const H = 150;
+  const top = 26; // room for percentile labels
+  const base = 112; // the histogram baseline / axis
+  const barH = base - top;
+  const x = (f) => (f * W).toFixed(1);
+
+  const bars = band.bars
+    .map((b) => {
+      const bx = x(b.x);
+      const h = Math.max(1, b.h * barH);
+      return `<line class="fc-bar" x1="${bx}" x2="${bx}" y1="${base}" y2="${(base - h).toFixed(1)}"><title>${b.count} run${b.count === 1 ? "" : "s"}</title></line>`;
+    })
+    .join("");
+
+  // Percentile + point markers. Labels alternate above the plot to avoid collisions.
+  const markers = band.markers
+    .map((m, i) => {
+      const mx = x(m.x);
+      const labelY = i % 2 === 0 ? 10 : 20;
+      const cls = `fc-mark fc-mark-${m.key}`;
+      return (
+        `<line class="${cls}" x1="${mx}" x2="${mx}" y1="${top}" y2="${base}"></line>` +
+        `<text class="fc-mark-label" x="${mx}" y="${labelY}" text-anchor="middle">${m.label}</text>`
+      );
+    })
+    .join("");
+
+  return (
+    `<svg class="fc-svg" viewBox="0 0 ${W} ${H}" role="img" ` +
+    `aria-label="Finish-date distribution with percentile markers" preserveAspectRatio="none">` +
+    `<line class="fc-axis" x1="0" x2="${W}" y1="${base}" y2="${base}"></line>` +
+    bars +
+    markers +
+    `<text class="fc-axis-label" x="0" y="132" text-anchor="start">${longDate(band.first)}</text>` +
+    `<text class="fc-axis-label" x="${W}" y="132" text-anchor="end">${longDate(band.last)}</text>` +
+    `</svg>`
+  );
+}
+
+function renderForecastPanel(data) {
+  const el = document.querySelector("#detail");
+  const band = forecastBand(data);
+  const pc = pointConfidence(data);
+  const ranked = data.criticality.filter((c) => c.criticality > 0).slice(0, 8);
+
+  const crit = ranked
+    .map((c) => {
+      const pct = Math.round(c.criticality * 100);
+      return (
+        `<li class="fc-crit-row">` +
+        `<span class="fc-crit-bar"><span style="width:${pct}%"></span></span>` +
+        `<span class="fc-crit-pct">${pct}%</span>` +
+        `<span class="fc-crit-name">${escapeHtml(c.name)}</span>` +
+        `</li>`
+      );
+    })
+    .join("");
+
+  const pointNote =
+    pc == null
+      ? ""
+      : `<p class="hint">The deterministic plan lands <strong>${longDate(data.deterministic_finish)}</strong> — but only <strong>${pc}%</strong> of runs actually hit it.</p>`;
+
+  el.innerHTML =
+    `<button class="detail-close" aria-label="Close" title="Close">×</button>` +
+    `<h2>Launch forecast</h2>` +
+    `<p class="reasoning">${data.iterations.toLocaleString()} Monte Carlo runs · Beta-PERT over the ` +
+    `three-point estimates · deterministic (seed ${data.seed}). “Confidence” is the chance of ` +
+    `launching on or before a date.</p>` +
+    `<div class="fc-readout">` +
+    `<div class="fc-headline"><span class="fc-conf">80% confidence</span>` +
+    `<span class="fc-date">on or before ${longDate(data.p80)}</span></div>` +
+    `<div class="fc-percentiles">` +
+    `<span><em>P50</em> ${longDate(data.p50)}</span>` +
+    `<span><em>P80</em> ${longDate(data.p80)}</span>` +
+    `<span><em>P90</em> ${longDate(data.p90)}</span>` +
+    `</div></div>` +
+    pointNote +
+    forecastBandSvg(band) +
+    `<h3>Criticality index</h3>` +
+    `<p class="hint">How often each task landed on the critical path across the runs — the true schedule drivers, risk-weighted.</p>` +
+    `<ul class="fc-crit">${crit}</ul>`;
+
+  el.querySelector(".detail-close").addEventListener("click", clearDetail);
+}
+
 // --- slippage simulator (RC1-190) ------------------------------------------
 
 function toggleSimMode() {
@@ -1329,6 +1455,8 @@ function wireControls() {
   document.querySelector("#jira-btn").addEventListener("click", showJira);
   // The weekly status update (RC1-194).
   document.querySelector("#status-btn").addEventListener("click", showStatus);
+  // The Monte Carlo launch-date forecast (RC1-201).
+  document.querySelector("#forecast-btn").addEventListener("click", showForecast);
   // The banner's Reset exits whichever overlay mode is active.
   document.querySelector("#sim-reset").addEventListener("click", exitOverlayMode);
   // The A/B toggle flips the timeline baseline<->simulated (RC1-203).

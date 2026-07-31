@@ -49,6 +49,7 @@ from planner_core import (
     diff_plans,
     execute_generation,
     fallback_narrative,
+    monte_carlo,
     record_proposal,
     render_html,
     render_markdown,
@@ -321,6 +322,61 @@ def cmd_simulate(args: argparse.Namespace) -> int:
     print(result.delta.render())
     # Non-zero exit when the what-if pushes the launch out — useful in scripts.
     return 1 if result.delta.finish_shift_days > 0 else 0
+
+
+def _sparkline(distribution: list[dict]) -> str:
+    """A tiny unicode histogram of the finish-date distribution."""
+    if not distribution:
+        return ""
+    bars = "▁▂▃▄▅▆▇█"
+    peak = max(b["count"] for b in distribution) or 1
+    return "".join(bars[min(len(bars) - 1, round((b["count"] / peak) * (len(bars) - 1)))]
+                   for b in distribution)
+
+
+def _render_forecast(result) -> str:
+    """Human-readable Monte Carlo summary for the CLI."""
+    def d(x) -> str:
+        return x.isoformat() if x else "n/a"
+
+    lines = [
+        f"Launch-date forecast — {result.iterations} runs, seed {result.seed} "
+        f"(Beta-PERT over three-point estimates)",
+        f"  Point estimate (likely durations): {d(result.deterministic_finish)}",
+        "",
+        "  Confidence band (chance of launching on or before):",
+        f"    P10  {d(result.p10)}   P50  {d(result.p50)}   "
+        f"P80  {d(result.p80)}   P90  {d(result.p90)}",
+        f"    → 80% confidence: on or before {d(result.p80)}.",
+        f"  {_sparkline(result.distribution)}",
+    ]
+    ranked = [tc for tc in result.criticality if tc.criticality > 0][:8]
+    if ranked:
+        lines.append("")
+        lines.append("  Criticality index (how often each task is on the critical path):")
+        for tc in ranked:
+            lines.append(f"    {tc.criticality * 100:5.0f}%  {tc.name}")
+    return "\n".join(lines)
+
+
+def cmd_forecast(args: argparse.Namespace) -> int:
+    """Monte Carlo the launch date over the three-point estimates (deterministic, no LLM)."""
+    plan_path = Path(args.plan)
+    if not plan_path.is_file():
+        print(f"error: {plan_path} not found", file=sys.stderr)
+        return 2
+
+    plan = Plan.model_validate_json(plan_path.read_text())
+    blackouts = tuple(_parse_blackout(b) for b in (args.blackout or []))
+    result = monte_carlo(
+        plan,
+        start_date=date.fromisoformat(args.start_date),
+        iterations=args.iterations,
+        seed=args.seed,
+        blackouts=blackouts,
+    )
+    print(_render_forecast(result))
+    return 0
 
 
 def cmd_breakdown(args: argparse.Namespace) -> int:
@@ -746,6 +802,24 @@ def main(argv: list[str] | None = None) -> int:
         help="Freeze/blackout window as START:END (YYYY-MM-DD:YYYY-MM-DD). Repeatable.",
     )
     simulate_cmd.set_defaults(func=cmd_simulate)
+
+    forecast = sub.add_parser(
+        "forecast",
+        help="Monte Carlo the launch date over three-point estimates (P50/P80/P90 + criticality).",
+    )
+    forecast.add_argument("plan", help="Path to a plan.json.")
+    forecast.add_argument("--start-date", required=True, help="Project start date (YYYY-MM-DD).")
+    forecast.add_argument(
+        "--iterations", type=int, default=1000, help="Number of Monte Carlo runs (default 1000)."
+    )
+    forecast.add_argument(
+        "--seed", type=int, default=0, help="RNG seed — a run is reproducible for a fixed seed."
+    )
+    forecast.add_argument(
+        "--blackout", action="append", metavar="START:END",
+        help="Freeze/blackout window as START:END (YYYY-MM-DD:YYYY-MM-DD). Repeatable.",
+    )
+    forecast.set_defaults(func=cmd_forecast)
 
     # --- plan-of-record store (RC1-189) ---
     propose = sub.add_parser("propose", help="Record an agent proposal in the store.")

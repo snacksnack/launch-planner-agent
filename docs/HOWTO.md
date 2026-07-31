@@ -84,6 +84,19 @@ the panel lists critical-path joiners/leavers and every moved task. **Reset** ex
 *Example:* slip **Obtain legal sign-off** 30 days → "Launch slips 24 working days"
 (its 6 days of float absorbed the rest), and legal review becomes critical.
 
+### Forecast — *the launch date as a probability, not a point*
+The **Forecast** button runs a **Monte Carlo** over the three-point estimates:
+each task's duration is sampled from a Beta-PERT distribution and CPM is re-run
+1,000 times. The panel gives a **confidence band** — "80% chance of launching on
+or before <date>" (P50/P80/P90) — over a finish-date histogram with the P50/P80/P90
+and the deterministic point estimate marked. Below it, the **criticality index**
+ranks each task by how often it landed on the critical path across the runs (the
+true, risk-weighted schedule drivers). It's deterministic for a fixed seed — no
+randomness reaches the browser.
+
+*Example (flagship golden):* the deterministic plan lands **Oct 12**, but only
+~19% of runs actually hit it; 80% confidence is **Oct 23**.
+
 ### Baseline — *plan vs. the committed baseline*
 The **Baseline** button overlays the current bars on a ghost of the committed
 baseline and shows the drift (tasks that moved, structural changes). If no baseline
@@ -118,6 +131,9 @@ uv run plan schedule $GOLDEN --start-date 2026-08-03
 # Simulate a slip / dependency edit and print the schedule delta
 uv run plan simulate $GOLDEN --start-date 2026-08-03 --slip task-legal-review:30
 uv run plan simulate $GOLDEN --start-date 2026-08-03 --add-dep task-a:task-b
+
+# Monte Carlo the launch date over the three-point estimates (P50/P80/P90 + criticality)
+uv run plan forecast $GOLDEN --start-date 2026-08-03 --seed 42
 
 # Generate Jira issues — MOCK preview (no writes, no credentials)
 uv run plan jira $GOLDEN --start-date 2026-08-03 --project PMA
@@ -254,8 +270,10 @@ fly certs add planner.hihelloreid.com  # then CNAME the subdomain to the Fly app
 
 - **[architecture.md](architecture.md)** — the layering, the ports/adapters, why
   `planner-core` cannot import the agents.
-- **[decisions.md](decisions.md)** — the running ADR log (ADR-0001 … 0019): every
-  non-trivial choice with its reasoning.
+- **[forecasting.md](forecasting.md)** — the Monte Carlo launch forecast in full: the
+  Beta-PERT sampler, the merge-bias theory, determinism, and the assumptions.
+- **[decisions.md](decisions.md)** — the running ADR log: every non-trivial choice
+  with its reasoning.
 - **[case-study.md](case-study.md)** — the agent's plan vs. the real migration.
 - **The flagship fixture** — `fixtures/jira-cloud-migration/`: the PRD, the
   team/constraints, and the hand-reviewed golden plan the whole demo runs on. Its
