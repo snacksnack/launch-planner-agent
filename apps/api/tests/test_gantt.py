@@ -181,6 +181,31 @@ def test_api_simulate_absorbed_slip_reports_zero_impact():
     assert "absorbed by available float" in body["delta"]["headline"]
 
 
+def test_api_forecast_returns_a_confidence_band_and_criticality():
+    """RC1-201: /api/forecast Monte Carlos the launch date over three-point estimates."""
+    client = TestClient(create_app())
+    resp = client.get("/api/forecast", params={"seed": 42, "iterations": 300})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["iterations"] == 300 and body["seed"] == 42
+    # non-decreasing confidence band
+    assert body["p10"] <= body["p50"] <= body["p80"] <= body["p90"]
+    # criticality index is a sorted list of probabilities
+    crit = body["criticality"]
+    assert crit and all(0.0 <= c["criticality"] <= 1.0 for c in crit)
+    assert [c["criticality"] for c in crit] == sorted(
+        (c["criticality"] for c in crit), reverse=True
+    )
+    assert sum(b["count"] for b in body["distribution"]) == 300
+
+
+def test_api_forecast_is_deterministic_for_a_fixed_seed():
+    client = TestClient(create_app())
+    a = client.get("/api/forecast", params={"seed": 7, "iterations": 200}).json()
+    b = client.get("/api/forecast", params={"seed": 7, "iterations": 200}).json()
+    assert a == b
+
+
 def test_api_jira_returns_the_mock_generation_plan():
     """RC1-193: /api/jira serves the mock preview (read-only, no writes)."""
     body = TestClient(create_app()).get("/api/jira").json()

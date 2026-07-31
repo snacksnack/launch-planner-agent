@@ -32,6 +32,55 @@ export function severityBand(sev) {
   return "low";
 }
 
+// A calendar date as "Oct 23, 2026" (UTC, so it never drifts a day by timezone).
+export function longDate(dateStr) {
+  if (!dateStr) return "n/a";
+  return new Date(`${dateStr}T00:00:00Z`).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+// Monte Carlo forecast geometry (RC1-201): fold the finish-date distribution and
+// the percentile markers onto one shared date axis (fractions 0..1), so the
+// histogram bars and the P10/P50/P80/P90/point markers line up. Pure — main.js
+// renders the SVG from what this returns.
+export function forecastBand(result) {
+  const dist = result.distribution ?? [];
+  if (!dist.length) return { bars: [], markers: [], first: null, last: null, span: 0 };
+
+  const days = dist.map((d) => day(d.date));
+  const first = Math.min(...days);
+  const last = Math.max(...days);
+  const span = last - first; // in days; 0 when every run finishes the same day
+  const peak = Math.max(...dist.map((d) => d.count)) || 1;
+  const xOf = (dateStr) => {
+    if (!dateStr) return null;
+    const frac = span === 0 ? 0.5 : (day(dateStr) - first) / span;
+    return Math.min(1, Math.max(0, frac));
+  };
+
+  const bars = dist.map((d) => ({ x: xOf(d.date), h: d.count / peak, count: d.count }));
+  const markers = [
+    { key: "point", label: "Likely", date: result.deterministic_finish },
+    { key: "p50", label: "P50", date: result.p50 },
+    { key: "p80", label: "P80", date: result.p80 },
+    { key: "p90", label: "P90", date: result.p90 },
+  ]
+    .filter((m) => m.date)
+    .map((m) => ({ ...m, x: xOf(m.date) }));
+
+  return {
+    bars,
+    markers,
+    first: dist[0].date,
+    last: dist[dist.length - 1].date,
+    span,
+  };
+}
+
 // A task's predecessor edges → Map(depId → {from, to}), so a flag on a dependency
 // can be shown as its endpoint names instead of an opaque id.
 export function buildDepIndex(tasks) {

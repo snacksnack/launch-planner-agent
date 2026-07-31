@@ -22,6 +22,7 @@ from planner_core import (
     build_generation_plan,
     compare_versions,
     fallback_narrative,
+    monte_carlo,
     render_html,
     render_markdown,
     schedule_plan,
@@ -207,6 +208,26 @@ def create_app() -> FastAPI:
             "delta": result.delta.model_dump(mode="json"),
             "warnings": result.warnings,
         }
+
+    @app.get("/api/forecast", tags=["plan"])
+    def api_forecast(
+        start: str | None = Query(default=None, description="Project start (YYYY-MM-DD)."),
+        plan: str | None = Query(default=None, description="Path to a plan.json to forecast."),
+        snapshot: str | None = Query(
+            default=None, description="Forecast over a committed snapshot (version or hash)."
+        ),
+        iterations: int = Query(
+            default=1000, ge=100, le=5000, description="Number of Monte Carlo runs."
+        ),
+        seed: int = Query(default=0, description="RNG seed — reproducible for a fixed seed."),
+    ) -> dict[str, object]:
+        """Monte Carlo the launch date over the three-point estimates: a P50/P80/P90
+        confidence band, a finish-date distribution, and the per-task criticality
+        index. Deterministic for a fixed seed (no randomness reaches the frontend)."""
+        parsed, _, _ = _load_request_plan(plan, snapshot)
+        start_date = _request_start_date(start)
+        result = monte_carlo(parsed, start_date=start_date, iterations=iterations, seed=seed)
+        return result.model_dump(mode="json")
 
     @app.get("/api/history", tags=["plan"])
     def api_history() -> list[dict[str, object]]:

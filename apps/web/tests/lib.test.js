@@ -7,8 +7,10 @@ import {
   describeScenario,
   escapeHtml,
   flagSubject,
+  forecastBand,
   ghostRect,
   jiraCommand,
+  longDate,
   nameFor,
   plural,
   severityBand,
@@ -145,6 +147,63 @@ describe("ghost-overlay geometry", () => {
   it("enforces a minimum ghost width", () => {
     const map = () => 100; // zero-width span
     expect(ghostRect(map, { start: "x", end: "x" }, 0, 10, 100).rect.width).toBe(2);
+  });
+});
+
+describe("monte carlo forecast geometry", () => {
+  it("formats a long date in UTC", () => {
+    expect(longDate("2026-10-23")).toBe("Oct 23, 2026");
+    expect(longDate(null)).toBe("n/a");
+  });
+
+  const result = {
+    deterministic_finish: "2026-10-12",
+    p10: "2026-10-09",
+    p50: "2026-10-16",
+    p80: "2026-10-23",
+    p90: "2026-10-27",
+    distribution: [
+      { date: "2026-10-09", count: 5 },
+      { date: "2026-10-16", count: 20 }, // the peak
+      { date: "2026-10-27", count: 2 },
+    ],
+  };
+
+  it("places bars on a shared date axis with height relative to the peak", () => {
+    const { bars, span } = forecastBand(result);
+    expect(span).toBe(18); // Oct 9 → Oct 27
+    expect(bars[0]).toMatchObject({ x: 0, h: 0.25 }); // 5/20
+    expect(bars[1]).toMatchObject({ h: 1 }); // the peak
+    expect(bars[1].x).toBeCloseTo(7 / 18); // Oct 16 is 7 days in
+    expect(bars[2]).toMatchObject({ x: 1, h: 0.1 });
+  });
+
+  it("places percentile + point markers on the same axis, skipping missing ones", () => {
+    const { markers } = forecastBand(result);
+    const byKey = Object.fromEntries(markers.map((m) => [m.key, m]));
+    expect(byKey.point.x).toBeCloseTo(3 / 18); // likely finish, Oct 12
+    expect(byKey.p80.x).toBeCloseTo(14 / 18); // Oct 23
+    expect(byKey.p90.x).toBe(1);
+    expect(markers.map((m) => m.key)).toEqual(["point", "p50", "p80", "p90"]);
+  });
+
+  it("degrades gracefully on an empty distribution", () => {
+    expect(forecastBand({ distribution: [] })).toEqual({
+      bars: [],
+      markers: [],
+      first: null,
+      last: null,
+      span: 0,
+    });
+  });
+
+  it("centers a single-bucket distribution instead of dividing by zero", () => {
+    const { bars, span } = forecastBand({
+      deterministic_finish: "2026-10-12",
+      distribution: [{ date: "2026-10-12", count: 9 }],
+    });
+    expect(span).toBe(0);
+    expect(bars[0]).toMatchObject({ x: 0.5, h: 1 });
   });
 });
 

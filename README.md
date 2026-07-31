@@ -3,8 +3,8 @@
 An agentic planning tool for **migrations and launches**. It takes a PRD /
 technical spec, a team list, milestones, and constraints, and produces a full
 delivery plan: an interactive Gantt chart with critical path, a slippage
-simulator, a RAID log, generated Jira tickets (behind an approval gate), and
-weekly exec status updates.
+simulator, a Monte Carlo launch-date forecast, a RAID log, generated Jira
+tickets (behind an approval gate), and weekly exec status updates.
 
 ## Core principle
 
@@ -23,7 +23,7 @@ not a black box.
 
 ```text
 apps/
-  web/            # Gantt UI + dashboard (Vite): decisions, RAID, simulate, baseline, status, Jira
+  web/            # Gantt UI + dashboard (Vite): decisions, RAID, simulate, forecast, baseline, status, Jira
   api/            # FastAPI: ingestion, agent orchestration, persistence
 packages/
   planner-core/   # task graph, CPM/critical path, validation, plan-store models — ZERO LLM deps
@@ -55,7 +55,7 @@ reference LLM code. This import direction is enforced in CI. See
                      validates        │        (cannot import the agents)
                                       ▼
                           human reviews & commits  ─▶  Gantt · RAID · Simulate
-                                                        Baseline · Status · Jira
+                                                        Forecast · Baseline · Status · Jira
 ```
 
 **Provenance is the spine.** Every agent-produced entity — epic, task, dependency,
@@ -75,6 +75,29 @@ gets to decide whether the launch date is real.
 
 **Positioning.** One of three delivery-intelligence tools: the **planner creates**
 the plan → a **drift detector watches** it → the **status agent reports** on it.
+
+## Launch forecast — a date you can put a number on
+
+The deterministic schedule reports one launch date from each task's *most-likely*
+estimate. The **Forecast** turns that into a probability. Each task carries a
+three-point estimate (optimistic / likely / pessimistic); the forecast samples every
+task's duration from a **Beta-PERT** distribution and re-runs the critical-path
+engine **1,000 times**, then reports the launch date as a distribution: a P50 / P80 /
+P90 confidence band ("80% chance of launching on or before *Oct 23*") plus a per-task
+**criticality index** — how often each task landed on the critical path across the
+runs, i.e. the true risk-weighted schedule drivers.
+
+Two properties make it defensible: it's **deterministic** (a seeded RNG, so a fixed
+seed reproduces a run exactly and *no randomness reaches the frontend*), and it
+reveals a **structural optimism bias** that a single CPM pass can't — because the
+finish is a max over converging paths, the expected date is provably *later* than the
+single-point date ([Jensen's inequality](docs/forecasting.md#6-why-the-single-point-date-is-biased-not-just-uncertain)).
+On the flagship golden the deterministic plan lands Oct 12, but only ~19% of runs
+actually hit it.
+
+→ **Full explanation:** [docs/forecasting.md](docs/forecasting.md) (the math, the
+Beta-PERT sampler, the merge-bias theory, and the assumptions). Run it with
+`uv run plan forecast <plan> --start-date … --seed …`.
 
 ## Getting started
 
@@ -123,7 +146,7 @@ check). See the **[Deploy section of the HOWTO](docs/HOWTO.md#7-deploy)** for th
 
 Phases 1–3 built (epic **RC1-181**): the domain model + provenance, the four
 agents (work breakdown, dependency, RAID, status), the deterministic CPM engine,
-the interactive Gantt with a decisions/RAID/simulate/baseline/status/Jira
+the interactive Gantt with a decisions/RAID/simulate/forecast/baseline/status/Jira
 dashboard, the event-sourced plan store with baselines, and gated Jira ticket
 generation. Remaining: deploy + audit-trail viewer & demo polish (**RC1-195**).
 See the [HOWTO](docs/HOWTO.md) to run it and the [decision log](docs/decisions.md)
