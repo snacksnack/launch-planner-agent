@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from collections import defaultdict, deque
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -15,12 +15,14 @@ from planner_core import (
     DecisionRecord,
     Plan,
     PlanDiff,
+    SavedScenario,
     Scenario,
     Snapshot,
     assemble_status,
     build_decision_record,
     build_generation_plan,
     compare_versions,
+    content_hash,
     fallback_narrative,
     monte_carlo,
     render_html,
@@ -28,6 +30,7 @@ from planner_core import (
     schedule_plan,
     simulate,
 )
+from pydantic import BaseModel
 
 from app import __version__
 from app.config import get_settings
@@ -76,6 +79,25 @@ def _decisions_for(
     if persisted is not None:
         return persisted
     return build_decision_record(plan, _resolve_prd_text(plan, plan_path))
+
+
+class _SaveScenarioBody(BaseModel):
+    """Request body for POST /api/scenarios."""
+
+    name: str
+    scenario: Scenario
+    note: str | None = None
+    created_by: str | None = None
+
+
+def _scenario_impact(plan: Plan, scenario: Scenario, start_date: date) -> dict[str, object]:
+    """The launch-date impact of a scenario over a plan — for list/compare views."""
+    delta = simulate(plan, scenario, start_date=start_date).delta
+    return {
+        "finish_shift_days": delta.finish_shift_days,
+        "has_launch_impact": delta.has_launch_impact,
+        "headline": delta.headline,
+    }
 
 
 def create_app() -> FastAPI:
@@ -141,9 +163,12 @@ def create_app() -> FastAPI:
             "app": settings.app_name,
             "version": __version__,
             "public_demo": settings.public_demo,
-            # The API has no LLM or write endpoints; agents + commits are CLI-only.
+            # No LLM, plan-of-record, or Jira writes over HTTP — agents + commits are
+            # CLI-only. The one mutable surface is the saved-scenario scratchpad, and
+            # even that is disabled in the public demo (see `scenario_writes`).
             "writes_enabled": False,
             "agent_endpoints": False,
+            "scenario_writes": not settings.public_demo,
             "rate_limit_per_minute": settings.rate_limit_per_minute,
         }
 
@@ -208,6 +233,85 @@ def create_app() -> FastAPI:
             "delta": result.delta.model_dump(mode="json"),
             "warnings": result.warnings,
         }
+
+    def _require_scenario_writes() -> None:
+        if settings.public_demo:
+            raise HTTPException(
+                status_code=403, detail="saving scenarios is disabled in the read-only demo"
+            )
+
+    @app.get("/api/scenarios", tags=["plan"])
+    def api_list_scenarios(
+        start: str | None = Query(default=None, description="Project start (YYYY-MM-DD)."),
+        plan: str | None = Query(default=None, description="Path to a plan.json."),
+        snapshot: str | None = Query(default=None, description="A committed snapshot ref."),
+    ) -> list[dict[str, object]]:
+        """Saved what-if scenarios for the targeted plan, each with its launch impact
+        (recomputed, so the list doubles as a side-by-side comparison)."""
+        parsed, _, _ = _load_request_plan(plan, snapshot)
+        start_date = _request_start_date(start)
+        store = SQLiteEventStore(settings.sqlite_path)
+        try:
+            saved = store.list_scenarios(content_hash(parsed))
+        finally:
+            store.close()
+        return [
+            {
+                **s.model_dump(mode="json"),
+                "impact": _scenario_impact(parsed, s.scenario, start_date),
+            }
+            for s in saved
+        ]
+
+    @app.post("/api/scenarios", tags=["plan"], status_code=201)
+    def api_save_scenario(
+        body: _SaveScenarioBody,
+        start: str | None = Query(default=None, description="Project start (YYYY-MM-DD)."),
+        plan: str | None = Query(default=None, description="Path to a plan.json."),
+        snapshot: str | None = Query(default=None, description="A committed snapshot ref."),
+    ) -> dict[str, object]:
+        """Save a named scenario against the targeted plan (keyed by its content hash).
+        Overwrites any existing scenario with the same name. Disabled in the demo."""
+        _require_scenario_writes()
+        if not body.name.strip():
+            raise HTTPException(status_code=422, detail="scenario name is required")
+        parsed, _, _ = _load_request_plan(plan, snapshot)
+        start_date = _request_start_date(start)
+        saved = SavedScenario(
+            name=body.name.strip(),
+            plan_hash=content_hash(parsed),
+            scenario=body.scenario,
+            created_by=body.created_by,
+            created_at=datetime.now(UTC),
+            note=body.note,
+        )
+        store = SQLiteEventStore(settings.sqlite_path)
+        try:
+            store.save_scenario(saved)
+        finally:
+            store.close()
+        return {
+            **saved.model_dump(mode="json"),
+            "impact": _scenario_impact(parsed, saved.scenario, start_date),
+        }
+
+    @app.delete("/api/scenarios/{name}", tags=["plan"])
+    def api_delete_scenario(
+        name: str,
+        plan: str | None = Query(default=None, description="Path to a plan.json."),
+        snapshot: str | None = Query(default=None, description="A committed snapshot ref."),
+    ) -> dict[str, object]:
+        """Delete a saved scenario for the targeted plan. Disabled in the demo."""
+        _require_scenario_writes()
+        parsed, _, _ = _load_request_plan(plan, snapshot)
+        store = SQLiteEventStore(settings.sqlite_path)
+        try:
+            deleted = store.delete_scenario(name, content_hash(parsed))
+        finally:
+            store.close()
+        if not deleted:
+            raise HTTPException(status_code=404, detail=f"no saved scenario named {name!r}")
+        return {"deleted": True, "name": name}
 
     @app.get("/api/forecast", tags=["plan"])
     def api_forecast(

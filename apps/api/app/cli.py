@@ -33,6 +33,7 @@ from planner_core import (
     MockJiraTarget,
     Plan,
     RemoveDependency,
+    SavedScenario,
     Scenario,
     Snapshot,
     TeamMember,
@@ -730,6 +731,94 @@ def content_hash_of(plan: Plan) -> str:
     return content_hash(plan)
 
 
+# --- saved what-if scenarios (RC1-202) -------------------------------------
+
+
+def _resolve_plan_for_scenario(args: argparse.Namespace) -> tuple[Plan, str] | None:
+    """Resolve the target plan (file or snapshot ref) and its content hash."""
+    store = _open_store()
+    try:
+        plan = _resolve_ref(store, args.plan)
+    except KeyError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return None
+    return plan, content_hash_of(plan)
+
+
+def cmd_scenario_save(args: argparse.Namespace) -> int:
+    """Persist a named what-if against a plan (file or snapshot), keyed by its hash."""
+    resolved = _resolve_plan_for_scenario(args)
+    if resolved is None:
+        return 2
+    plan, plan_hash = resolved
+    scenario = _build_scenario(args)
+    if not scenario.changes:
+        print("error: a scenario needs at least one change (--slip/--add-dep/--remove-dep)",
+              file=sys.stderr)
+        return 2
+    saved = SavedScenario(
+        name=args.name, plan_hash=plan_hash, scenario=scenario,
+        created_by=args.by, created_at=datetime.now(UTC), note=args.note,
+    )
+    _open_store().save_scenario(saved)
+    print(f"saved scenario {args.name!r} against plan {plan_hash[:12]} "
+          f"({len(scenario.changes)} change(s))")
+    return 0
+
+
+def cmd_scenario_list(args: argparse.Namespace) -> int:
+    """List saved scenarios for a plan; with --start-date, show each launch impact."""
+    resolved = _resolve_plan_for_scenario(args)
+    if resolved is None:
+        return 2
+    plan, plan_hash = resolved
+    saved = _open_store().list_scenarios(plan_hash)
+    if not saved:
+        print(f"no saved scenarios for plan {plan_hash[:12]}")
+        return 0
+    start = date.fromisoformat(args.start_date) if args.start_date else None
+    print(f"saved scenarios for plan {plan_hash[:12]}:")
+    for s in saved:
+        impact = ""
+        if start is not None:
+            delta = simulate(plan, s.scenario, start_date=start).delta
+            impact = f" · {delta.headline}"
+        who = f" by {s.created_by}" if s.created_by else ""
+        note = f" — {s.note}" if s.note else ""
+        print(f"  {s.name}{who} · {s.created_at.date().isoformat()}{note}{impact}")
+    return 0
+
+
+def cmd_scenario_load(args: argparse.Namespace) -> int:
+    """Reload a saved scenario and print its schedule delta (reproduces the what-if)."""
+    resolved = _resolve_plan_for_scenario(args)
+    if resolved is None:
+        return 2
+    plan, plan_hash = resolved
+    saved = _open_store().get_scenario(args.name, plan_hash)
+    if saved is None:
+        print(f"error: no saved scenario {args.name!r} for plan {plan_hash[:12]}", file=sys.stderr)
+        return 2
+    result = simulate(plan, saved.scenario, start_date=date.fromisoformat(args.start_date))
+    for warning in result.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
+    print(result.delta.render())
+    return 1 if result.delta.finish_shift_days > 0 else 0
+
+
+def cmd_scenario_delete(args: argparse.Namespace) -> int:
+    """Delete a saved scenario for a plan."""
+    resolved = _resolve_plan_for_scenario(args)
+    if resolved is None:
+        return 2
+    _, plan_hash = resolved
+    if _open_store().delete_scenario(args.name, plan_hash):
+        print(f"deleted scenario {args.name!r}")
+        return 0
+    print(f"error: no saved scenario {args.name!r} for plan {plan_hash[:12]}", file=sys.stderr)
+    return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="plan", description="Launch planner agent CLI.")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -903,6 +992,49 @@ def main(argv: list[str] | None = None) -> int:
     )
     jira.add_argument("--out", help="Where to write the plan with jira_key mappings (real mode).")
     jira.set_defaults(func=cmd_jira)
+
+    # --- saved what-if scenarios (RC1-202) ---
+    scenario = sub.add_parser(
+        "scenario", help="Save, list, load, or delete named what-if scenarios."
+    )
+    scenario_sub = scenario.add_subparsers(dest="scenario_cmd", required=True)
+
+    sc_save = scenario_sub.add_parser("save", help="Persist a named scenario against a plan.")
+    sc_save.add_argument("plan", help="Plan ref the scenario targets (version, hash, or file).")
+    sc_save.add_argument("--name", required=True, help="Name to save the scenario under.")
+    sc_save.add_argument(
+        "--slip", action="append", metavar="TASK_ID:DAYS",
+        help="Slip a task by N working days. Repeatable.",
+    )
+    sc_save.add_argument(
+        "--add-dep", action="append", metavar="PRED:SUCC",
+        help="Add a hypothetical dependency edge. Repeatable.",
+    )
+    sc_save.add_argument(
+        "--remove-dep", action="append", metavar="PRED:SUCC",
+        help="Remove an existing dependency edge. Repeatable.",
+    )
+    sc_save.add_argument("--by", help="Who saved it (light provenance).")
+    sc_save.add_argument("--note", help="Optional note.")
+    sc_save.set_defaults(func=cmd_scenario_save)
+
+    sc_list = scenario_sub.add_parser("list", help="List saved scenarios for a plan.")
+    sc_list.add_argument("plan", help="Plan ref (version, hash, or file).")
+    sc_list.add_argument(
+        "--start-date", help="If set, show each scenario's launch impact (YYYY-MM-DD)."
+    )
+    sc_list.set_defaults(func=cmd_scenario_list)
+
+    sc_load = scenario_sub.add_parser("load", help="Reload a saved scenario and print its delta.")
+    sc_load.add_argument("plan", help="Plan ref (version, hash, or file).")
+    sc_load.add_argument("--name", required=True, help="The saved scenario name.")
+    sc_load.add_argument("--start-date", required=True, help="Project start date (YYYY-MM-DD).")
+    sc_load.set_defaults(func=cmd_scenario_load)
+
+    sc_delete = scenario_sub.add_parser("delete", help="Delete a saved scenario for a plan.")
+    sc_delete.add_argument("plan", help="Plan ref (version, hash, or file).")
+    sc_delete.add_argument("--name", required=True, help="The saved scenario name.")
+    sc_delete.set_defaults(func=cmd_scenario_delete)
 
     args = parser.parse_args(argv)
     return args.func(args)

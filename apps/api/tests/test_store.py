@@ -15,9 +15,12 @@ from app.store import SQLiteEventStore
 from planner_core import (
     CommitRejected,
     Confidence,
+    DelayTask,
     InMemoryPlanRepository,
     Plan,
     Provenance,
+    SavedScenario,
+    Scenario,
     SnapshotKind,
     Task,
     TeamMember,
@@ -151,5 +154,74 @@ def test_sqlite_persists_across_store_instances(tmp_path):
     try:
         assert len(reopened.history()) == 1
         assert reopened.latest_commit().approved_by == "Reid"
+    finally:
+        reopened.close()
+
+
+# --- saved what-if scenarios (RC1-202) -------------------------------------
+
+
+def _saved(name: str, plan_hash: str, days: float = 5, **kw) -> SavedScenario:
+    return SavedScenario(
+        name=name, plan_hash=plan_hash,
+        scenario=Scenario(name=name, changes=[DelayTask(task_id="a", days=days)]),
+        created_at=NOW, **kw,
+    )
+
+
+def test_scenario_save_get_and_list_by_plan_hash():
+    store = SQLiteEventStore(":memory:")
+    try:
+        store.save_scenario(_saved("aggressive", "hashA", created_by="Priya", note="worst case"))
+        store.save_scenario(_saved("mild", "hashA"))
+        store.save_scenario(_saved("other-plan", "hashB"))
+
+        got = store.get_scenario("aggressive", "hashA")
+        assert got.created_by == "Priya" and got.note == "worst case"
+        assert got.scenario.changes[0].task_id == "a"
+
+        names = {s.name for s in store.list_scenarios("hashA")}
+        assert names == {"aggressive", "mild"}  # scoped to the plan hash
+        assert [s.name for s in store.list_scenarios("hashB")] == ["other-plan"]
+        assert len(store.list_scenarios()) == 3  # all, unfiltered
+    finally:
+        store.close()
+
+
+def test_scenario_save_overwrites_by_plan_and_name():
+    store = SQLiteEventStore(":memory:")
+    try:
+        store.save_scenario(_saved("s", "hashA", days=5, note="first"))
+        store.save_scenario(_saved("s", "hashA", days=9, note="second"))
+        rows = store.list_scenarios("hashA")
+        assert len(rows) == 1  # overwritten, not duplicated
+        assert rows[0].note == "second"
+        assert rows[0].scenario.changes[0].days == 9
+    finally:
+        store.close()
+
+
+def test_scenario_delete_reports_whether_it_removed_one():
+    store = SQLiteEventStore(":memory:")
+    try:
+        store.save_scenario(_saved("s", "hashA"))
+        assert store.delete_scenario("s", "hashA") is True
+        assert store.get_scenario("s", "hashA") is None
+        assert store.delete_scenario("s", "hashA") is False  # already gone
+    finally:
+        store.close()
+
+
+def test_scenarios_survive_reopen_and_are_unaffected_by_snapshot_triggers(tmp_path):
+    path = str(tmp_path / "plans.db")
+    store = SQLiteEventStore(path)
+    store.save_scenario(_saved("s", "hashA", note="keep me"))
+    store.close()
+
+    reopened = SQLiteEventStore(path)
+    try:
+        # The append-only triggers are on `snapshots`; the scenarios catalog is mutable.
+        assert reopened.get_scenario("s", "hashA").note == "keep me"
+        assert reopened.delete_scenario("s", "hashA") is True
     finally:
         reopened.close()

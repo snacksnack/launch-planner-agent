@@ -81,6 +81,15 @@ export function forecastBand(result) {
   };
 }
 
+// A saved scenario's launch impact as a short badge: "+24d", "-3d", or "no slip".
+export function scenarioImpactLabel(impact) {
+  if (!impact) return "";
+  const d = impact.finish_shift_days;
+  if (d > 0) return `+${d}d`;
+  if (d < 0) return `${d}d`;
+  return "no slip";
+}
+
 // A task's predecessor edges → Map(depId → {from, to}), so a flag on a dependency
 // can be shown as its endpoint names instead of an opaque id.
 export function buildDepIndex(tasks) {

@@ -21,6 +21,7 @@ import {
   longDate,
   nameFor as libNameFor,
   plural,
+  scenarioImpactLabel,
   severityBand,
   signed,
 } from "./lib.js";
@@ -50,6 +51,10 @@ let simActive = false;
 let simResult = null; // { baseline, simulated, delta, warnings }
 let scenarioChanges = []; // the what-if changes being composed
 let simShowBaseline = false; // A/B toggle: show the baseline schedule, not the simulated one (RC1-203)
+
+// Saved scenarios (RC1-202) state.
+let savedScenarios = []; // [{name, note, created_by, scenario, impact}] for the current plan
+let scenarioWrites = true; // whether the API allows save/delete (off in the read-only demo)
 
 // Baseline / plan-vs-actual (RC1-192) state.
 let baselineActive = false;
@@ -1019,6 +1024,7 @@ function enterSimMode() {
   document.querySelector("#simulate-btn").classList.add("active");
   updateSimBanner();
   renderSimPanel();
+  loadSavedScenarios(); // async; re-renders the panel with the saved list
 }
 
 function exitSimMode() {
@@ -1073,6 +1079,64 @@ async function runSimulation() {
   renderGantt(currentViewMode); // rAF draws the ghost baseline overlay
   updateSimBanner();
   renderSimPanel();
+}
+
+// --- saved scenarios (RC1-202) ---------------------------------------------
+
+// Load the saved scenarios for the current plan and whether saving is allowed,
+// then re-render the panel. Best-effort: a failure just leaves the list empty.
+async function loadSavedScenarios() {
+  try {
+    const [list, info] = await Promise.all([
+      fetch(`${API_BASE}/api/scenarios`).then((r) => (r.ok ? r.json() : [])),
+      fetch(`${API_BASE}/api/info`).then((r) => (r.ok ? r.json() : {})),
+    ]);
+    savedScenarios = Array.isArray(list) ? list : [];
+    scenarioWrites = info.scenario_writes !== false;
+  } catch {
+    savedScenarios = [];
+  }
+  if (simActive) renderSimPanel();
+}
+
+async function saveScenario() {
+  const input = document.querySelector("#sim-save-name");
+  const name = input?.value.trim();
+  if (!name) {
+    input?.focus();
+    return;
+  }
+  try {
+    const resp = await fetch(`${API_BASE}/api/scenarios`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, scenario: { changes: scenarioChanges } }),
+    });
+    if (!resp.ok) throw new Error(`API ${resp.status}`);
+  } catch (err) {
+    const status = document.querySelector("#sim-save-status");
+    if (status) status.textContent = `Couldn't save: ${err.message}`;
+    return;
+  }
+  await loadSavedScenarios();
+}
+
+// Re-apply a saved scenario: its changes come back in the list payload, so no
+// second fetch — set them as the composed scenario and run it.
+function applySavedScenario(name) {
+  const saved = savedScenarios.find((s) => s.name === name);
+  if (!saved) return;
+  scenarioChanges = structuredClone(saved.scenario.changes ?? []);
+  runSimulation();
+}
+
+async function deleteSavedScenario(name) {
+  try {
+    await fetch(`${API_BASE}/api/scenarios/${encodeURIComponent(name)}`, { method: "DELETE" });
+  } catch {
+    /* best-effort; the reload reflects the true state */
+  }
+  await loadSavedScenarios();
 }
 
 // Flip the timeline baseline <-> simulated without touching the composed scenario
@@ -1136,12 +1200,45 @@ function renderSimPanel() {
         .join("")}</ul>`
     : `<p class="hint">No changes yet — slip a task or edit a dependency below.</p>`;
 
+  // Save the composed scenario (only when there are changes and the API allows it).
+  const saveRow =
+    scenarioChanges.length && scenarioWrites
+      ? `<div class="sim-row sim-save-row">
+           <input id="sim-save-name" type="text" placeholder="Name this scenario" aria-label="Scenario name" />
+           <button id="sim-save" class="toolbtn">Save scenario</button>
+         </div><p id="sim-save-status" class="hint"></p>`
+      : "";
+
+  // The saved-scenario picker + side-by-side impact (RC1-202).
+  const savedSection = savedScenarios.length
+    ? `<h3>Saved scenarios</h3>
+       <ul class="saved-list">${savedScenarios
+         .map((s) => {
+           const shift = s.impact?.finish_shift_days ?? 0;
+           const cls = shift > 0 ? "slip" : shift < 0 ? "pull" : "ok";
+           const del = scenarioWrites
+             ? `<button class="saved-x" data-del="${escapeHtml(s.name)}" title="Delete" aria-label="Delete scenario">×</button>`
+             : "";
+           const meta = s.note ? escapeHtml(s.note) : escapeHtml(s.created_by ?? "");
+           return `<li>
+             <button class="saved-load" data-load="${escapeHtml(s.name)}" title="Re-apply this scenario">
+               <span class="saved-name">${escapeHtml(s.name)}</span>
+               ${meta ? `<span class="saved-meta">${meta}</span>` : ""}
+             </button>
+             <span class="saved-impact saved-${cls}" title="${escapeHtml(s.impact?.headline ?? "")}">${scenarioImpactLabel(s.impact)}</span>
+             ${del}
+           </li>`;
+         })
+         .join("")}</ul>`
+    : "";
+
   el.innerHTML = `
     <button class="detail-close" aria-label="Exit simulate" title="Exit simulate">×</button>
     <h2>Simulate — what if?</h2>
     <p class="reasoning">Compose hypothetical changes; the schedule recomputes deterministically and the timeline shows the shift against a ghost of the baseline.</p>
     <h3>Scenario</h3>
     ${changeList}
+    ${saveRow}
     <div class="sim-form">
       <label class="sim-label" for="sim-task">Slip a task</label>
       <div class="sim-row">
@@ -1163,9 +1260,23 @@ function renderSimPanel() {
       </div>
     </div>
     <div id="sim-impact">${renderImpact()}</div>
+    ${savedSection}
   `;
 
   el.querySelector(".detail-close").addEventListener("click", exitSimMode);
+  const saveBtn = el.querySelector("#sim-save");
+  if (saveBtn) {
+    saveBtn.addEventListener("click", saveScenario);
+    el.querySelector("#sim-save-name").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") saveScenario();
+    });
+  }
+  for (const b of el.querySelectorAll("[data-load]")) {
+    b.addEventListener("click", () => applySavedScenario(b.dataset.load));
+  }
+  for (const b of el.querySelectorAll("[data-del]")) {
+    b.addEventListener("click", () => deleteSavedScenario(b.dataset.del));
+  }
   el.querySelector("#sim-add-slip").addEventListener("click", () => {
     const task_id = el.querySelector("#sim-task").value;
     const days = Number(el.querySelector("#sim-days").value);

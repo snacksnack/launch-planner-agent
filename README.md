@@ -3,8 +3,9 @@
 An agentic planning tool for **migrations and launches**. It takes a PRD /
 technical spec, a team list, milestones, and constraints, and produces a full
 delivery plan: an interactive Gantt chart with critical path, a slippage
-simulator, a Monte Carlo launch-date forecast, a RAID log, generated Jira
-tickets (behind an approval gate), and weekly exec status updates.
+simulator (with saveable what-if scenarios), a Monte Carlo launch-date forecast,
+a RAID log, generated Jira tickets (behind an approval gate), and weekly exec
+status updates.
 
 ## Core principle
 

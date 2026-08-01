@@ -98,6 +98,25 @@ class Scenario(BaseModel):
     changes: list[ScenarioChange] = []
 
 
+class SavedScenario(BaseModel):
+    """A `Scenario` persisted under a name, scoped to the plan it was built against.
+
+    A saved scenario is a reviewer's scratchpad entry, not a plan-of-record entity:
+    it lives *beside* the store (a mutable catalog), keyed by `plan_hash` — the
+    content hash of the target plan. Because the hash pins the exact plan, reloading
+    a saved scenario reproduces the identical `ScheduleDelta`. Carries light
+    provenance (who saved it, when) in keeping with the system's audit ethos.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    name: str
+    plan_hash: str
+    scenario: Scenario
+    created_by: str | None = None
+    created_at: datetime
+    note: str | None = None
+
+
 # --- applying a scenario ---------------------------------------------------
 
 
