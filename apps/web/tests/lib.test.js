@@ -13,6 +13,7 @@ import {
   longDate,
   nameFor,
   plural,
+  scenarioImpactLabel,
   severityBand,
   signed,
 } from "../src/lib.js";
@@ -204,6 +205,19 @@ describe("monte carlo forecast geometry", () => {
     });
     expect(span).toBe(0);
     expect(bars[0]).toMatchObject({ x: 0.5, h: 1 });
+  });
+});
+
+describe("saved scenario impact badge", () => {
+  it("signs a slip, a pull-in, and no change", () => {
+    expect(scenarioImpactLabel({ finish_shift_days: 24 })).toBe("+24d");
+    expect(scenarioImpactLabel({ finish_shift_days: -3 })).toBe("-3d");
+    expect(scenarioImpactLabel({ finish_shift_days: 0 })).toBe("no slip");
+  });
+
+  it("is empty when there's no impact payload", () => {
+    expect(scenarioImpactLabel(null)).toBe("");
+    expect(scenarioImpactLabel(undefined)).toBe("");
   });
 });
 

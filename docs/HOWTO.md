@@ -84,6 +84,13 @@ the panel lists critical-path joiners/leavers and every moved task. **Reset** ex
 *Example:* slip **Obtain legal sign-off** 30 days → "Launch slips 24 working days"
 (its 6 days of float absorbed the rest), and legal review becomes critical.
 
+**Save & recall (RC1-202).** Once a scenario is composed, name it and **Save
+scenario**; it's kept beside the plan (scoped to the plan's content hash). Saved
+scenarios list under the panel with each one's launch impact (e.g. `+24d`) — a
+side-by-side comparison — and one click **re-applies** a saved scenario, reproducing
+the identical schedule delta. The **×** deletes one. (Saving is a local convenience:
+it's disabled in the read-only public demo; the list still shows.)
+
 ### Forecast — *the launch date as a probability, not a point*
 The **Forecast** button runs a **Monte Carlo** over the three-point estimates:
 each task's duration is sampled from a Beta-PERT distribution and CPM is re-run
@@ -134,6 +141,12 @@ uv run plan simulate $GOLDEN --start-date 2026-08-03 --add-dep task-a:task-b
 
 # Monte Carlo the launch date over the three-point estimates (P50/P80/P90 + criticality)
 uv run plan forecast $GOLDEN --start-date 2026-08-03 --seed 42
+
+# Save / list / load / delete named what-if scenarios (persisted beside the plan)
+uv run plan scenario save $GOLDEN --name "legal blows up" --slip task-legal-review:30 --by Priya
+uv run plan scenario list $GOLDEN --start-date 2026-08-03            # each with its launch impact
+uv run plan scenario load $GOLDEN --name "legal blows up" --start-date 2026-08-03   # reproduce the delta
+uv run plan scenario delete $GOLDEN --name "legal blows up"
 
 # Generate Jira issues — MOCK preview (no writes, no credentials)
 uv run plan jira $GOLDEN --start-date 2026-08-03 --project PMA
@@ -251,9 +264,11 @@ docker run -p 8080:8080 -v lp:/data launch-planner   # → http://localhost:8080
 
 The image sets `LPA_PUBLIC_DEMO=true`, so it **seeds** a proposal → commit →
 baseline history on first boot (the Baseline/Status/audit views have data), serves
-the built UI same-origin (no CORS), and **rate-limits** `/api/*`. The API has no
-LLM or write endpoints — agents and real Jira writes are CLI-only — so the public
-demo is read-only by construction; `GET /api/info` reports the posture.
+the built UI same-origin (no CORS), and **rate-limits** `/api/*`. The API exposes no
+LLM, plan-of-record, or Jira writes — agents and commits are CLI-only — and the one
+mutable surface (the saved-scenario scratchpad) is **also disabled** in the demo, so
+it's read-only by construction; `GET /api/info` reports the posture
+(`scenario_writes: false`).
 
 **Fly.io** (config in `fly.toml`, with a persistent volume for the SQLite store):
 

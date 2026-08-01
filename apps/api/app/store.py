@@ -13,7 +13,7 @@ from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 
-from planner_core import DecisionRecord, Plan, Snapshot, SnapshotKind
+from planner_core import DecisionRecord, Plan, SavedScenario, Scenario, Snapshot, SnapshotKind
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS snapshots (
@@ -37,6 +37,19 @@ CREATE TRIGGER IF NOT EXISTS snapshots_no_update
 CREATE TRIGGER IF NOT EXISTS snapshots_no_delete
     BEFORE DELETE ON snapshots
     BEGIN SELECT RAISE(FAIL, 'snapshots are append-only'); END;
+
+-- Saved what-if scenarios (RC1-202): a reviewer's scratchpad catalog, keyed by
+-- the target plan's content hash. Deliberately MUTABLE (save overwrites, delete
+-- removes) — distinct from the append-only plan-of-record above.
+CREATE TABLE IF NOT EXISTS scenarios (
+    name          TEXT NOT NULL,
+    plan_hash     TEXT NOT NULL,
+    scenario_json TEXT NOT NULL,
+    created_by    TEXT,
+    created_at    TEXT NOT NULL,
+    note          TEXT,
+    PRIMARY KEY (plan_hash, name)
+);
 """
 
 _COLUMNS = (
@@ -132,6 +145,51 @@ class SQLiteEventStore:
         with closing(self._conn.execute(sql, params)) as cursor:
             return cursor.fetchone()
 
+    # --- saved what-if scenarios (RC1-202) ---------------------------------
+
+    def save_scenario(self, saved: SavedScenario) -> SavedScenario:
+        """Persist a scenario, overwriting any prior one with the same (plan, name)."""
+        with self._conn:
+            self._conn.execute(
+                "INSERT OR REPLACE INTO scenarios "
+                "(name, plan_hash, scenario_json, created_by, created_at, note) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    saved.name,
+                    saved.plan_hash,
+                    saved.scenario.model_dump_json(),
+                    saved.created_by,
+                    saved.created_at.isoformat(),
+                    saved.note,
+                ),
+            )
+        return saved
+
+    def list_scenarios(self, plan_hash: str | None = None) -> list[SavedScenario]:
+        """Saved scenarios, newest first — all, or just those for one plan hash."""
+        sql = "SELECT * FROM scenarios"
+        params: tuple = ()
+        if plan_hash is not None:
+            sql += " WHERE plan_hash = ?"
+            params = (plan_hash,)
+        sql += " ORDER BY created_at DESC, name"
+        with closing(self._conn.execute(sql, params)) as cur:
+            return [_row_to_scenario(row) for row in cur.fetchall()]
+
+    def get_scenario(self, name: str, plan_hash: str) -> SavedScenario | None:
+        row = self._one(
+            "SELECT * FROM scenarios WHERE plan_hash = ? AND name = ?", (plan_hash, name)
+        )
+        return _row_to_scenario(row) if row else None
+
+    def delete_scenario(self, name: str, plan_hash: str) -> bool:
+        """Remove a saved scenario; True if one was deleted."""
+        with self._conn:
+            cur = self._conn.execute(
+                "DELETE FROM scenarios WHERE plan_hash = ? AND name = ?", (plan_hash, name)
+            )
+        return cur.rowcount > 0
+
 
 def _row_to_snapshot(row: sqlite3.Row) -> Snapshot:
     decision_json = row["decision_json"]
@@ -148,4 +206,15 @@ def _row_to_snapshot(row: sqlite3.Row) -> Snapshot:
         decision_record=(
             DecisionRecord.model_validate_json(decision_json) if decision_json else None
         ),
+    )
+
+
+def _row_to_scenario(row: sqlite3.Row) -> SavedScenario:
+    return SavedScenario(
+        name=row["name"],
+        plan_hash=row["plan_hash"],
+        scenario=Scenario.model_validate_json(row["scenario_json"]),
+        created_by=row["created_by"],
+        created_at=datetime.fromisoformat(row["created_at"]),
+        note=row["note"],
     )

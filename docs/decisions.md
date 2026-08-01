@@ -12,6 +12,46 @@ to).
 
 ---
 
+## ADR-0023 — Saved scenarios: a mutable catalog beside the append-only store
+
+**Date:** 2026-08-01 · **Ticket:** RC1-202 · **Status:** Accepted
+
+**Context.** The simulator's what-ifs (RC1-190) were ephemeral. RC1-202 adds optional
+persistence so a reviewer can name, save, recall, and compare scenarios. The question
+was *where* they live relative to the event-sourced plan store (RC1-189), whose
+defining property is append-only immutability of the plan of record.
+
+**Explanation.** *A scenario is a scratchpad entry, not a plan-of-record entity, so it
+does not belong on a snapshot.* The decision-record precedent (RC1-197) rides the
+immutable snapshot because it's frozen at commit time; a scenario is the opposite —
+created later, edited, deleted, many per plan. Forcing it into the append-only table
+would be a category error. So scenarios get their **own `scenarios` table**, and it is
+deliberately **mutable** (`INSERT OR REPLACE`, `DELETE`) — the plan-of-record triggers
+that reject UPDATE/DELETE are on `snapshots` only. Two catalogs, two lifecycles, one DB.
+*Keyed by the plan's content hash, not a snapshot version.* A `SavedScenario` references
+`plan_hash = content_hash(plan)`. The hash pins the exact plan the scenario was built
+against — so reloading reproduces the **identical `ScheduleDelta`** (the acceptance
+criterion), and it works uniformly whether the plan came from a committed snapshot or
+the golden *file* the demo renders (which is not a snapshot at all). *The model lives in
+`planner_core`, the persistence in the app.* `SavedScenario` is a pure Pydantic model
+(core, testable without a DB); the SQLite CRUD is an app-layer extension of the existing
+store — mirroring the `PlanRepository` port/adapter split. *Recall needs no second
+fetch:* the list endpoint returns each scenario's changes **and** its recomputed launch
+impact, so the UI re-applies one client-side and the list doubles as the side-by-side
+comparison. *The one write endpoint stays honest.* Saving is the only mutable HTTP
+surface, so it is **gated off in the public demo** (`_require_scenario_writes` → 403) and
+surfaced as `scenario_writes` in `/api/info`; the plan-of-record/LLM/Jira remain
+read-only by construction.
+
+**Consequences.** A `scenarios` table (mutable, beside the immutable snapshots), a
+`SavedScenario` core model, store CRUD, `save/list/load/delete` on CLI and API, and a
+Simulate-panel picker with per-scenario impact + one-click recall. Saved scenarios are
+plan-scoped by hash: edit the plan and its old scenarios simply don't list against the
+new hash (no stale/misapplied deltas) — a deliberate trade (scenarios don't "follow" a
+plan across edits) that buys the exact-reproduction guarantee.
+
+---
+
 ## ADR-0022 — Monte Carlo launch forecast: Beta-PERT sampling, seeded and engine-side
 
 **Date:** 2026-07-31 · **Ticket:** RC1-201 · **Status:** Accepted

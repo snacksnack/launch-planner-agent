@@ -206,6 +206,72 @@ def test_api_forecast_is_deterministic_for_a_fixed_seed():
     assert a == b
 
 
+def test_api_scenarios_save_list_and_delete_roundtrip(tmp_path, monkeypatch):
+    """RC1-202: save a named scenario, see it listed with its impact, then delete it."""
+    monkeypatch.setenv("LPA_DATABASE_URL", f"sqlite:///{tmp_path / 'plans.db'}")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    try:
+        client = TestClient(create_app())
+        # Save: a 30-day legal-review slip (24 working days of launch impact).
+        saved = client.post(
+            "/api/scenarios",
+            json={
+                "name": "legal blows up",
+                "note": "worst case",
+                "scenario": {
+                    "changes": [{"kind": "delay_task", "task_id": "task-legal-review", "days": 30}]
+                },
+            },
+        )
+        assert saved.status_code == 201
+        assert saved.json()["impact"]["finish_shift_days"] == 24
+        assert saved.json()["plan_hash"]  # scoped to the loaded plan's content hash
+
+        listed = client.get("/api/scenarios").json()
+        assert [s["name"] for s in listed] == ["legal blows up"]
+        assert listed[0]["note"] == "worst case"
+        assert listed[0]["impact"]["finish_shift_days"] == 24
+
+        gone = client.delete("/api/scenarios/legal blows up")
+        assert gone.status_code == 200 and gone.json()["deleted"] is True
+        assert client.get("/api/scenarios").json() == []
+    finally:
+        get_settings.cache_clear()
+
+
+def test_api_delete_missing_scenario_is_404(tmp_path, monkeypatch):
+    monkeypatch.setenv("LPA_DATABASE_URL", f"sqlite:///{tmp_path / 'plans.db'}")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    try:
+        assert TestClient(create_app()).delete("/api/scenarios/nope").status_code == 404
+    finally:
+        get_settings.cache_clear()
+
+
+def test_api_scenario_writes_disabled_in_public_demo(tmp_path, monkeypatch):
+    """The demo is read-only: listing works, saving/deleting are refused (403)."""
+    monkeypatch.setenv("LPA_DATABASE_URL", f"sqlite:///{tmp_path / 'plans.db'}")
+    monkeypatch.setenv("LPA_PUBLIC_DEMO", "true")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    try:
+        client = TestClient(create_app())
+        assert client.get("/api/info").json()["scenario_writes"] is False
+        assert client.get("/api/scenarios").status_code == 200  # reads still fine
+        blocked = client.post(
+            "/api/scenarios", json={"name": "x", "scenario": {"changes": []}}
+        )
+        assert blocked.status_code == 403
+        assert client.delete("/api/scenarios/x").status_code == 403
+    finally:
+        get_settings.cache_clear()
+
+
 def test_api_jira_returns_the_mock_generation_plan():
     """RC1-193: /api/jira serves the mock preview (read-only, no writes)."""
     body = TestClient(create_app()).get("/api/jira").json()
