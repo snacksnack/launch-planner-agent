@@ -18,6 +18,7 @@ import {
   forecastBand,
   ghostRect,
   jiraCommand as libJiraCommand,
+  jiraLinkMode,
   longDate,
   nameFor as libNameFor,
   plural,
@@ -744,15 +745,27 @@ function renderJiraPanel(data) {
   const epics = gen.issues.filter((op) => op.issue_type === "Epic");
   const stories = gen.issues.filter((op) => op.issue_type === "Story");
 
-  const issueRow = (op) =>
-    `<li class="jira-op">
-      <label>
-        <input type="checkbox" data-op="${escapeHtml(op.local_id)}" ${jiraSelected.has(op.local_id) ? "checked" : ""} />
-        <span class="jira-type jira-type-${op.issue_type.toLowerCase()}">${op.action === "update" ? "~" : "+"} ${op.issue_type}</span>
-        <span class="jira-summary">${escapeHtml(op.summary)}</span>
-      </label>
+  // Checkbox (approve) and summary (navigate) are decoupled — no shared <label> —
+  // so clicking the summary opens the ticket / jumps to the task without toggling
+  // the partial-approval checkbox (RC1-211).
+  const issueRow = (op) => {
+    const name = escapeHtml(op.summary);
+    const mode = jiraLinkMode(op, byId.has(op.local_id));
+    let summary;
+    if (mode === "open") {
+      summary = `<a class="jira-summary jira-open" href="${escapeHtml(op.jira_url)}" target="_blank" rel="noopener" title="Open ${escapeHtml(op.existing_key)} in Jira">${name} <span class="jira-ext">↗</span></a>`;
+    } else if (mode === "jump") {
+      summary = `<a class="jira-summary jira-jump" href="#" data-jump="${escapeHtml(op.local_id)}" title="Show this task on the timeline">${name}</a>`;
+    } else {
+      summary = `<span class="jira-summary">${name}</span>`;
+    }
+    return `<li class="jira-op">
+      <input type="checkbox" class="jira-check" data-op="${escapeHtml(op.local_id)}" ${jiraSelected.has(op.local_id) ? "checked" : ""} aria-label="Include ${name}" />
+      <span class="jira-type jira-type-${op.issue_type.toLowerCase()}">${op.action === "update" ? "~" : "+"} ${op.issue_type}</span>
+      ${summary}
       ${op.due_date ? `<span class="jira-due">due ${op.due_date}</span>` : ""}
     </li>`;
+  };
 
   el.innerHTML =
     `<button class="detail-close" aria-label="Close" title="Close">×</button>` +
@@ -782,6 +795,13 @@ function renderJiraPanel(data) {
       if (cb.checked) jiraSelected.add(cb.dataset.op);
       else jiraSelected.delete(cb.dataset.op);
       updateJiraCommand();
+    });
+  }
+  // Click a previewed issue with no real ticket → jump to that task's detail.
+  for (const a of el.querySelectorAll("[data-jump]")) {
+    a.addEventListener("click", (e) => {
+      e.preventDefault();
+      showDetail(a.getAttribute("data-jump"));
     });
   }
   el.querySelector("#jira-copy").addEventListener("click", copyJiraCommand);

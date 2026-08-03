@@ -870,22 +870,15 @@ blockquote {
 .jira-op {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
+  gap: 0.45rem;
   padding: 0.2rem 0;
+  font-size: 0.83rem;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
 }
-.jira-op label {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  min-width: 0;
-  font-size: 0.83rem;
-  cursor: pointer;
-}
-.jira-op input {
+.jira-check {
   accent-color: var(--accent);
   flex-shrink: 0;
+  cursor: pointer;
 }
 .jira-type {
   flex-shrink: 0;
@@ -899,10 +892,26 @@ blockquote {
 .jira-type-epic { background: color-mix(in srgb, var(--accent) 14%, var(--bg)); color: var(--accent); }
 .jira-type-story { background: var(--panel); color: var(--muted); border: 1px solid var(--border); }
 .jira-summary {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* Clickable summaries: jump-to-task (default ink) and open-real-ticket (accent). */
+a.jira-summary {
+  color: var(--text);
+  text-decoration: none;
+  cursor: pointer;
+}
+a.jira-summary:hover {
+  text-decoration: underline;
+}
+a.jira-open {
+  color: var(--accent);
+}
+.jira-ext {
+  font-size: 0.7rem;
 }
 .jira-due {
   flex-shrink: 0;

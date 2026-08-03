@@ -81,6 +81,16 @@ export function forecastBand(result) {
   };
 }
 
+// How a Jira preview issue's summary should behave when clicked (RC1-211):
+// "open" a real ticket if it has been pushed (carries a jira_url), else "jump"
+// to the underlying task if it has a bar on the timeline, else "none" (e.g. an
+// epic that isn't on the chart and hasn't been pushed).
+export function jiraLinkMode(op, canJump) {
+  if (op && op.jira_url) return "open";
+  if (canJump) return "jump";
+  return "none";
+}
+
 // A saved scenario's launch impact as a short badge: "+24d", "-3d", or "no slip".
 export function scenarioImpactLabel(impact) {
   if (!impact) return "";

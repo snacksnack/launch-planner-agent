@@ -285,6 +285,50 @@ def test_api_jira_returns_the_mock_generation_plan():
     story = next(op for op in gen["issues"] if op["local_id"] == "task-inventory")
     assert story["due_date"]  # scheduled finish date
     assert "Reasoning:" in story["description"]  # provenance travels in
+    # RC1-211: every op carries a jira_url key; None here since nothing is pushed.
+    assert all("jira_url" in op for op in gen["issues"])
+    assert story["jira_url"] is None
+
+
+def test_api_jira_surfaces_browse_url_for_pushed_issues(tmp_path, monkeypatch):
+    """RC1-211: an issue already pushed (has a jira_key) carries a real browse URL."""
+    from datetime import UTC, datetime
+
+    from app.config import get_settings
+    from planner_core import (
+        Confidence,
+        Plan,
+        Provenance,
+        Task,
+        TeamMember,
+        ThreePointEstimate,
+    )
+
+    prov = Provenance(
+        reasoning="r", source_quote="q", source_section=None, confidence=Confidence.HIGH,
+        agent="a", model="m", timestamp=datetime(2026, 7, 24, tzinfo=UTC),
+    )
+    plan = Plan(
+        id="p", name="p", team=[TeamMember(id="tm-1", name="Ada")],
+        tasks=[Task(
+            id="task-x", name="Task X", owner_id="tm-1", jira_key="PMA-42",
+            estimate=ThreePointEstimate(optimistic=1, likely=2, pessimistic=3), provenance=prov,
+        )],
+    )
+    path = tmp_path / "plan.json"
+    path.write_text(plan.model_dump_json())
+
+    monkeypatch.setenv("LPA_JIRA_BASE_URL", "https://acme.atlassian.net")
+    get_settings.cache_clear()
+    try:
+        body = TestClient(create_app()).get(
+            "/api/jira", params={"plan": str(path), "start": "2026-08-03"}
+        ).json()
+        op = next(o for o in body["generation"]["issues"] if o["local_id"] == "task-x")
+        assert op["action"] == "update" and op["existing_key"] == "PMA-42"
+        assert op["jira_url"] == "https://acme.atlassian.net/browse/PMA-42"
+    finally:
+        get_settings.cache_clear()
 
 
 def test_api_status_reports_no_baseline_on_an_empty_store(tmp_path, monkeypatch):

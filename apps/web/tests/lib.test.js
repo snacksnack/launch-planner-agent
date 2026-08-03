@@ -10,6 +10,7 @@ import {
   forecastBand,
   ghostRect,
   jiraCommand,
+  jiraLinkMode,
   longDate,
   nameFor,
   plural,
@@ -205,6 +206,22 @@ describe("monte carlo forecast geometry", () => {
     });
     expect(span).toBe(0);
     expect(bars[0]).toMatchObject({ x: 0.5, h: 1 });
+  });
+});
+
+describe("jira issue link mode", () => {
+  it("opens the real ticket when the op carries a jira_url", () => {
+    expect(jiraLinkMode({ jira_url: "https://x/browse/PMA-1" }, true)).toBe("open");
+    expect(jiraLinkMode({ jira_url: "https://x/browse/PMA-1" }, false)).toBe("open");
+  });
+
+  it("jumps to the task when there's no ticket but it has a bar", () => {
+    expect(jiraLinkMode({ jira_url: null, local_id: "task-a" }, true)).toBe("jump");
+  });
+
+  it("is inert when there's no ticket and no bar (e.g. an unpushed epic)", () => {
+    expect(jiraLinkMode({ jira_url: null }, false)).toBe("none");
+    expect(jiraLinkMode(null, false)).toBe("none");
   });
 });
 

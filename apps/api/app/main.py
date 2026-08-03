@@ -34,7 +34,7 @@ from pydantic import BaseModel
 
 from app import __version__
 from app.config import get_settings
-from app.gantt import build_gantt_payload
+from app.gantt import _jira_url, build_gantt_payload
 from app.store import SQLiteEventStore
 
 # Repo root, so a relative plan_path resolves no matter where uvicorn is launched
@@ -367,8 +367,13 @@ def create_app() -> FastAPI:
         schedule = schedule_plan(parsed, start_date=start_date)
         project_key = project or settings.jira_project_key
         gen = build_generation_plan(parsed, schedule, project_key=project_key)
+        generation = gen.model_dump(mode="json")
+        # Surface the browse URL for issues already pushed (an "update" carries a
+        # key), so the panel can link straight to the real Jira ticket (RC1-211).
+        for op in generation["issues"]:
+            op["jira_url"] = _jira_url(settings.jira_base_url, op.get("existing_key"))
         return {
-            "generation": gen.model_dump(mode="json"),
+            "generation": generation,
             "creates": gen.creates,
             "updates": gen.updates,
             "links": len(gen.links),
