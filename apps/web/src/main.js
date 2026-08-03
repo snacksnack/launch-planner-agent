@@ -11,6 +11,7 @@ import "./style.css";
 import {
   buildDepIndex,
   calibrate,
+  clampPanelWidth,
   describeChange as libDescribeChange,
   describeScenario as libDescribeScenario,
   escapeHtml,
@@ -416,6 +417,49 @@ function setPanelCollapsed(collapsed) {
   const btn = document.querySelector("#panel-toggle");
   btn.textContent = collapsed ? "‹" : "›";
   btn.title = collapsed ? "Show details panel" : "Hide details panel";
+}
+
+// --- resizable detail panel (RC1-212) --------------------------------------
+
+const PANEL_WIDTH_KEY = "lpa.panelWidth";
+
+function applyPanelWidth(px) {
+  document.querySelector(".layout").style.setProperty("--panel-w", `${px}px`);
+}
+
+// Drag the handle on the panel's left border to resize it; the width persists
+// across panels and reloads. The frappe-gantt SVG is fixed-width and scrolls, so
+// the timeline needs no re-render — it just gets more/less viewport.
+function setupPanelResize() {
+  const saved = Number(localStorage.getItem(PANEL_WIDTH_KEY));
+  if (saved) applyPanelWidth(clampPanelWidth(saved, window.innerWidth));
+
+  const layout = document.querySelector(".layout");
+  const handle = document.querySelector("#panel-resize");
+  let dragging = false;
+
+  const onMove = (e) => {
+    if (!dragging) return;
+    // Panel hugs the right edge: its width is the gap from the cursor to that edge.
+    const width = clampPanelWidth(window.innerWidth - e.clientX, window.innerWidth);
+    applyPanelWidth(width);
+  };
+  const onUp = () => {
+    if (!dragging) return;
+    dragging = false;
+    layout.classList.remove("resizing");
+    const px = parseInt(getComputedStyle(layout).getPropertyValue("--panel-w"), 10);
+    if (px) localStorage.setItem(PANEL_WIDTH_KEY, String(px));
+    window.removeEventListener("mousemove", onMove);
+    window.removeEventListener("mouseup", onUp);
+  };
+  handle.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    dragging = true;
+    layout.classList.add("resizing");
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  });
 }
 
 // A "Jira" row once a task has been pushed to the board (RC1-200): a clickable
@@ -1566,6 +1610,7 @@ function wireControls() {
     const collapsed = document.querySelector(".layout").classList.contains("panel-collapsed");
     setPanelCollapsed(!collapsed);
   });
+  setupPanelResize(); // drag the panel's left border to resize it (RC1-212)
   // The decision-record panel: what the agents proposed vs. what Python did.
   const decBtn = document.querySelector("#decisions-btn");
   const n = decisionCount();

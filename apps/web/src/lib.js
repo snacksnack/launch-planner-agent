@@ -81,6 +81,14 @@ export function forecastBand(result) {
   };
 }
 
+// Clamp the resizable detail-panel width (RC1-212) to a usable band: never
+// narrower than `min`, never wider than the smaller of `maxPx` and `maxFrac` of
+// the viewport (so the timeline always keeps room). Pure, so it's unit-testable.
+export function clampPanelWidth(px, viewportW, { min = 260, maxPx = 680, maxFrac = 0.6 } = {}) {
+  const max = Math.max(min, Math.min(maxPx, viewportW * maxFrac));
+  return Math.round(Math.max(min, Math.min(px, max)));
+}
+
 // How a Jira preview issue's summary should behave when clicked (RC1-211):
 // "open" a real ticket if it has been pushed (carries a jira_url), else "jump"
 // to the underlying task if it has a bar on the timeline, else "none" (e.g. an

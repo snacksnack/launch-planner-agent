@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildDepIndex,
   calibrate,
+  clampPanelWidth,
   describeChange,
   describeScenario,
   escapeHtml,
@@ -206,6 +207,30 @@ describe("monte carlo forecast geometry", () => {
     });
     expect(span).toBe(0);
     expect(bars[0]).toMatchObject({ x: 0.5, h: 1 });
+  });
+});
+
+describe("resizable panel width clamp", () => {
+  it("keeps the width within the usable band", () => {
+    // viewport 1400: max = min(680, 0.6*1400=840) = 680
+    expect(clampPanelWidth(400, 1400)).toBe(400);
+    expect(clampPanelWidth(100, 1400)).toBe(260); // below min → min
+    expect(clampPanelWidth(2000, 1400)).toBe(680); // above maxPx → maxPx
+  });
+
+  it("caps at a fraction of a narrow viewport so the timeline keeps room", () => {
+    // viewport 800: max = min(680, 0.6*800=480) = 480
+    expect(clampPanelWidth(600, 800)).toBe(480);
+    expect(clampPanelWidth(300, 800)).toBe(300);
+  });
+
+  it("never returns below min even on a tiny viewport", () => {
+    // viewport 300: 0.6*300=180 < min 260 → max floored to min
+    expect(clampPanelWidth(500, 300)).toBe(260);
+  });
+
+  it("rounds to a whole pixel", () => {
+    expect(Number.isInteger(clampPanelWidth(400.6, 1400))).toBe(true);
   });
 });
 
