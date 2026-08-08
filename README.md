@@ -114,8 +114,12 @@ uv run uvicorn app.main:app --reload   # serve the API (GET /healthz)
 
 Then run the UI and open the demo — **see the [HOWTO](docs/HOWTO.md)** for the
 two-terminal quick start, a tour of every UI panel, and worked examples for every
-CLI verb. It all runs credential-free against the flagship golden plan. There's
-also a one-page [visual quick-start](https://claude.ai/code/artifact/89cfe001-3652-4ffd-85f1-815836d83031).
+CLI verb. It all runs credential-free against the flagship golden plan. For a
+visual tour, see the [project overview
+page](https://www.hihelloreid.com/projects/launch-planner) and the [live
+demo](https://planner.hihelloreid.com); the one-page [visual
+quick-start](https://claude.ai/code/artifact/89cfe001-3652-4ffd-85f1-815836d83031)
+(source: `docs/quickstart.html`) adds the local two-terminal setup.
 
 ### Checks
 
