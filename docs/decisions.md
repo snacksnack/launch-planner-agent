@@ -12,6 +12,33 @@ to).
 
 ---
 
+## ADR-0024 — The demo's Jira keys live in a copy, not in the golden
+
+**Date:** 2026-08-07 · **Ticket:** RC1-213 · **Status:** Accepted
+
+**Context.** The gated `--real` push (RC1-193) stamps `jira_key` back onto the plan so
+re-runs update rather than duplicate. Pushing the flagship plan to the public Skyline
+(SKY) project — so the live demo's Jira panel opens real tickets instead of jumping to a
+task (RC1-211) — therefore produces a plan carrying 29 ephemeral keys. The question was
+whether those keys belong on the canonical golden fixture.
+
+**Explanation.** *They don't: the golden is a reference expectation, and SKY keys are a
+property of one throwaway Jira project, not of the plan.* A dozen tests assert against
+`expected-plan.json` as the hand-authored ground truth; baking in keys would couple that
+ground truth to the lifetime of a demo project we may delete or rebuild. So the push
+writes a sibling — `expected-plan.skyline.json` — and the deploy points at it via
+`LPA_PLAN_PATH`. The browse URL is *not* stored: `_jira_url` composes it at render time
+from `LPA_JIRA_BASE_URL` + key, so re-homing the tickets is a config change, not a
+refixture.
+
+**Consequences.** Two copies of one plan, and copies drift. `test_deploy.py` guards the
+invariant directly — the keyed copy must equal the golden once keys are stripped — so a
+golden edit that isn't propagated fails CI instead of quietly serving a stale demo. The
+same test asserts fly.toml sets both env vars, since a key without a base URL silently
+degrades to the old "jump to task" behavior rather than erroring.
+
+---
+
 ## ADR-0023 — Saved scenarios: a mutable catalog beside the append-only store
 
 **Date:** 2026-08-01 · **Ticket:** RC1-202 · **Status:** Accepted
