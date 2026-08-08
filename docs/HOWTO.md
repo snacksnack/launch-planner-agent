@@ -8,10 +8,13 @@ UI surface**. For *why* it's built the way it is, see
 Everything here runs **credential-free** against the flagship golden plan
 (`fixtures/jira-cloud-migration/`) unless a step is marked **needs an API key**.
 
-> **Prefer a visual tour?** A one-page, brand-matched
-> [visual quick-start](https://claude.ai/code/artifact/89cfe001-3652-4ffd-85f1-815836d83031)
-> walks the pipeline, the two-terminal setup, and the seven dashboard surfaces.
-> (Private by default — shareable from the page's share menu.)
+> **Prefer a visual tour?** The [project overview
+> page](https://www.hihelloreid.com/projects/launch-planner) walks the pipeline and
+> the eight dashboard surfaces, and links to the [live
+> demo](https://planner.hihelloreid.com). There's also a one-page [visual
+> quick-start](https://claude.ai/code/artifact/89cfe001-3652-4ffd-85f1-815836d83031)
+> that adds the two-terminal local setup (source: `docs/quickstart.html`; private by
+> default — shareable from the page's share menu).
 
 ---
 
@@ -121,6 +124,11 @@ The **Jira** button previews exactly what real mode would create: epics, stories
 carrying the provenance. Check/uncheck issues (partial approval); the panel shows
 the gated CLI command for your selection. **The web UI never writes to Jira** — a
 real run is an explicit CLI step (§4).
+
+In the [live demo](https://planner.hihelloreid.com) the previewed issues are
+**clickable and real**: a one-off gated run pushed this plan to a public Skyline
+(`SKY`) project, so each one opens the actual ticket — provenance audit and all —
+for an anonymous visitor. Issues with no key fall back to jumping to the task.
 
 ---
 
@@ -252,7 +260,7 @@ renders a committed snapshot.
 
 ---
 
-## 7. Deploy
+## 6. Deploy
 
 One container (`Dockerfile`): Node builds the web app, Python serves it same-origin
 with the API. Run it locally exactly as it runs in production:
@@ -281,7 +289,7 @@ fly certs add planner.hihelloreid.com  # then CNAME the subdomain to the Fly app
 
 ---
 
-## 6. Where to go deeper
+## 7. Where to go deeper
 
 - **[architecture.md](architecture.md)** — the layering, the ports/adapters, why
   `planner-core` cannot import the agents.

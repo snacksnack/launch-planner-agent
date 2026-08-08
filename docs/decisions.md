@@ -12,6 +12,33 @@ to).
 
 ---
 
+## ADR-0025 — The on-domain overview page is the canonical visual tour
+
+**Date:** 2026-08-08 · **Ticket:** RC1-210 · **Status:** Accepted
+
+**Context.** There are now two visual front doors: the claude.ai-hosted quick-start
+artifact (RC1-204) and the self-hosted overview page at
+`hihelloreid.com/projects/launch-planner` (RC1-206). They overlap, and the artifact had
+already drifted — it still toured *seven* surfaces after RC1-201 added Forecast and
+RC1-202 added saved scenarios, while the overview page was current.
+
+**Explanation.** *The canonical tour should be the one a stranger can reach.* The
+overview page is on the domain, publicly indexable, brand-owned, and links straight to
+the live demo; the artifact is private by default and has to be shared deliberately.
+Two sources of the same truth is what caused the drift, so README and HOWTO now point
+at the overview page **first**. The artifact is kept, not retired: it carries the one
+thing the overview page deliberately doesn't — the two-terminal *local* setup — which
+makes it the right thing to hand a reviewer who intends to run the repo.
+
+**Consequences.** The artifact stays secondary and must not accumulate content the
+overview page owns; when they disagree, the overview page wins. Its source now lives in
+the repo at `docs/quickstart.html` rather than in a session scratchpad, so a refresh is
+an edit-and-republish against the recorded URL instead of a rebuild from scratch — the
+practical cause of the drift this ADR closes. The surface count is now stated in three
+places (overview page, artifact, HOWTO §2); a new surface means updating all three.
+
+---
+
 ## ADR-0024 — The demo's Jira keys live in a copy, not in the golden
 
 **Date:** 2026-08-07 · **Ticket:** RC1-213 · **Status:** Accepted

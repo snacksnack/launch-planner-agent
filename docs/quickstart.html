@@ -1,0 +1,355 @@
+<title>launch-planner-agent — Quick start</title>
+
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #fbfcfe;
+    --surface-2: #f4f6fa;
+    --text: #0b1220;
+    --muted: #5b657a;
+    --accent: #0f62fe;
+    --border: #e6e8ee;
+    --sep: #c2c7d1;
+    --crit: #c0392b;
+    --good: #0f7b3f;
+    --good-bg: #e7f4ec;
+    --warn: #9a6700;
+    --warn-bg: #fdf3e2;
+    --bad-bg: #fbe9e7;
+    /* blue-family bar palette from the product */
+    --b1: #2f6cb0; --b2: #6ba0cf; --b3: #3f8fa0; --b4: #86a0b8; --b5: #5f7896; --b6: #4784c2;
+    --code-bg: #0b1220; --code-fg: #e7ecf5;
+    --radius: 12px; --radius-sm: 7px;
+    --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --maxw: 880px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0b1220; --surface: #121c30; --surface-2: #16223a;
+      --text: #e9eef7; --muted: #9aa6bc; --accent: #6ba0cf; --border: #22304d; --sep: #33425f;
+      --crit: #e2796d; --good: #5fbf88; --good-bg: #143026; --warn: #d7a84a; --warn-bg: #33280f;
+      --bad-bg: #33201d; --code-bg: #060b16; --code-fg: #dce6f5;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b1220; --surface: #121c30; --surface-2: #16223a;
+    --text: #e9eef7; --muted: #9aa6bc; --accent: #6ba0cf; --border: #22304d; --sep: #33425f;
+    --crit: #e2796d; --good: #5fbf88; --good-bg: #143026; --warn: #d7a84a; --warn-bg: #33280f;
+    --bad-bg: #33201d; --code-bg: #060b16; --code-fg: #dce6f5;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: var(--font); line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 1.5rem; }
+  .eyebrow {
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.11em;
+    font-weight: 600; color: var(--accent); margin: 0 0 0.6rem;
+  }
+  h1, h2, h3 { text-wrap: balance; letter-spacing: -0.02em; margin: 0; }
+  a { color: var(--accent); }
+  a:focus-visible, .cta:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+  code, kbd { font-family: var(--mono); }
+
+  /* --- hero --- */
+  header.hero { padding: 4.5rem 0 2.5rem; border-bottom: 1px solid var(--border); }
+  .hero h1 { font-size: 2.55rem; font-weight: 800; line-height: 1.05; }
+  .hero .lede {
+    font-size: 1.12rem; color: var(--muted); max-width: 44ch; margin: 1rem 0 0;
+  }
+  .thesis {
+    margin: 1.6rem 0 0; font-size: 0.95rem; display: flex; flex-wrap: wrap;
+    gap: 0.4rem 0.55rem; align-items: center;
+  }
+  .thesis .step { font-weight: 650; }
+  .thesis .arw { color: var(--sep); }
+
+  .ctas { margin-top: 1.7rem; display: flex; flex-wrap: wrap; gap: 0.6rem; }
+  .cta {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    padding: 0.5rem 0.95rem; border-radius: var(--radius-sm);
+    font-size: 0.87rem; font-weight: 650; text-decoration: none;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  }
+  .cta.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  :root[data-theme="dark"] .cta.primary { color: #0b1220; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .cta.primary { color: #0b1220; }
+  }
+
+  /* mini gantt */
+  .mini-gantt {
+    margin-top: 2.2rem; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1rem 1.15rem; display: grid; gap: 0.5rem;
+  }
+  .mg-row { display: grid; grid-template-columns: 130px 1fr; align-items: center; gap: 0.8rem; }
+  .mg-row .lbl { font-size: 0.76rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mg-track { position: relative; height: 15px; }
+  .mg-bar { position: absolute; height: 15px; border-radius: 4px; }
+  .mg-bar.crit { outline: 2px solid var(--crit); outline-offset: 1px; }
+  .mg-cap { margin-top: 0.35rem; font-size: 0.73rem; color: var(--muted); display: flex; gap: 1rem; flex-wrap: wrap; }
+  .dot { width: 9px; height: 9px; border-radius: 2px; display: inline-block; vertical-align: -1px; margin-right: 0.35rem; }
+
+  /* --- sections --- */
+  section { padding: 3rem 0; border-bottom: 1px solid var(--border); }
+  section h2 { font-size: 1.4rem; font-weight: 750; }
+  section .sub { color: var(--muted); margin: 0.5rem 0 0; max-width: 60ch; }
+
+  /* code block */
+  .code {
+    margin: 1.5rem 0 0; background: var(--code-bg); color: var(--code-fg);
+    border-radius: var(--radius); padding: 1.1rem 1.25rem; overflow-x: auto;
+    font-family: var(--mono); font-size: 0.83rem; line-height: 1.75;
+  }
+  .code .c { color: #8aa0c6; }
+  .code .p { color: #7fd1a8; }
+  .terminal-tag {
+    display: inline-block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--muted); font-weight: 600; margin-top: 1.2rem;
+  }
+  .note { margin-top: 1rem; font-size: 0.88rem; color: var(--muted); }
+  .note code { background: var(--surface-2); padding: 0.05rem 0.35rem; border-radius: 4px; border: 1px solid var(--border); font-size: 0.85em; }
+
+  /* pipeline */
+  .pipe { margin-top: 1.8rem; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: stretch; }
+  .pnode {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 0.55rem 0.8rem; font-size: 0.83rem; font-weight: 600; display: flex; flex-direction: column; gap: 0.15rem;
+  }
+  .pnode .tag { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }
+  .pnode.llm { border-left: 3px solid var(--accent); }
+  .pnode.det { border-left: 3px solid var(--b3); }
+  .pnode.human { border-left: 3px solid var(--warn); }
+  .pnode .tag.llm { color: var(--accent); }
+  .pnode .tag.det { color: var(--b3); }
+  .pnode .tag.human { color: var(--warn); }
+  .parrow { align-self: center; color: var(--sep); font-weight: 700; }
+  .legend { margin-top: 1.2rem; display: flex; gap: 1.3rem; flex-wrap: wrap; font-size: 0.8rem; color: var(--muted); }
+  .legend .k { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 0.4rem; vertical-align: -1px; }
+
+  /* surface cards */
+  .grid { margin-top: 1.8rem; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0.9rem; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 1.1rem 1.15rem; display: flex; flex-direction: column; gap: 0.55rem;
+  }
+  .card .glyph { height: 46px; display: flex; align-items: center; }
+  .card h3 { font-size: 1rem; font-weight: 700; }
+  .card p { margin: 0; font-size: 0.85rem; color: var(--muted); }
+  .card .how { margin-top: auto; font-size: 0.78rem; color: var(--text); }
+  .card .how b { color: var(--accent); font-weight: 650; }
+
+  /* glyph pieces */
+  .g-bars { display: grid; gap: 3px; width: 100%; }
+  .g-bars i { height: 6px; border-radius: 2px; display: block; }
+  .g-hist { display: flex; align-items: flex-end; gap: 2px; height: 34px; width: 100%; }
+  .g-hist i { flex: 1; border-radius: 1.5px; background: var(--b2); display: block; }
+  .g-hist i.p80 { background: var(--accent); }
+  .badge { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 0.12rem 0.5rem; border-radius: 999px; color: #fff; }
+  .b-good { background: var(--good); } .b-warn { background: var(--warn); } .b-bad { background: var(--crit); }
+  .pill { font-size: 0.6rem; font-weight: 700; padding: 0.1rem 0.4rem; border-radius: var(--radius-sm); }
+  .flag { color: var(--warn); font-size: 1.1rem; }
+
+  /* principles */
+  .principles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-top: 1.6rem; }
+  .principle { padding: 1rem 0; }
+  .principle .n { font-family: var(--mono); font-size: 0.8rem; color: var(--accent); font-weight: 700; }
+  .principle h3 { font-size: 0.98rem; margin: 0.35rem 0; }
+  .principle p { margin: 0; font-size: 0.85rem; color: var(--muted); }
+
+  footer { padding: 2.5rem 0 4rem; }
+  footer .links { display: flex; gap: 1.4rem; flex-wrap: wrap; font-size: 0.9rem; font-weight: 600; }
+  footer .fine { margin-top: 1.2rem; font-size: 0.8rem; color: var(--muted); }
+
+  @media (max-width: 560px) {
+    .hero h1 { font-size: 2rem; }
+    .mg-row { grid-template-columns: 92px 1fr; }
+  }
+</style>
+
+<div class="wrap">
+  <header class="hero">
+    <p class="eyebrow">launch-planner-agent</p>
+    <h1>Turn a migration PRD into a plan you can defend.</h1>
+    <p class="lede">An agentic planner for launches &amp; migrations: a critical-path Gantt, a what-if simulator, a Monte Carlo launch forecast, a RAID log, gated Jira generation, and weekly exec status — every claim traceable to the sentence that justified it.</p>
+
+    <div class="thesis">
+      <span class="step">PRD</span><span class="arw">→</span>
+      <span class="step">plan</span><span class="arw">→</span>
+      <span class="step">what-if</span><span class="arw">→</span>
+      <span class="step">forecast</span><span class="arw">→</span>
+      <span class="step">risks</span><span class="arw">→</span>
+      <span class="step">status</span><span class="arw">→</span>
+      <span class="step">Jira</span>
+    </div>
+
+    <div class="ctas">
+      <a class="cta primary" href="https://planner.hihelloreid.com">Open the live demo</a>
+      <a class="cta" href="https://www.hihelloreid.com/projects/launch-planner">Project overview</a>
+    </div>
+
+    <div class="mini-gantt" role="img" aria-label="A mini Gantt chart with the critical path outlined in red">
+      <div class="mg-row"><span class="lbl">Inventory projects</span><div class="mg-track"><span class="mg-bar" style="left:2%;width:20%;background:var(--b1)"></span></div></div>
+      <div class="mg-row"><span class="lbl">Plugin audit</span><div class="mg-track"><span class="mg-bar crit" style="left:2%;width:30%;background:var(--b3)"></span></div></div>
+      <div class="mg-row"><span class="lbl">Cloud &amp; SSO</span><div class="mg-track"><span class="mg-bar" style="left:14%;width:26%;background:var(--b2)"></span></div></div>
+      <div class="mg-row"><span class="lbl">Pilot migration</span><div class="mg-track"><span class="mg-bar crit" style="left:40%;width:22%;background:var(--b1)"></span></div></div>
+      <div class="mg-row"><span class="lbl">Bulk migration</span><div class="mg-track"><span class="mg-bar crit" style="left:62%;width:24%;background:var(--b4)"></span></div></div>
+      <div class="mg-row"><span class="lbl">Cutover</span><div class="mg-track"><span class="mg-bar crit" style="left:86%;width:12%;background:var(--b5)"></span></div></div>
+      <div class="mg-cap">
+        <span><span class="dot" style="background:var(--b1)"></span>epics coloured by workstream</span>
+        <span><span class="dot" style="outline:2px solid var(--crit);outline-offset:-1px;background:transparent"></span>critical path</span>
+      </div>
+    </div>
+  </header>
+
+  <section>
+    <p class="eyebrow">Quick start</p>
+    <h2>Two terminals, no credentials.</h2>
+    <p class="sub">The whole thing runs against a hand-reviewed flagship plan (an on-prem&nbsp;Jira&nbsp;→&nbsp;Cloud migration) with no API key — the UI reads a pre-scheduled plan from the API.</p>
+
+    <span class="terminal-tag">Terminal 1 — the API</span>
+    <div class="code"><span class="c"># serves the scheduled golden plan by default</span>
+uv sync --all-packages
+uv run uvicorn app.main:app --reload      <span class="c"># :8000</span></div>
+
+    <span class="terminal-tag">Terminal 2 — the UI</span>
+    <div class="code">cd apps/web &amp;&amp; npm install &amp;&amp; npm run dev  <span class="c"># :5173</span></div>
+
+    <p class="note">Open <code>localhost:5173</code> — the migration renders as a Gantt with the critical path in red. Add <code>LPA_ANTHROPIC_API_KEY</code> only when you want the agents to build a plan from a fresh PRD. Nothing to install? The <a href="https://planner.hihelloreid.com">hosted demo</a> runs the same plan, read-only.</p>
+  </section>
+
+  <section>
+    <p class="eyebrow">The pipeline</p>
+    <h2>LLM proposes, Python validates, human approves.</h2>
+    <p class="sub">Judgment is the LLM's; the math and the gates are deterministic. Nothing reaches Jira — or an exec — without a human in the loop.</p>
+
+    <div class="pipe">
+      <div class="pnode llm"><span class="tag llm">agent</span>Work breakdown</div>
+      <span class="parrow">→</span>
+      <div class="pnode llm"><span class="tag llm">agent</span>Dependencies</div>
+      <span class="parrow">→</span>
+      <div class="pnode det"><span class="tag det">python</span>CPM schedule</div>
+      <span class="parrow">→</span>
+      <div class="pnode det"><span class="tag det">python</span>Monte Carlo forecast</div>
+      <span class="parrow">→</span>
+      <div class="pnode llm"><span class="tag llm">agent</span>RAID log</div>
+      <span class="parrow">→</span>
+      <div class="pnode human"><span class="tag human">human</span>Review &amp; commit</div>
+      <span class="parrow">→</span>
+      <div class="pnode det"><span class="tag det">python</span>Baseline &amp; status</div>
+      <span class="parrow">→</span>
+      <div class="pnode human"><span class="tag human">gated</span>Jira tickets</div>
+    </div>
+    <div class="legend">
+      <span><span class="k" style="background:var(--accent)"></span>LLM judgment (schema-forced, with provenance)</span>
+      <span><span class="k" style="background:var(--b3)"></span>Deterministic Python</span>
+      <span><span class="k" style="background:var(--warn)"></span>Human approval</span>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">The dashboard</p>
+    <h2>Eight surfaces, one plan.</h2>
+    <p class="sub">Each opens in the right rail. Every task, edge, and risk carries its audit trail — reasoning, a verbatim PRD quote, and a confidence level.</p>
+
+    <div class="grid">
+      <div class="card">
+        <div class="glyph"><div class="g-bars"><i style="width:70%;background:var(--b1)"></i><i style="width:45%;background:var(--b2);outline:1.5px solid var(--crit)"></i><i style="width:85%;background:var(--b3)"></i></div></div>
+        <h3>Gantt</h3>
+        <p>Critical path in red, deadline markers, per-task float and dependencies.</p>
+        <p class="how">Click a bar → its <b>provenance</b>.</p>
+      </div>
+
+      <div class="card">
+        <div class="glyph"><span class="flag">⚑</span>&nbsp;<span class="pill" style="background:var(--warn-bg);color:var(--warn)">low confidence</span></div>
+        <h3>Decisions</h3>
+        <p>What the agents proposed vs. what Python accepted, rejected, or cut — durably.</p>
+        <p class="how">Dropped edges, cycle-breaks, <b>coverage gaps</b>.</p>
+      </div>
+
+      <div class="card">
+        <div class="glyph"><span class="pill" style="background:var(--warn-bg);color:var(--warn)">RISK</span>&nbsp;<span class="pill" style="background:var(--bad-bg);color:var(--crit)">P×I 16</span></div>
+        <h3>RAID</h3>
+        <p>Risks, assumptions, issues, decisions — scored, filterable, exportable.</p>
+        <p class="how">Evidence: a PRD quote <b>or</b> a schedule fact.</p>
+      </div>
+
+      <div class="card">
+        <div class="glyph"><div class="g-bars"><i style="width:40%;background:transparent;border:1.5px dashed var(--sep)"></i><i style="width:64%;background:var(--b1);margin-top:-2px"></i></div></div>
+        <h3>Simulate</h3>
+        <p>What if a task slips? Recompute the schedule; see the shift as a ghost overlay. Name a scenario to save it and re-apply it later.</p>
+        <p class="how">"Legal slips 30d → <b>launch +24d</b>."</p>
+      </div>
+
+      <div class="card">
+        <div class="glyph"><div class="g-hist" role="img" aria-label="A finish-date histogram with the P80 date marked"><i style="height:18%"></i><i style="height:38%"></i><i style="height:66%"></i><i style="height:100%"></i><i style="height:74%"></i><i class="p80" style="height:48%"></i><i style="height:26%"></i><i style="height:12%"></i></div></div>
+        <h3>Forecast</h3>
+        <p>Monte Carlo over the three-point estimates: a launch-date confidence band, plus which tasks drive it.</p>
+        <p class="how">"80% confidence: <b>Oct 23</b>", not a single date.</p>
+      </div>
+
+      <div class="card">
+        <div class="glyph"><div class="g-bars"><i style="width:55%;background:transparent;border:1.5px dashed var(--sep)"></i><i style="width:80%;background:var(--b4);margin-top:-2px"></i></div></div>
+        <h3>Baseline</h3>
+        <p>Drift against the committed plan — the view Jira's timeline lacks.</p>
+        <p class="how">Current bars over a <b>baseline ghost</b>.</p>
+      </div>
+
+      <div class="card">
+        <div class="glyph"><span class="badge b-good">On track</span>&nbsp;<span class="badge b-warn">At risk</span>&nbsp;<span class="badge b-bad">Off track</span></div>
+        <h3>Status</h3>
+        <p>The weekly exec update: health by rule (not vibes), plus what changed.</p>
+        <p class="how">Every line traces to the <b>diff</b>.</p>
+      </div>
+
+      <div class="card">
+        <div class="glyph"><span class="pill" style="background:var(--surface-2);color:var(--accent);border:1px solid var(--border)">+ Epic</span>&nbsp;<span style="color:var(--crit);font-weight:700;font-size:0.8rem">blocks</span></div>
+        <h3>Jira</h3>
+        <p>Preview the epics, stories, and "blocks" links this plan would create. In the demo, they open the real tickets a gated run produced.</p>
+        <p class="how">Mock by default — <b>never writes</b> from the web.</p>
+      </div>
+
+      <div class="card" style="justify-content:center;background:transparent;border-style:dashed">
+        <h3 style="font-size:0.95rem">Idempotent &amp; auditable</h3>
+        <p>Committed plans are immutable, content-addressed snapshots. Re-running Jira updates instead of duplicating. The audit travels into every ticket description.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Why it's built this way</p>
+    <h2>The plan is an audit trail, not a black box.</h2>
+    <div class="principles">
+      <div class="principle">
+        <span class="n">01</span>
+        <h3>Provenance is first-class</h3>
+        <p>Every agent-produced entity carries reasoning, a verbatim source quote, and a confidence level — from day one, not bolted on.</p>
+      </div>
+      <div class="principle">
+        <span class="n">02</span>
+        <h3>The engine can't call an LLM</h3>
+        <p>The deterministic core (CPM, float, Monte Carlo, cycle detection, validation) cannot even import the agent code. Enforced in CI.</p>
+      </div>
+      <div class="principle">
+        <span class="n">03</span>
+        <h3>Side effects are gated</h3>
+        <p>Real Jira writes need explicit confirmation and credentials; mock is the default. Status emails are previewed, never auto-sent.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p class="eyebrow">Go deeper — in the repo</p>
+    <div class="links" style="font-family:var(--mono);font-size:0.82rem;font-weight:500;color:var(--text)">
+      <span><code>docs/HOWTO.md</code> — run it &amp; use every verb</span>
+      <span><code>docs/architecture.md</code></span>
+      <span><code>docs/forecasting.md</code></span>
+      <span><code>docs/decisions.md</code> — 25 ADRs</span>
+    </div>
+    <p class="fine">Built on a uv-managed Python 3.12 monorepo — <code>planner-core</code> (deterministic, zero LLM deps), <code>agents</code> (LLM, schema-forced), FastAPI, and a Vite frontend. Runs credential-free on a hand-reviewed flagship migration fixture.</p>
+  </footer>
+</div>
