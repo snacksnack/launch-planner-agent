@@ -16,6 +16,13 @@ primary_region = "iad"
   LPA_ENVIRONMENT = "production"
   LPA_RATE_LIMIT_PER_MINUTE = "60"
 
+  # RC1-213: serve the SKY-keyed copy of the flagship plan so the Jira panel
+  # links to real tickets. The canonical golden stays key-free; this copy is the
+  # only place ephemeral demo keys live. Base URL + key make the browse link
+  # (app/gantt.py:_jira_url) — without both, issues fall back to "jump to task".
+  LPA_PLAN_PATH = "fixtures/jira-cloud-migration/golden/expected-plan.skyline.json"
+  LPA_JIRA_BASE_URL = "https://hirereidcollins.atlassian.net"
+
 # Persist the SQLite plan store across deploys/restarts.
 [mounts]
   source = "planner_data"

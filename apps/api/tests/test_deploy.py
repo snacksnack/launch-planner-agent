@@ -8,10 +8,11 @@ from app.main import create_app
 from fastapi.testclient import TestClient
 from planner_core import Plan
 
-GOLDEN = (
-    Path(__file__).resolve().parents[3]
-    / "fixtures" / "jira-cloud-migration" / "golden" / "expected-plan.json"
-)
+REPO_ROOT = Path(__file__).resolve().parents[3]
+GOLDEN = REPO_ROOT / "fixtures" / "jira-cloud-migration" / "golden" / "expected-plan.json"
+# RC1-213: the SKY-keyed copy the deployed demo serves, so its Jira panel links
+# to real tickets. Kept beside the golden, never in place of it.
+SKYLINE = GOLDEN.with_name("expected-plan.skyline.json")
 
 
 def _clear():
@@ -115,3 +116,34 @@ def test_golden_still_loads_as_a_plan():
     plan = Plan.model_validate_json(GOLDEN.read_text())
     assert len(plan.epics) == 6 and len(plan.tasks) == 23 and len(plan.raid) == 5
     assert plan.tasks[0].provenance.agent  # provenance present for the audit view
+
+
+# --- the SKY-keyed demo plan (RC1-213) -------------------------------------
+
+
+def test_skyline_plan_is_the_golden_plus_jira_keys():
+    """The deployed copy may add `jira_key` and nothing else.
+
+    If the golden is edited and the keyed copy isn't regenerated, the live demo
+    would quietly serve a stale plan. This is the drift alarm.
+    """
+    golden = Plan.model_validate_json(GOLDEN.read_text())
+    skyline = Plan.model_validate_json(SKYLINE.read_text())
+
+    assert all(e.jira_key and e.jira_key.startswith("SKY-") for e in skyline.epics)
+    assert all(t.jira_key and t.jira_key.startswith("SKY-") for t in skyline.tasks)
+    assert all(e.jira_key is None for e in golden.epics)  # canonical stays clean
+    assert all(t.jira_key is None for t in golden.tasks)
+
+    for entity in (*skyline.epics, *skyline.tasks):
+        entity.jira_key = None
+    assert skyline == golden
+
+
+def test_fly_config_serves_the_keyed_plan_with_a_jira_base_url():
+    """Both halves are needed: `_jira_url` yields None unless key *and* base URL."""
+    import tomllib
+
+    env = tomllib.loads((REPO_ROOT / "fly.toml").read_text())["env"]
+    assert (REPO_ROOT / env["LPA_PLAN_PATH"]) == SKYLINE
+    assert env["LPA_JIRA_BASE_URL"].startswith("https://")
