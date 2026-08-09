@@ -324,13 +324,28 @@ def create_app() -> FastAPI:
             default=1000, ge=100, le=5000, description="Number of Monte Carlo runs."
         ),
         seed: int = Query(default=0, description="RNG seed — reproducible for a fixed seed."),
+        correlation: float = Query(
+            default=0.0,
+            ge=0.0,
+            le=1.0,
+            description=(
+                "How strongly task durations move together. 0 (default) samples each "
+                "task independently; above 0 a shared risk factor widens the tail."
+            ),
+        ),
     ) -> dict[str, object]:
         """Monte Carlo the launch date over the three-point estimates: a P50/P80/P90
         confidence band, a finish-date distribution, and the per-task criticality
         index. Deterministic for a fixed seed (no randomness reaches the frontend)."""
         parsed, _, _ = _load_request_plan(plan, snapshot)
         start_date = _request_start_date(start)
-        result = monte_carlo(parsed, start_date=start_date, iterations=iterations, seed=seed)
+        result = monte_carlo(
+            parsed,
+            start_date=start_date,
+            iterations=iterations,
+            seed=seed,
+            correlation=correlation,
+        )
         return result.model_dump(mode="json")
 
     @app.get("/api/history", tags=["plan"])

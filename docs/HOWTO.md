@@ -149,6 +149,7 @@ uv run plan simulate $GOLDEN --start-date 2026-08-03 --add-dep task-a:task-b
 
 # Monte Carlo the launch date over the three-point estimates (P50/P80/P90 + criticality)
 uv run plan forecast $GOLDEN --start-date 2026-08-03 --seed 42
+uv run plan forecast $GOLDEN --start-date 2026-08-03 --seed 42 --correlation 0.4  # common-cause risk
 
 # Save / list / load / delete named what-if scenarios (persisted beside the plan)
 uv run plan scenario save $GOLDEN --name "legal blows up" --slip task-legal-review:30 --by Priya
@@ -294,7 +295,8 @@ fly certs add planner.hihelloreid.com  # then CNAME the subdomain to the Fly app
 - **[architecture.md](architecture.md)** — the layering, the ports/adapters, why
   `planner-core` cannot import the agents.
 - **[forecasting.md](forecasting.md)** — the Monte Carlo launch forecast in full: the
-  Beta-PERT sampler, the merge-bias theory, determinism, and the assumptions.
+  Beta-PERT sampler, correlated durations, the merge-bias theory, determinism, and the
+  assumptions.
 - **[decisions.md](decisions.md)** — the running ADR log: every non-trivial choice
   with its reasoning.
 - **[case-study.md](case-study.md)** — the agent's plan vs. the real migration.

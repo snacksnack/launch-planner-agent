@@ -12,6 +12,51 @@ to).
 
 ---
 
+## ADR-0026 — Correlated durations: a one-factor Gaussian copula
+
+**Date:** 2026-08-09 · **Ticket:** RC1-209 · **Status:** Accepted
+
+**Context.** ADR-0022 sampled each task's duration independently and said so out loud.
+Real delays correlate — a hard integration, an absent team, an optimistic estimator all
+slip several tasks at once — so independence makes the band **too narrow in the tail**.
+The question was how to correlate without breaking the two properties the forecast is
+sold on: exactly Beta-PERT marginals, and reproducibility for a fixed seed.
+
+**Explanation.** *A one-factor Gaussian copula.* Each iteration draws one shared factor
+`z₀ ~ N(0,1)`; each task then gets `zᵢ = √ρ·z₀ + √(1−ρ)·zᵢ′`, which is mapped to a
+uniform through the normal CDF and back to a duration through the **Beta-PERT quantile
+function**. Correlation therefore lives entirely in *which* quantile each task lands on
+— every task's own distribution is untouched, which is why P50 barely moves while P80
+and P90 push out. The alternative, scaling the drawn durations by a shared factor, is
+~15 lines but silently changes the marginals, and a forecast whose selling point is
+defensible math should not have a distribution nobody can name.
+
+*Implement the quantile function rather than take a dependency.* This needs an inverse
+Beta CDF, which stdlib lacks. `planner-core` carries exactly pydantic and networkx, and
+adding SciPy for one call in one module would cost more than it buys — so `_betainc`
+(regularized incomplete beta, continued fraction over `math.lgamma`) and `_beta_ppf`
+(bisection, valid because the CDF is monotone) live in `monte_carlo.py`, pinned against
+closed forms: `I_x(1,1) = x`, the reflection identity, and the PERT mean.
+
+*Zero correlation takes the old code path.* `sample_pert` and `pert_ppf` consume the RNG
+stream differently, so routing an uncorrelated run through the copula would shift every
+published number without changing the model. At `ρ = 0` the sampler branches to the
+original draw, and the result is **bit-for-bit identical** to RC1-201 — verified across
+three seeds against the pre-change implementation.
+
+**Consequences.** `correlation` is a parameter on `monte_carlo`, a `--correlation` flag
+on `plan forecast`, and a bounded query param on `/api/forecast`, defaulting to 0
+everywhere — no existing caller changes behaviour. It is deliberately **not** in the UI;
+the Forecast panel keeps one honest default rather than offering a knob whose units
+("how correlated is your project?") nobody can estimate. On the golden at ρ=0.4, P50
+holds at Oct 16 while P80 moves Oct 23 → Oct 27 and P90 Oct 27 → Nov 2. Note the band
+widens **both** ways — P10 pulls earlier too — because common-cause risk means a good
+run is also good for everyone; the tail that matters is the late one, but the model does
+not pretend the effect is one-sided. `MonteCarloResult` now reports `correlation`, so a
+stored forecast records how it was produced.
+
+---
+
 ## ADR-0025 — The on-domain overview page is the canonical visual tour
 
 **Date:** 2026-08-08 · **Ticket:** RC1-210 · **Status:** Accepted
@@ -141,7 +186,9 @@ the criticality index. The value it surfaces on the golden: the deterministic pl
 Oct 12, but only ~19% of runs hit it — 80% confidence is Oct 23. Sampling is
 distribution-simple by design; correlated estimate risk (one slip implies another) is
 not modeled — a possible later refinement, called out here so the independence
-assumption is on the record.
+assumption is on the record. **Extended by [ADR-0026](#adr-0026--correlated-durations-a-one-factor-gaussian-copula)
+(RC1-209),** which makes correlation an opt-in parameter; independence remains the
+default, so everything above still describes a default run.
 
 ---
 

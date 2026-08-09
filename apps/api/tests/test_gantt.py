@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import date
 from pathlib import Path
 
+import pytest
 from app.gantt import build_gantt_payload
 from app.main import create_app
 from fastapi.testclient import TestClient
@@ -204,6 +205,25 @@ def test_api_forecast_is_deterministic_for_a_fixed_seed():
     a = client.get("/api/forecast", params={"seed": 7, "iterations": 200}).json()
     b = client.get("/api/forecast", params={"seed": 7, "iterations": 200}).json()
     assert a == b
+
+
+def test_api_forecast_correlation_widens_the_band():
+    """RC1-209: the correlation knob is reachable over HTTP and does what it says."""
+    client = TestClient(create_app())
+    params = {"seed": 42, "iterations": 1500}
+    independent = client.get("/api/forecast", params=params).json()
+    correlated = client.get("/api/forecast", params={**params, "correlation": 0.5}).json()
+
+    assert independent["correlation"] == 0.0  # the default is unchanged behaviour
+    assert correlated["correlation"] == 0.5
+    assert correlated["p90"] > independent["p90"]
+
+
+@pytest.mark.parametrize("bad", [-0.5, 1.5])
+def test_api_forecast_rejects_correlation_outside_zero_to_one(bad):
+    client = TestClient(create_app())
+    resp = client.get("/api/forecast", params={"correlation": bad, "iterations": 100})
+    assert resp.status_code == 422
 
 
 def test_api_scenarios_save_list_and_delete_roundtrip(tmp_path, monkeypatch):

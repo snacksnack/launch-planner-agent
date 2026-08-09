@@ -64,6 +64,7 @@ from planner_core.monte_carlo import (
     MonteCarloResult,
     TaskCriticality,
     monte_carlo,
+    pert_ppf,
     sample_pert,
 )
 from planner_core.plan_store import (
@@ -242,6 +243,7 @@ __all__ = [
     "MonteCarloResult",
     "TaskCriticality",
     "monte_carlo",
+    "pert_ppf",
     "sample_pert",
     # plan diff (human-vs-agent audit trail)
     "EntityDiff",
