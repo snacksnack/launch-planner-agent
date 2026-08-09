@@ -340,9 +340,14 @@ def _render_forecast(result) -> str:
     def d(x) -> str:
         return x.isoformat() if x else "n/a"
 
+    sampling = (
+        "independent"
+        if not result.correlation
+        else f"correlation {result.correlation:g}"
+    )
     lines = [
         f"Launch-date forecast — {result.iterations} runs, seed {result.seed} "
-        f"(Beta-PERT over three-point estimates)",
+        f"(Beta-PERT over three-point estimates, {sampling})",
         f"  Point estimate (likely durations): {d(result.deterministic_finish)}",
         "",
         "  Confidence band (chance of launching on or before):",
@@ -374,6 +379,7 @@ def cmd_forecast(args: argparse.Namespace) -> int:
         start_date=date.fromisoformat(args.start_date),
         iterations=args.iterations,
         seed=args.seed,
+        correlation=args.correlation,
         blackouts=blackouts,
     )
     print(_render_forecast(result))
@@ -903,6 +909,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     forecast.add_argument(
         "--seed", type=int, default=0, help="RNG seed — a run is reproducible for a fixed seed."
+    )
+    forecast.add_argument(
+        "--correlation",
+        type=float,
+        default=0.0,
+        metavar="0..1",
+        help=(
+            "How strongly task durations move together (default 0 = independent). "
+            "Above 0, a shared risk factor widens the tail without moving the median."
+        ),
     )
     forecast.add_argument(
         "--blackout", action="append", metavar="START:END",

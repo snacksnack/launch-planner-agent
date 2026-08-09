@@ -232,13 +232,10 @@ it at 5000) so you can trade precision for speed.
 
 State these before an interviewer finds them:
 
-- **Independent sampling.** Each task's duration is drawn independently. Real delays
-  **correlate** — a slip in one task often signals common-cause trouble (a hard
-  integration, an unavailable team) that slips its neighbours too. Independence
-  therefore makes the band **somewhat too narrow** in the tail: it can understate
-  genuine worst cases. Modeling correlation (a shared risk factor, or a copula over
-  task durations) is the natural next iteration; the independence assumption is
-  documented here and in ADR-0022 rather than hidden.
+- **Independent sampling — by default, but no longer forced.** Each task's duration is
+  drawn independently unless you ask for correlation; see §8b below. Independence makes
+  the band **somewhat too narrow** in the tail, so a default run is the optimistic read
+  on spread.
 - **Beta-PERT's fixed weighting.** The `4×` mode weight is the standard PERT
   assumption about how concentrated the distribution is around the mode. A "modified
   PERT" exposes that weight as a tunable parameter; we use the classic value.
@@ -251,13 +248,55 @@ reproducible read on schedule risk *given* the estimates — not a crystal ball.
 
 ---
 
+## 8b. Correlated durations
+
+Real delays travel in packs. A hard integration, a team that never freed up, an
+estimator who is optimistic about everything — each slips *several* tasks at once.
+Sampling every task independently quietly assumes the opposite, and independent errors
+partly cancel, so the tail comes out too thin.
+
+`--correlation ρ` (0 to 1, default 0) turns that off. Each iteration draws **one shared
+factor** and gives every task a blend of it and its own noise:
+
+```
+z₀ ~ N(0,1)                     # the common cause, drawn once per run
+zᵢ = √ρ·z₀ + √(1−ρ)·zᵢ′         # each task: shared part + its own part
+dᵢ = PERT⁻¹( Φ(zᵢ) )            # back to a duration via the quantile function
+```
+
+This is a **one-factor Gaussian copula**. The important property: correlation changes
+only *which quantile* each task lands on, never the shape of its own distribution. Every
+task is still exactly Beta-PERT — so the middle of the forecast stays put and only the
+spread responds. On the golden at seed 42 and the default 1,000 iterations:
+
+| ρ | P10 | P50 | P80 | P90 |
+|---|---|---|---|---|
+| 0.0 (independent) | Oct 9 | Oct 16 | Oct 23 | Oct 27 |
+| 0.4 | Oct 2 | Oct 16 | Oct 27 | Nov 2 |
+| 1.0 (lockstep) | Sep 25 | Oct 15 | Oct 29 | Nov 5 |
+
+Two honest notes. First, the band widens in **both** directions — P10 pulls earlier as
+P90 pushes later — because a shared factor makes good runs good for everyone too. The
+late tail is the one that matters commercially, but the model isn't one-sided and this
+doc won't pretend it is. Second, **ρ is a judgement, not a measurement.** Nobody can
+read "0.4" off a project. Treat it as a stress test — "if this team's delays move
+together, how much later is the safe date?" — rather than a calibrated input. That is
+also why there is no slider in the UI: the panel shows one defensible default instead
+of inviting a number nobody can justify.
+
+At `ρ = 0` the sampler takes the original independent code path, so an uncorrelated run
+is **bit-for-bit identical** to what it produced before this feature existed. The
+determinism guarantee in §7 is unchanged: same seed, same ρ, same output.
+
+---
+
 ## 9. Where it lives, and how to run it
 
 | Layer | Location |
 |---|---|
 | **Engine** (pure, no LLM/app deps) | `packages/planner-core/planner_core/monte_carlo.py` |
-| **CLI verb** | `plan forecast <plan> --start-date … [--iterations N] [--seed S]` |
-| **API** (read-only) | `GET /api/forecast?start=…&iterations=…&seed=…` |
+| **CLI verb** | `plan forecast <plan> --start-date … [--iterations N] [--seed S] [--correlation ρ]` |
+| **API** (read-only) | `GET /api/forecast?start=…&iterations=…&seed=…&correlation=…` |
 | **UI panel** | the **Forecast** button in the web toolbar |
 | **Tests** | `packages/planner-core/tests/test_monte_carlo.py`, plus `apps/api/tests/test_gantt.py`; frontend geometry in `apps/web/tests/lib.test.js` |
 
@@ -268,7 +307,7 @@ uv run plan forecast fixtures/jira-cloud-migration/golden/expected-plan.json \
 ```
 
 ```
-Launch-date forecast — 1000 runs, seed 42 (Beta-PERT over three-point estimates)
+Launch-date forecast — 1000 runs, seed 42 (Beta-PERT over three-point estimates, independent)
   Point estimate (likely durations): 2026-10-12
 
   Confidence band (chance of launching on or before):

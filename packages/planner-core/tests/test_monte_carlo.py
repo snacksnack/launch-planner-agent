@@ -12,6 +12,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from random import Random
 
+import pytest
 from planner_core import (
     Confidence,
     Dependency,
@@ -21,9 +22,11 @@ from planner_core import (
     TeamMember,
     ThreePointEstimate,
     monte_carlo,
+    pert_ppf,
     sample_pert,
     schedule_plan,
 )
+from planner_core.monte_carlo import _betainc
 
 FIXTURE = Path(__file__).resolve().parents[3] / "fixtures" / "jira-cloud-migration"
 MONDAY = date(2026, 8, 3)
@@ -169,3 +172,114 @@ def test_distribution_histogram_counts_sum_to_iterations():
     # buckets are date-sorted
     dates = [b["date"] for b in r.distribution]
     assert dates == sorted(dates)
+
+
+# --- the quantile function (RC1-209) ---------------------------------------
+
+
+def test_betainc_matches_known_values():
+    # I_x(1, 1) is the uniform CDF — the one closed form worth pinning.
+    for x in (0.0, 0.25, 0.5, 0.9, 1.0):
+        assert abs(_betainc(1, 1, x) - x) < 1e-12
+    # and the reflection identity I_x(a, b) == 1 - I_(1-x)(b, a)
+    assert abs(_betainc(2, 5, 0.3) - (1 - _betainc(5, 2, 0.7))) < 1e-12
+
+
+def test_pert_ppf_is_bounded_and_monotone():
+    o, m, p = 2, 6, 16
+    assert pert_ppf(0.0, o, m, p) == o
+    assert pert_ppf(1.0, o, m, p) == p
+    draws = [pert_ppf(u / 20, o, m, p) for u in range(1, 20)]
+    assert draws == sorted(draws)
+    assert all(o <= d <= p for d in draws)
+
+
+def test_pert_ppf_degenerate_range_is_constant():
+    assert pert_ppf(0.3, 5, 5, 5) == 5
+
+
+def test_pert_ppf_reproduces_the_pert_mean():
+    # Averaging the quantile function over a uniform grid is the distribution mean,
+    # which for Beta-PERT is (o + 4m + p) / 6 — the same law sample_pert draws from.
+    o, m, p = 2, 6, 16
+    n = 2000
+    avg = sum(pert_ppf((i + 0.5) / n, o, m, p) for i in range(n)) / n
+    assert abs(avg - (o + 4 * m + p) / 6) < 0.01
+
+
+# --- correlated durations (RC1-209) ----------------------------------------
+
+
+def test_zero_correlation_is_the_independent_default():
+    # The contract that keeps RC1-201's numbers valid: at strength 0 nothing changes,
+    # because the sampler takes the original draw path.
+    plan = _golden()
+    a = monte_carlo(plan, start_date=MONDAY, iterations=400, seed=42)
+    b = monte_carlo(plan, start_date=MONDAY, iterations=400, seed=42, correlation=0.0)
+    assert a.model_dump() == b.model_dump()
+
+
+def test_correlation_widens_the_tail_but_holds_the_median():
+    # The whole point: common-cause risk fattens the tail without moving the middle.
+    plan = _golden()
+    independent = monte_carlo(plan, start_date=MONDAY, iterations=2000, seed=42)
+    correlated = monte_carlo(
+        plan, start_date=MONDAY, iterations=2000, seed=42, correlation=0.5
+    )
+    assert correlated.p80 > independent.p80
+    assert correlated.p90 > independent.p90
+    assert abs((correlated.p50 - independent.p50).days) <= 3
+
+
+def test_higher_correlation_pushes_the_tail_further_out():
+    plan = _golden()
+    p90s = [
+        monte_carlo(
+            plan, start_date=MONDAY, iterations=1500, seed=5, correlation=rho
+        ).p90
+        for rho in (0.0, 0.3, 0.6, 1.0)
+    ]
+    assert p90s == sorted(p90s)
+    assert p90s[-1] > p90s[0]
+
+
+def test_correlated_runs_are_deterministic_for_a_fixed_seed():
+    plan = _golden()
+    a = monte_carlo(plan, start_date=MONDAY, iterations=300, seed=9, correlation=0.4)
+    b = monte_carlo(plan, start_date=MONDAY, iterations=300, seed=9, correlation=0.4)
+    assert a.model_dump() == b.model_dump()
+
+
+def test_correlation_is_reported_on_the_result():
+    plan = _plan([_task("A", 2, 4, 8)], [])
+    assert monte_carlo(plan, start_date=MONDAY, iterations=50, correlation=0.25).correlation == 0.25
+
+
+@pytest.mark.parametrize("bad", [-0.1, 1.1, 2.0])
+def test_correlation_outside_zero_to_one_is_rejected(bad):
+    plan = _plan([_task("A", 2, 4, 8)], [])
+    with pytest.raises(ValueError, match="correlation"):
+        monte_carlo(plan, start_date=MONDAY, iterations=10, correlation=bad)
+
+
+def test_full_correlation_removes_the_merge_bias():
+    """Two identical parallel tasks feeding one finish — the §6 merge-bias setup.
+
+    Independently, the finish is the *max* of two draws, so it lands later than either
+    task alone. At correlation 1 both sit at the same quantile, so there is no max to
+    take and the merge bias vanishes.
+    """
+    both = _plan([_task("A", 2, 6, 20), _task("B", 2, 6, 20)], [])
+    one = _plan([_task("A", 2, 6, 20)], [])
+    kw = {"start_date": MONDAY, "iterations": 3000, "seed": 3}
+
+    independent_gap = (
+        monte_carlo(both, **kw).p50 - monte_carlo(one, **kw).p50
+    ).days
+    locked_gap = (
+        monte_carlo(both, correlation=1.0, **kw).p50
+        - monte_carlo(one, correlation=1.0, **kw).p50
+    ).days
+
+    assert independent_gap > 0  # the merge bias is real when durations are independent
+    assert abs(locked_gap) <= 1  # and gone when they move together

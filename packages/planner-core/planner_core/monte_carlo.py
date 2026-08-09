@@ -12,6 +12,12 @@ optimistic / most-likely / pessimistic). It's deterministic given a seed — the
 is seeded and passed in like `start_date`, so a run is reproducible and testable;
 there is no randomness anywhere near the frontend. Pure `planner_core`: it reuses
 `compute_cpm` and the working-day calendar, nothing else.
+
+Durations may be sampled **independently** (the default) or with a shared risk
+factor — see `correlation` on `monte_carlo` and §"Correlated durations" in
+`docs/forecasting.md`. Correlated sampling uses a one-factor Gaussian copula, which
+needs the Beta quantile function; `_betainc`/`_beta_ppf` below implement it directly
+so the core keeps its two dependencies (RC1-209).
 """
 
 from __future__ import annotations
@@ -20,6 +26,7 @@ import math
 from collections import Counter
 from datetime import date
 from random import Random
+from statistics import NormalDist
 
 from pydantic import BaseModel, ConfigDict
 
@@ -49,6 +56,93 @@ def sample_pert(optimistic: float, likely: float, pessimistic: float, rng: Rando
     return optimistic + span * rng.betavariate(alpha, beta)
 
 
+_STANDARD_NORMAL = NormalDist()
+
+
+def _betacf(a: float, b: float, x: float) -> float:
+    """Continued-fraction expansion for the incomplete beta (Lentz's method)."""
+    tiny, eps, max_iter = 1e-300, 3e-16, 300
+    qab, qap, qam = a + b, a + 1.0, a - 1.0
+    c = 1.0
+    d = 1.0 - qab * x / qap
+    if abs(d) < tiny:
+        d = tiny
+    d = 1.0 / d
+    h = d
+    for m in range(1, max_iter + 1):
+        m2 = 2 * m
+        # even step, then odd step — each refines one level of the fraction
+        for numerator in (
+            m * (b - m) * x / ((qam + m2) * (a + m2)),
+            -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2)),
+        ):
+            d = 1.0 + numerator * d
+            if abs(d) < tiny:
+                d = tiny
+            c = 1.0 + numerator / c
+            if abs(c) < tiny:
+                c = tiny
+            d = 1.0 / d
+            h *= d * c
+        if abs(d * c - 1.0) < eps:
+            break
+    return h
+
+
+def _betainc(a: float, b: float, x: float) -> float:
+    """The regularized incomplete beta I_x(a, b) — the Beta CDF.
+
+    Stdlib has no beta function, and `planner-core` deliberately carries only
+    pydantic and networkx, so this is computed directly from `math.lgamma`.
+    """
+    if x <= 0.0:
+        return 0.0
+    if x >= 1.0:
+        return 1.0
+    log_front = (
+        math.lgamma(a + b) - math.lgamma(a) - math.lgamma(b)
+        + a * math.log(x) + b * math.log1p(-x)
+    )
+    front = math.exp(log_front)
+    # The fraction converges fast only on one side of the mode; flip when it doesn't.
+    if x < (a + 1.0) / (a + b + 2.0):
+        return front * _betacf(a, b, x) / a
+    return 1.0 - front * _betacf(b, a, 1.0 - x) / b
+
+
+def _beta_ppf(u: float, a: float, b: float) -> float:
+    """Invert the Beta CDF by bisection — monotone, so this always converges."""
+    if u <= 0.0:
+        return 0.0
+    if u >= 1.0:
+        return 1.0
+    lo, hi = 0.0, 1.0
+    for _ in range(200):
+        mid = (lo + hi) / 2.0
+        if _betainc(a, b, mid) < u:
+            lo = mid
+        else:
+            hi = mid
+        if hi - lo < 1e-12:
+            break
+    return (lo + hi) / 2.0
+
+
+def pert_ppf(u: float, optimistic: float, likely: float, pessimistic: float) -> float:
+    """The Beta-PERT quantile function: the duration at cumulative probability `u`.
+
+    The inverse of `sample_pert`'s distribution, taking the randomness as an argument
+    instead of drawing it. That's what lets a copula correlate draws while leaving
+    each task's marginal distribution exactly Beta-PERT.
+    """
+    if pessimistic <= optimistic:
+        return optimistic
+    span = pessimistic - optimistic
+    alpha = 1 + 4 * (likely - optimistic) / span
+    beta = 1 + 4 * (pessimistic - likely) / span
+    return optimistic + span * _beta_ppf(u, alpha, beta)
+
+
 class TaskCriticality(BaseModel):
     """How often a task landed on the critical path across the runs."""
 
@@ -66,6 +160,7 @@ class MonteCarloResult(BaseModel):
 
     iterations: int
     seed: int
+    correlation: float  # 0 = independent durations; 1 = one shared risk factor
     start_date: date
     deterministic_finish: date | None  # the point estimate (likely durations)
     p10: date | None
@@ -90,10 +185,20 @@ def monte_carlo(
     start_date: date,
     iterations: int = 1000,
     seed: int = 0,
+    correlation: float = 0.0,
     weekend: frozenset[int] = _DEFAULT_WEEKEND,
     blackouts: tuple[tuple[date, date], ...] = (),
 ) -> MonteCarloResult:
-    """Sample durations, re-run CPM `iterations` times, and summarize the launch date."""
+    """Sample durations, re-run CPM `iterations` times, and summarize the launch date.
+
+    `correlation` (0..1) is how strongly task durations move together. At 0 each task
+    is drawn independently — the RC1-201 behaviour, reproduced exactly. Above 0 a
+    one-factor Gaussian copula gives every task a shared latent risk factor, so a bad
+    run tends to be bad for everyone: the tail widens while P50 barely moves. At 1
+    every task sits at the same quantile of its own distribution.
+    """
+    if not 0.0 <= correlation <= 1.0:
+        raise ValueError(f"correlation must be between 0 and 1, got {correlation}")
     rng = Random(seed)
     calendar = WorkingCalendar(
         start_date=start_date,
@@ -112,10 +217,22 @@ def monte_carlo(
     finish_durations: list[float] = []
     critical_hits = dict.fromkeys(triples, 0)
 
+    # At zero correlation, keep the original draw path exactly — same RNG calls in the
+    # same order — so an independent run reproduces RC1-201's numbers bit for bit.
+    common_weight = math.sqrt(correlation)
+    idiosyncratic_weight = math.sqrt(1.0 - correlation)
+
     for _ in range(iterations):
-        durations = {
-            tid: sample_pert(o, m, p, rng) for tid, (o, m, p) in triples.items()
-        }
+        if correlation == 0.0:
+            durations = {
+                tid: sample_pert(o, m, p, rng) for tid, (o, m, p) in triples.items()
+            }
+        else:
+            shared = rng.gauss(0.0, 1.0)  # one draw per run: the common-cause factor
+            durations = {}
+            for tid, (o, m, p) in triples.items():
+                z = common_weight * shared + idiosyncratic_weight * rng.gauss(0.0, 1.0)
+                durations[tid] = pert_ppf(_STANDARD_NORMAL.cdf(z), o, m, p)
         for mid in milestone_ids:
             durations[mid] = 0.0
         result = compute_cpm(durations, edges)
@@ -158,6 +275,7 @@ def monte_carlo(
     return MonteCarloResult(
         iterations=iterations,
         seed=seed,
+        correlation=correlation,
         start_date=start_date,
         deterministic_finish=deterministic,
         p10=percentile(10),
