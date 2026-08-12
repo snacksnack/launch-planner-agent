@@ -537,6 +537,59 @@ def cmd_history(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_backup(args: argparse.Namespace) -> int:
+    """Take, list, or restore a backup of the plan of record (RC1-246)."""
+    import tempfile
+
+    from app.backup import BackupError, destination_from_settings, restore, run_backup
+    from app.config import get_settings
+
+    settings = get_settings()
+    destination = destination_from_settings(settings)
+
+    try:
+        if args.list:
+            refs = destination.list()
+            if not refs:
+                print("no backups found")
+                return 0
+            print(f"{len(refs)} backup(s), oldest first:")
+            for ref in refs:
+                taken = ref.taken_at.isoformat() if ref.taken_at else "unknown"
+                print(f"  {ref.key}  {ref.size_bytes:>9,} bytes  taken {taken}")
+            return 0
+
+        if args.restore:
+            target = Path(args.into or f"restored-{args.restore}")
+            snapshots = restore(destination, args.restore, target)
+            print(f"restored {args.restore} -> {target} ({snapshots} snapshot(s))")
+            print("Verified readable. Swap it in with the service stopped — see the HOWTO.")
+            return 0
+
+        with tempfile.TemporaryDirectory() as workdir:
+            ref, snapshots, pruned = run_backup(
+                destination,
+                settings.sqlite_path,
+                workdir=Path(workdir),
+                keep=args.keep or settings.backup_keep,
+            )
+    except BackupError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    print(f"backed up {snapshots} snapshot(s) to {ref.key} ({ref.size_bytes:,} bytes)")
+    if pruned:
+        print(f"pruned {len(pruned)} old backup(s): {', '.join(pruned)}")
+    if not settings.backups_go_off_box:
+        print(
+            "warning: backups are going to a local directory "
+            f"({settings.backup_dir}). A copy on the same volume as the database "
+            "is not a backup — set LPA_BACKUP_S3_BUCKET in production.",
+            file=sys.stderr,
+        )
+    return 0
+
+
 def cmd_show(args: argparse.Namespace) -> int:
     store = _open_store()
     try:
@@ -947,6 +1000,23 @@ def main(argv: list[str] | None = None) -> int:
 
     history = sub.add_parser("history", help="List the plan snapshot history.")
     history.set_defaults(func=cmd_history)
+
+    backup = sub.add_parser(
+        "backup",
+        help="Back up the plan of record, list backups, or restore one.",
+        description=(
+            "Takes a consistent copy with VACUUM INTO — safe while the service is "
+            "running — verifies it opens as a plan store, stores it, and prunes old "
+            "ones. Writes to a local directory unless LPA_BACKUP_S3_BUCKET is set."
+        ),
+    )
+    backup.add_argument("--list", action="store_true", help="List existing backups and exit.")
+    backup.add_argument("--restore", metavar="KEY", help="Fetch and verify a backup by key.")
+    backup.add_argument("--into", metavar="PATH", help="Where --restore writes (never in place).")
+    backup.add_argument(
+        "--keep", type=int, default=None, help="Retain the newest N (default LPA_BACKUP_KEEP)."
+    )
+    backup.set_defaults(func=cmd_backup)
 
     show = sub.add_parser("show", help="Print a snapshot's plan (by version, hash, or file).")
     show.add_argument("ref", help="Snapshot version, content hash, or a plan.json path.")

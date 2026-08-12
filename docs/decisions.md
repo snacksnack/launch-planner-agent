@@ -12,6 +12,71 @@ to).
 
 ---
 
+## ADR-0029 — Backups: `VACUUM INTO`, daily, verified before they are trusted
+
+**Date:** 2026-08-12 · **Ticket:** RC1-246 · **Status:** Accepted
+
+**Context.** The store enforces immutability at the storage layer — triggers
+reject UPDATE and DELETE (ADR-0012) — which protects the audit trail from
+*tampering* and not at all from *loss*. The plan of record is one SQLite file on
+one Fly volume, whose only protection was Fly's default volume snapshots: daily,
+five-day retention, not configured by us, never restored from. Immutability
+without durability is a guarantee about the wrong axis.
+
+**Explanation.** *`VACUUM INTO`, never a file copy.* Since ADR-0028 the store
+runs in WAL mode, so committed transactions can still be in the `-wal` sidecar. A
+naive copy of the `.db` therefore silently produces a backup missing the most
+recent commits — the ones most worth having. `VACUUM INTO` writes a consistent,
+checkpointed copy without blocking writers, so it runs against a live service.
+This is asserted rather than assumed: a test copies the file naively and the
+proper way from the same live store, and the naive copy comes back short.
+
+*Verify before storing, not after.* `run_backup` opens the staged copy as a plan
+store and counts its snapshots *before* uploading and *before* pruning. Shipping
+a corrupt file off-box and then deleting a good one behind it is the failure that
+turns a backup system into a liability.
+
+*Destinations are a port, with the client injected.* `LocalDirectory` is the
+default and what the tests use; `S3Destination` takes its boto3 client as an
+argument, so the S3 path is exercised in CI with a fake and no credentials, and
+`boto3` stays an optional extra that only a deployment installs. Same shape as
+`PlanRepository` (ADR-0012) and `JiraTarget` (ADR-0018). A local directory is
+loudly *not* a backup in production — `plan backup` warns on stderr when no
+bucket is configured, because a copy on the same volume as the original dies with
+it.
+
+*Daily, not per-commit.* The obvious alternative is to back up after every
+`plan commit`. Rejected: it couples the approval path to a network write, and the
+question "does a failed upload fail the commit?" has no good answer — failing it
+blocks a human approval on object storage being up, and not failing it means the
+guarantee is decorative. A commit here happens a few times a week, so a daily
+scheduled run has a worst-case exposure of one day's approvals, and the HOWTO
+says to run one by hand before anything destructive. Retention is the newest 14,
+which at that cadence is a fortnight of recoverable history for a few megabytes.
+
+*Keys carry their own timestamp* (`launch-planner-20260812T150912Z.db`), so
+lexical order is chronological order on every backend and "keep the newest N" is
+the same operation locally and in S3. It also means a backup reports when its
+*data* is from rather than when the file was uploaded, which drifts if a copy is
+re-uploaded.
+
+*Restore never writes in place.* It fetches to a path the caller names and
+verifies the file opens, reporting the snapshot count; swapping it in is a
+deliberate step with the service stopped, documented in the HOWTO.
+
+**Consequences.** A `plan backup` verb with `--list`, `--restore` and `--keep`; a
+`BackupDestination` port with two adapters; five `LPA_BACKUP_*` settings, all
+optional at boot so local development and CI need none. The procedure has been
+**executed end to end**, not merely written down: a seeded proposal → baseline →
+commit history was backed up while the API served it, the database was deleted,
+the backup restored and swapped in, and the API confirmed serving all three
+snapshots with versions, content hashes, and approvers identical to the source.
+Scheduling the daily run and provisioning the bucket are operator steps, not code
+here. A Postgres adapter would need its own backup story; this one is
+SQLite-specific by construction.
+
+---
+
 ## ADR-0028 — WAL for concurrency, but `synchronous` stays FULL
 
 **Date:** 2026-08-12 · **Ticket:** RC1-245 · **Status:** Accepted
