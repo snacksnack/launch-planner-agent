@@ -12,6 +12,55 @@ to).
 
 ---
 
+## ADR-0028 — WAL for concurrency, but `synchronous` stays FULL
+
+**Date:** 2026-08-12 · **Ticket:** RC1-245 · **Status:** Accepted
+
+**Context.** `SQLiteEventStore` opened its connection with no pragmas at all, so
+it inherited SQLite's default rollback journal. In that mode a writer takes an
+EXCLUSIVE lock at commit and **blocks every reader** for its duration. That was
+harmless while the API was the only reader and commits were rare CLI actions.
+RC1-231 changed the shape: the MCP server is now a second long-lived process
+reading the same file, so reader/writer contention stopped being theoretical.
+
+**Explanation.** *WAL, because readers and writers stop blocking each other.*
+`PRAGMA journal_mode=WAL` is the whole fix, and it costs nothing here — the mode
+is a property of the file, so it survives restarts, and it is re-applied on every
+connect so a database restored from a backup or copied from elsewhere cannot
+quietly come back in rollback mode. On `:memory:` the pragma returns `"memory"`
+rather than erroring, so the parametrized contract test (ADR-0012's port payoff)
+needed no special case.
+
+*`synchronous` deliberately stays at FULL — this is the part worth writing down.*
+The obvious companion change is `synchronous=NORMAL`, which under WAL skips the
+fsync on each commit and is the standard advice for write-heavy workloads. It is
+rejected here. A commit in this system is a **human-approved plan of record**, a
+few times a week; there is no throughput to win. What NORMAL risks is losing the
+most recent transaction on a power loss — and that transaction is precisely the
+audit record this project exists to keep. Immutability is enforced by triggers at
+the storage layer; trading durability for speed we do not need would weaken the
+same guarantee from the other side. FULL is now set *explicitly* rather than
+inherited, so it reads as a decision, and a test pins it so a future performance
+pass finds a failing assertion instead of an easy win.
+
+*`busy_timeout` is set explicitly too*, from the same constant passed to the
+driver's `timeout`, so the two cannot drift and the value in force is the value
+in the code.
+
+**Consequences.** Readers no longer block on a writer. WAL creates sibling `-wal`
+and `-shm` files beside the database, which is fine on the Fly volume and matters
+for RC1-246: `VACUUM INTO` is now the correct way to take a backup, since copying
+the `.db` file alone would miss committed transactions still in the WAL. The test
+that proves the concurrency win was initially wrong in a way worth recording —
+it used `BEGIN IMMEDIATE`, which only takes a RESERVED lock and blocks nobody in
+*either* mode, so it passed against the old configuration and proved nothing. It
+now uses `BEGIN EXCLUSIVE` and was verified by flipping the pragma back to DELETE
+and watching it fail. Moving to Postgres later would need equivalents for all
+three settings, and the append-only triggers, behind the same `PlanRepository`
+port.
+
+---
+
 ## ADR-0027 — The MCP server lives in the repo, and trades a structural guarantee for an enforced one
 
 **Date:** 2026-08-11 · **Ticket:** RC1-236 (RC1-231 P1) · **Status:** Accepted
