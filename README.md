@@ -158,25 +158,6 @@ Client config (Claude Desktop, or any stdio MCP client):
 `LPA_DRIFT_BASE_URL` is optional — leave it unset and the drift tools report
 unavailable while every planner tool keeps working.
 
-**Read-only, and enforced rather than asserted.** No tool writes to the plan
-store, writes to Jira, calls an LLM, or sends anything. `plan.simulate` takes a
-what-if scenario but applies it to an in-memory copy and persists nothing.
-Committing a plan, generating Jira tickets, and running the agents stay CLI-only
-behind a human approval gate. Two mechanisms hold the line, and they cover
-different things:
-
-- an **allowlist test** (`apps/mcp/tests/test_allowlist.py`) asserting the
-  registered tool set exactly equals `mcp_server.allowlist.TOOL_ALLOWLIST` — a
-  new tool fails CI until someone consciously adds it
-- an **import-linter contract** (`mcp_server is read-only`) stopping the package
-  from importing `app.cli`, `agents`, or `anthropic` at all
-
-The contract stops a module being reachable; the allowlist stops a tool being
-exposed. Elsewhere in this repo read-only is structural — the deployed API simply
-has no write endpoints — but the MCP process runs *inside* the repo and could
-import those paths, so here it is enforced. See
-[ADR-0027](docs/decisions.md#adr-0027--the-mcp-server-lives-in-the-repo-and-trades-a-structural-guarantee-for-an-enforced-one).
-
 ### Tools
 
 | Tool | What it answers |
@@ -191,69 +172,92 @@ import those paths, so here it is enforced. See
 | `drift.check` | What the drift detector last found — findings by severity, with evidence |
 | `drift.explain` | Why one finding fired: the tickets, the dates, the change that triggered it |
 
-The allowlist is the source of truth for what is actually exposed.
+### Read-only, enforced rather than asserted
 
-**The drift tools read; they never scan.** They call the read-only endpoints on
-`tpm-automation-platform` — the only network calls in this server, everything else
-being in-process. A scan (`POST /drift/run`) collects from Jira, calls an LLM, and
-DMs owners on Slack, so it is deliberately unreachable from any tool here: a model
-exploring a question would otherwise message real people several times over. Every
-response carries the run it came from and an `is_live: false`, because these are
-the last *scheduled* run's findings, not a fresh scan. Set `LPA_DRIFT_BASE_URL` to
-enable them; leave it unset and they report unavailable while every planner tool
-keeps working.
+No tool writes to the plan store, writes to Jira, calls an LLM, or sends
+anything. `plan.simulate` takes a what-if scenario but applies it to an in-memory
+copy and persists nothing.
 
-Findings are addressed by an opaque `finding_id` that `drift.check` returns and
-`drift.explain` takes back verbatim — the same contract as `canonical_ref` on the
-plan tools. It encodes the finding's identity upstream, which stays stable across
-detector runs where a row id would not.
+Elsewhere in this repo that property is *structural* — the deployed API simply has
+no write endpoints, so `plan commit` and `plan jira` are unreachable from the
+served surface. The MCP process runs inside the repo and could import those paths,
+so here it is enforced by three mechanisms that each cover something the others
+cannot:
 
-**`status.draft` drafts; it does not deliver.** Health is decided by rule, not by
-prose, so a week with critical-path slippage flips the signal regardless of how
-the summary reads. The narrative is the deterministic, rule-written one and every
-response says so in `narrative_source` — the LLM narrative comes from the gated
-`plan status` CLI, which the import contract stops this server from reaching. With
-no committed baseline the call fails with an explanation rather than returning an
-empty update, because "nothing to compare" and "nothing changed" mean opposite
-things. There is no audience parameter in v1: the service has no audience-shaping
-concept, and adding one here would put content logic in a transport wrapper.
+- an **import contract** (`mcp_server is read-only`) stops the package reaching
+  `app.cli`, `agents`, or `anthropic` at all;
+- an **allowlist** (`mcp_server.allowlist`) stops a tool being exposed without
+  someone consciously listing it;
+- a **call-level sweep** (`tests/test_read_only_sweep.py`) exercises all nine
+  tools with the store, Jira, and Anthropic write paths patched to fail. This is
+  the one the others miss: `SQLiteEventStore` is legitimately imported for reads,
+  and `append` / `save_scenario` / `delete_scenario` hang off the same class.
 
-**The plan's own date is returned with its odds.** `plan.forecast` reports the
+Each was verified by injecting its violation and watching it fail. See
+[ADR-0027](docs/decisions.md#adr-0027--the-mcp-server-lives-in-the-repo-and-trades-a-structural-guarantee-for-an-enforced-one).
+
+### How answers are grounded
+
+**Every response says which plan it read.** Tools take a friendly `ref` — a
+version number, a content-hash prefix of 4+ characters, `latest`, `baseline`, or
+omitted for the default plan — and echo back a `canonical_ref` that resolves to
+exactly that plan. An ambiguous hash prefix is an error listing the candidates
+rather than a silent pick. File paths are deliberately not accepted from a
+caller; the default is set by `LPA_PLAN_PATH`, an operator's decision rather than
+a model's.
+
+**A zero is not always good news.** `plan.simulate` returns an explicit
+`outcome`: a slip smaller than the task's float is absorbed and the launch date
+holds (`absorbed_by_float`), while a rejected change also leaves the date unmoved
+(`not_applied`) and means the opposite. The engine deliberately never raises on
+bad input, so task references resolve to a real id *before* the simulation runs.
+
+**The plan's own date comes with its odds.** `plan.forecast` reports the
 deterministic single-point date alongside `deterministic_confidence` — the share
-of sampled runs that actually achieved it. On the flagship golden that is Oct 12
-at 19%, against a P80 of Oct 23. Given both figures unlabelled, a model reports
-the earlier one, so the number ships with the date. `correlation` is deliberately
-not a parameter: it defaults to 0, matching the dashboard, and ADR-0026 kept it
-out of the UI because the units are unestimable. The histogram behind the band is
-not returned either — it is a chart, not an answer.
+of sampled runs that achieved it. On the flagship golden that is Oct 12 at 19%,
+against a P80 of Oct 23. Given both figures unlabelled, a model reports the
+earlier one.
 
 **Critical chains are plural.** A schedule can have several converging critical
-paths — the flagship golden has two, sharing a prefix and diverging over the
-cutover rehearsal. `plan.critical_path` returns all of them with a count, ordered
-along their own dependency edges. It is a single deterministic CPM pass over the
-most-likely estimates, deliberately distinct from `plan.forecast`, which samples
-those estimates and reports how *often* each task lands on a critical path.
+paths — the golden has two. `plan.critical_path` returns all of them with a
+count, ordered along their own dependency edges, in one deterministic CPM pass;
+`plan.forecast` answers the different question of how *often* each task is
+critical across sampled runs.
 
-**Plan references.** Tools take a friendly `ref`: a version number, a content-hash
-prefix of 4+ characters, `latest`, `baseline`, or omitted for the default plan.
-Every response echoes back a `canonical_ref` that resolves to exactly that plan,
-so a model never has to guess an ID format. An ambiguous hash prefix is an error
-listing the candidates rather than a silent pick. File paths are deliberately not
-accepted from a caller — the default is set by `LPA_PLAN_PATH`, an operator's
-decision rather than a model's.
+**Drift is read, never scanned.** The drift tools call read-only endpoints on
+`tpm-automation-platform` — the only network calls in this server. A scan
+(`POST /drift/run`) collects from Jira, calls an LLM, and DMs owners on Slack, so
+it is unreachable from any tool here. Responses carry the run they came from and
+`is_live: false`: these are the last *scheduled* run's findings.
 
-**A zero is not always good news.** `plan.simulate` returns an explicit `outcome`
-rather than leaving a caller to read a delta. A slip smaller than the task's float
-is fully absorbed and the launch date holds (`absorbed_by_float`) — a real finding.
-A rejected change also leaves the date unmoved (`not_applied`) and means the
-opposite. The engine deliberately never raises on bad input, so task references are
-resolved to a real id *before* the simulation runs; an unresolvable name is an error
-rather than a silent no-op that reads as "no impact."
+**Response sizes are bounded.** `plan.get` returns a summary by default — 1.4 KB
+on the golden, against 41.7 KB for the full Gantt payload behind `detail=true`
+(most of the difference is per-task provenance carrying verbatim PRD quotes).
+`plan.forecast` omits the finish-date histogram; it is a chart, not an answer.
+Both are pinned by tests.
 
-**Response sizes.** `plan.get` returns a summary by default — 1.4 KB on the
-flagship golden, against 41.7 KB for the full Gantt payload behind `detail=true`
-(3.4%; most of the difference is per-task provenance blocks carrying verbatim PRD
-quotes). Both are pinned by tests so the summary cannot quietly grow back.
+### Demo
+
+[docs/mcp-demo.md](docs/mcp-demo.md) is a five-minute conversational script —
+the questions, the tool each should route to, and the numbers to expect. It
+doubles as the discoverability check: the questions are phrased the way a person
+would ask them, and a wrong tool pick means a description needs fixing.
+
+### Honest gaps
+
+- **No audience shaping** on `status.draft`. The service has no audience concept,
+  and adding one in the MCP layer would put content logic in a transport wrapper.
+- **Drift data is the last scheduled run**, not live. On-demand rescanning is a
+  write and stays behind the platform's approval gate.
+- **`correlation` is not exposed** on `plan.forecast`. It defaults to 0, matching
+  the dashboard; ADR-0026 kept it out of the UI because the units are
+  unestimable, and a model is likelier than a human to set a plausible-sounding
+  value. It is echoed in the response so a stored forecast records how it ran.
+- **`narrative_source` is always `deterministic`.** The LLM narrative comes from
+  the gated `plan status` CLI, which the import contract stops this server from
+  reaching.
+- **Write tools are out of scope for v1.** A later version could add them, but
+  only routed through the same human approval gates the CLI uses.
 
 ## Deploy
 
