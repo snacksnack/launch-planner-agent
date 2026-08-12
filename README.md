@@ -186,10 +186,20 @@ import those paths, so here it is enforced. See
 | `plan.get` | When does this plan launch, how long is it, where are the milestones? |
 | `plan.critical_path` | What is driving the date — every critical chain, with owners and float |
 | `plan.simulate` | What if a task slips N working days — the new launch date and what moved |
+| `plan.forecast` | The launch date as a P50/P80/P90 band, plus the criticality index |
 
-Four more are planned under epic RC1-231 (`plan.forecast`, `drift.check`,
-`drift.explain`, `status.draft`). The table grows one story at a time; the
-allowlist is the source of truth for what is actually exposed today.
+Three more are planned under epic RC1-231 (`drift.check`, `drift.explain`,
+`status.draft`). The table grows one story at a time; the allowlist is the source
+of truth for what is actually exposed today.
+
+**The plan's own date is returned with its odds.** `plan.forecast` reports the
+deterministic single-point date alongside `deterministic_confidence` — the share
+of sampled runs that actually achieved it. On the flagship golden that is Oct 12
+at 19%, against a P80 of Oct 23. Given both figures unlabelled, a model reports
+the earlier one, so the number ships with the date. `correlation` is deliberately
+not a parameter: it defaults to 0, matching the dashboard, and ADR-0026 kept it
+out of the UI because the units are unestimable. The histogram behind the band is
+not returned either — it is a chart, not an answer.
 
 **Critical chains are plural.** A schedule can have several converging critical
 paths — the flagship golden has two, sharing a prefix and diverging over the

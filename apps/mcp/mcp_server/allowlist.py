@@ -42,5 +42,7 @@ TOOL_ALLOWLIST: frozenset[str] = frozenset(
         "plan.critical_path",
         # RC1-239 — applies a what-if to an in-memory copy; persists nothing.
         "plan.simulate",
+        # RC1-240 — seeded sampling over the same engine; nothing is stored.
+        "plan.forecast",
     }
 )
