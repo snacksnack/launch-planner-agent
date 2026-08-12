@@ -184,11 +184,18 @@ import those paths, so here it is enforced. See
 | `platform.health` | Is the plan store readable? Is the drift service answering? |
 | `plan.list` | Which plans exist — every snapshot, plus the default used when no ref is given |
 | `plan.get` | When does this plan launch, how long is it, where are the milestones? |
+| `plan.critical_path` | What is driving the date — every critical chain, with owners and float |
 
-Six more are planned under epic RC1-231 (`plan.critical_path`, `plan.simulate`,
-`plan.forecast`, `drift.check`, `drift.explain`, `status.draft`). The table grows
-one story at a time; the allowlist is the source of truth for what is actually
-exposed today.
+Five more are planned under epic RC1-231 (`plan.simulate`, `plan.forecast`,
+`drift.check`, `drift.explain`, `status.draft`). The table grows one story at a
+time; the allowlist is the source of truth for what is actually exposed today.
+
+**Critical chains are plural.** A schedule can have several converging critical
+paths — the flagship golden has two, sharing a prefix and diverging over the
+cutover rehearsal. `plan.critical_path` returns all of them with a count, ordered
+along their own dependency edges. It is a single deterministic CPM pass over the
+most-likely estimates, deliberately distinct from `plan.forecast`, which samples
+those estimates and reports how *often* each task lands on a critical path.
 
 **Plan references.** Tools take a friendly `ref`: a version number, a content-hash
 prefix of 4+ characters, `latest`, `baseline`, or omitted for the default plan.
