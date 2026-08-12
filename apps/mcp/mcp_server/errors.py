@@ -78,6 +78,32 @@ class AmbiguousPlanRef(PlannerToolError):
         self.candidates = candidates
 
 
+class TaskNotFound(PlannerToolError):
+    """A task reference matched nothing.
+
+    Must never fall through to the engine. `apply_scenario` skips an unknown id
+    with a warning and still returns a schedule, so passing an unresolved
+    reference through produces a successful-looking response with an unchanged
+    date — a wrong answer delivered confidently.
+    """
+
+    code = "task_not_found"
+
+
+class AmbiguousTaskRef(PlannerToolError):
+    """A task reference matched more than one task."""
+
+    code = "ambiguous_task_ref"
+
+    def __init__(self, ref: str, candidates: list[str]) -> None:
+        listed = "; ".join(candidates)
+        super().__init__(
+            f"{ref!r} matches {len(candidates)} tasks ({listed}). "
+            "Name one exactly, or pass its task id."
+        )
+        self.candidates = candidates
+
+
 class InvalidArgument(PlannerToolError):
     """An argument was malformed. Distinct from `plan_not_found`: the caller
     passed something unusable, rather than naming something that isn't there."""

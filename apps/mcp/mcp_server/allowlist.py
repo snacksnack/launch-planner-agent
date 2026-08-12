@@ -40,5 +40,7 @@ TOOL_ALLOWLIST: frozenset[str] = frozenset(
         "plan.get",
         # RC1-238 — one deterministic CPM pass; selects from the payload.
         "plan.critical_path",
+        # RC1-239 — applies a what-if to an in-memory copy; persists nothing.
+        "plan.simulate",
     }
 )
