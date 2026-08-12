@@ -46,5 +46,8 @@ TOOL_ALLOWLIST: frozenset[str] = frozenset(
         "plan.forecast",
         # RC1-242 — composes existing diffs; drafts only, sends nothing.
         "status.draft",
+        # RC1-241 — read-only HTTP to the drift service; never triggers a scan.
+        "drift.check",
+        "drift.explain",
     }
 )

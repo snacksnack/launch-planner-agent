@@ -188,11 +188,25 @@ import those paths, so here it is enforced. See
 | `plan.simulate` | What if a task slips N working days — the new launch date and what moved |
 | `plan.forecast` | The launch date as a P50/P80/P90 band, plus the criticality index |
 | `status.draft` | The weekly exec update against the committed baseline — drafted, never sent |
+| `drift.check` | What the drift detector last found — findings by severity, with evidence |
+| `drift.explain` | Why one finding fired: the tickets, the dates, the change that triggered it |
 
-Two more are planned under epic RC1-231 (`drift.check`, `drift.explain`), both
-waiting on a read-only findings endpoint in `tpm-automation-platform`. The table
-grows one story at a time; the allowlist is the source of truth for what is
-actually exposed today.
+The allowlist is the source of truth for what is actually exposed.
+
+**The drift tools read; they never scan.** They call the read-only endpoints on
+`tpm-automation-platform` — the only network calls in this server, everything else
+being in-process. A scan (`POST /drift/run`) collects from Jira, calls an LLM, and
+DMs owners on Slack, so it is deliberately unreachable from any tool here: a model
+exploring a question would otherwise message real people several times over. Every
+response carries the run it came from and an `is_live: false`, because these are
+the last *scheduled* run's findings, not a fresh scan. Set `LPA_DRIFT_BASE_URL` to
+enable them; leave it unset and they report unavailable while every planner tool
+keeps working.
+
+Findings are addressed by an opaque `finding_id` that `drift.check` returns and
+`drift.explain` takes back verbatim — the same contract as `canonical_ref` on the
+plan tools. It encodes the finding's identity upstream, which stays stable across
+detector runs where a row id would not.
 
 **`status.draft` drafts; it does not deliver.** Health is decided by rule, not by
 prose, so a week with critical-path slippage flips the signal regardless of how
