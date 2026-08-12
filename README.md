@@ -185,10 +185,11 @@ import those paths, so here it is enforced. See
 | `plan.list` | Which plans exist — every snapshot, plus the default used when no ref is given |
 | `plan.get` | When does this plan launch, how long is it, where are the milestones? |
 | `plan.critical_path` | What is driving the date — every critical chain, with owners and float |
+| `plan.simulate` | What if a task slips N working days — the new launch date and what moved |
 
-Five more are planned under epic RC1-231 (`plan.simulate`, `plan.forecast`,
-`drift.check`, `drift.explain`, `status.draft`). The table grows one story at a
-time; the allowlist is the source of truth for what is actually exposed today.
+Four more are planned under epic RC1-231 (`plan.forecast`, `drift.check`,
+`drift.explain`, `status.draft`). The table grows one story at a time; the
+allowlist is the source of truth for what is actually exposed today.
 
 **Critical chains are plural.** A schedule can have several converging critical
 paths — the flagship golden has two, sharing a prefix and diverging over the
@@ -204,6 +205,14 @@ so a model never has to guess an ID format. An ambiguous hash prefix is an error
 listing the candidates rather than a silent pick. File paths are deliberately not
 accepted from a caller — the default is set by `LPA_PLAN_PATH`, an operator's
 decision rather than a model's.
+
+**A zero is not always good news.** `plan.simulate` returns an explicit `outcome`
+rather than leaving a caller to read a delta. A slip smaller than the task's float
+is fully absorbed and the launch date holds (`absorbed_by_float`) — a real finding.
+A rejected change also leaves the date unmoved (`not_applied`) and means the
+opposite. The engine deliberately never raises on bad input, so task references are
+resolved to a real id *before* the simulation runs; an unresolvable name is an error
+rather than a silent no-op that reads as "no impact."
 
 **Response sizes.** `plan.get` returns a summary by default — 1.4 KB on the
 flagship golden, against 41.7 KB for the full Gantt payload behind `detail=true`

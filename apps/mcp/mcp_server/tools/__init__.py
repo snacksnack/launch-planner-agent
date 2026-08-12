@@ -12,12 +12,13 @@ from collections.abc import Callable, Sequence
 
 from mcp.server import MCPServer
 
-from mcp_server.tools import critical_path, health, plans
+from mcp_server.tools import critical_path, health, plans, simulate
 
 REGISTRARS: Sequence[Callable[[MCPServer], None]] = (
     health.register,
     plans.register,
     critical_path.register,
+    simulate.register,
 )
 
 
