@@ -187,10 +187,22 @@ import those paths, so here it is enforced. See
 | `plan.critical_path` | What is driving the date — every critical chain, with owners and float |
 | `plan.simulate` | What if a task slips N working days — the new launch date and what moved |
 | `plan.forecast` | The launch date as a P50/P80/P90 band, plus the criticality index |
+| `status.draft` | The weekly exec update against the committed baseline — drafted, never sent |
 
-Three more are planned under epic RC1-231 (`drift.check`, `drift.explain`,
-`status.draft`). The table grows one story at a time; the allowlist is the source
-of truth for what is actually exposed today.
+Two more are planned under epic RC1-231 (`drift.check`, `drift.explain`), both
+waiting on a read-only findings endpoint in `tpm-automation-platform`. The table
+grows one story at a time; the allowlist is the source of truth for what is
+actually exposed today.
+
+**`status.draft` drafts; it does not deliver.** Health is decided by rule, not by
+prose, so a week with critical-path slippage flips the signal regardless of how
+the summary reads. The narrative is the deterministic, rule-written one and every
+response says so in `narrative_source` — the LLM narrative comes from the gated
+`plan status` CLI, which the import contract stops this server from reaching. With
+no committed baseline the call fails with an explanation rather than returning an
+empty update, because "nothing to compare" and "nothing changed" mean opposite
+things. There is no audience parameter in v1: the service has no audience-shaping
+concept, and adding one here would put content logic in a transport wrapper.
 
 **The plan's own date is returned with its odds.** `plan.forecast` reports the
 deterministic single-point date alongside `deterministic_confidence` — the share

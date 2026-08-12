@@ -44,5 +44,7 @@ TOOL_ALLOWLIST: frozenset[str] = frozenset(
         "plan.simulate",
         # RC1-240 — seeded sampling over the same engine; nothing is stored.
         "plan.forecast",
+        # RC1-242 — composes existing diffs; drafts only, sends nothing.
+        "status.draft",
     }
 )
