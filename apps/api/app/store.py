@@ -52,6 +52,10 @@ CREATE TABLE IF NOT EXISTS scenarios (
 );
 """
 
+#: How long a connection waits for a lock before giving up. Passed to the driver
+#: (which takes seconds) *and* set as a pragma, so the two cannot drift.
+_BUSY_TIMEOUT_MS = 5_000
+
 _COLUMNS = (
     "version, content_hash, kind, parent_hash, source_proposal_hash, "
     "approved_by, message, created_at, plan_json, decision_json"
@@ -66,11 +70,39 @@ class SQLiteEventStore:
         if path != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True)
         # A shared connection so an in-memory DB persists across calls.
-        self._conn = sqlite3.connect(path, check_same_thread=False)
+        self._conn = sqlite3.connect(
+            path, check_same_thread=False, timeout=_BUSY_TIMEOUT_MS / 1000
+        )
         self._conn.row_factory = sqlite3.Row
+        self._configure()
         with self._conn:
             self._conn.executescript(_SCHEMA)
             self._migrate()
+
+    def _configure(self) -> None:
+        """Set the durability and concurrency pragmas explicitly (RC1-245).
+
+        All three are deliberate, and two of them are deliberately *not* the
+        thing that would make writes faster — see ADR-0028.
+        """
+        # WAL: readers no longer block on a writer. Under the default rollback
+        # journal a commit holds an exclusive lock and blocks every reader, which
+        # was harmless while the API was the only reader and stopped being so
+        # once the MCP server became a second long-lived process on the same
+        # file. On `:memory:` this is a no-op returning "memory", not an error.
+        self._conn.execute("PRAGMA journal_mode=WAL")
+
+        # FULL is SQLite's default and we keep it, stated here so it is a
+        # decision rather than an accident. NORMAL would skip the fsync on each
+        # commit, but a commit here is a human-approved plan of record a few
+        # times a week — there is no throughput to win, and the transaction that
+        # a power loss would drop is exactly the audit record this project
+        # exists to keep.
+        self._conn.execute("PRAGMA synchronous=FULL")
+
+        # Explicit rather than inherited from the driver's `timeout` default, so
+        # the value is visible to whoever is debugging a lock wait.
+        self._conn.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
 
     def _migrate(self) -> None:
         """Add columns introduced after a DB was first created (append-only-safe:
