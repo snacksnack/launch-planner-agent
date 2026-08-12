@@ -296,3 +296,38 @@ def test_the_golden_plan_file_is_untouched(platform):
     before = GOLDEN.read_bytes()
     _exercise_every_tool()
     assert GOLDEN.read_bytes() == before
+
+
+def test_no_tool_creates_the_database(tmp_path, monkeypatch):
+    """RC1-247: reads must not bring a store into existence.
+
+    `SQLiteEventStore` migrates on construction, so opening a missing path
+    creates an empty database — a write, from a server whose whole claim is that
+    it does not write. `platform.health` always guarded this; `plan.list` did
+    not, and every read path now shares one check.
+
+    Not part of the `platform` fixture's sweep, because that fixture seeds a
+    store on purpose. Only the tools that work without one are exercised here.
+    """
+    from app.config import get_settings
+
+    monkeypatch.setenv("LPA_DATABASE_URL", f"sqlite:///{tmp_path / 'absent.db'}")
+    monkeypatch.setenv("LPA_DRIFT_BASE_URL", "")
+    get_settings.cache_clear()
+    drift_client.get_mcp_settings.cache_clear()
+    try:
+        assert not (tmp_path / "absent.db").exists()
+
+        async def run():
+            async with Client(build_server()) as client:
+                for name, args in EVERY_TOOL:
+                    if name in {"status.draft", "drift.check", "drift.explain"}:
+                        continue  # these need a baseline or the drift service
+                    await client.call_tool(name, args)
+
+        asyncio.run(run())
+
+        assert not (tmp_path / "absent.db").exists(), "a read tool created the database"
+    finally:
+        get_settings.cache_clear()
+        drift_client.get_mcp_settings.cache_clear()

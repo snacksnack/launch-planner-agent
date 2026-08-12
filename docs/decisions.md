@@ -172,6 +172,17 @@ checked from the first commit — and it applies unchanged here. With one tool t
 allowlist costs nothing, and it starts failing usefully the moment the second
 tool is added.
 
+**Amended 2026-08-12 (RC1-247).** The "creates nothing" property was originally
+only true of `platform.health`. `plan.list` opened the store to read its history
+and so created an empty database on a fresh clone, quietly defeating the care
+taken next door. Every read path now shares one `plan_store_exists()` guard, and
+`resolve_plan_ref` stands in `InMemoryPlanRepository` — the port's own empty
+reference implementation from ADR-0012 — when there is no file, so each branch
+still produces the exact message it would have given for an empty store rather
+than a special-cased one. A test asserts no tool brings a database into
+existence. "No tool creates anything" is a sentence worth being able to say
+without a footnote.
+
 **Consequences.** A fourth root package, a third import contract, and a fourth
 `layers` entry (`mcp_server -> app -> agents -> planner_core`). `platform.health`
 is the walking skeleton: it proves transport, config, and error mapping, and it
