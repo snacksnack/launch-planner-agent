@@ -31,11 +31,23 @@ from typing import Literal
 
 from app.config import get_settings
 from app.store import SQLiteEventStore
-from planner_core import Plan, Snapshot, content_hash
+from planner_core import InMemoryPlanRepository, Plan, Snapshot, content_hash
 
 from mcp_server.errors import AmbiguousPlanRef, PlanNotFound
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def plan_store_exists() -> bool:
+    """Whether there is a database to read, without creating one.
+
+    `SQLiteEventStore` runs its migration on construction, so simply opening a
+    missing path creates an empty database — a write, from a server whose entire
+    claim is that it does not write. Every read path here checks first and
+    treats "no file" as "no snapshots", which is what it means.
+    """
+    sqlite_path = get_settings().sqlite_path
+    return sqlite_path == ":memory:" or Path(sqlite_path).exists()
 
 #: A hash prefix must be at least this long. Shorter is almost always a typo,
 #: and a 1–3 character prefix matches so much that the error is unhelpful.
@@ -142,7 +154,14 @@ def resolve_plan_ref(ref: str | None = None) -> ResolvedPlan:
     if lowered == "default":
         return _default_plan_file(requested)
 
-    store = SQLiteEventStore(get_settings().sqlite_path)
+    # With no database yet, stand in the port's own empty reference repository
+    # rather than special-casing: every branch below then produces exactly the
+    # message it would have given for an empty store, and nothing is created.
+    store = (
+        SQLiteEventStore(get_settings().sqlite_path)
+        if plan_store_exists()
+        else InMemoryPlanRepository()
+    )
     try:
         if lowered == "latest":
             snapshot = store.latest_of_record()
@@ -185,11 +204,14 @@ def resolve_plan_ref(ref: str | None = None) -> ResolvedPlan:
             )
         return _from_snapshot(matches[0], requested)
     finally:
-        store.close()
+        if isinstance(store, SQLiteEventStore):
+            store.close()
 
 
 def snapshot_history() -> list[Snapshot]:
-    """The full snapshot log, oldest first. Read-only."""
+    """The full snapshot log, oldest first. Read-only, and creates nothing."""
+    if not plan_store_exists():
+        return []
     store = SQLiteEventStore(get_settings().sqlite_path)
     try:
         return store.history()

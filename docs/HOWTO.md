@@ -41,6 +41,10 @@ key is needed — the UI reads the pre-scheduled golden from `GET /api/plan`.
 
 **Checks** (from the repo root):
 
+There is a third surface beyond the API and the web UI: an **MCP server**, so a
+client like Claude Desktop can drive the planner in conversation. It needs no
+credentials either — see [§5](#5-the-mcp-server--the-planner-in-conversation).
+
 ```bash
 uv run ruff check .          # lint
 uv run lint-imports          # enforce: planner-core imports no LLM/app code
@@ -238,7 +242,183 @@ running it on a weekly schedule are deploy concerns (RC1-195), not built here.
 
 ---
 
-## 5. Configuration
+## 5. The MCP server — the planner in conversation
+
+The same engines, driven by talking to them. An MCP client spawns
+`launch-planner-mcp` over stdio and gets nine tools; a question like *"what if
+the legal sign-off slips a month?"* becomes a real number out of the real CPM
+engine rather than a guess.
+
+Nothing here writes. See [§4](#4-real-modes--safety) for the boundary and how it
+is enforced; the [README](../README.md#mcp-server--the-planner-as-conversational-tools)
+has the design rationale and [ADR-0027](decisions.md) the reasoning behind it.
+
+### Connect a client
+
+Add this to your client's config — for Claude Desktop that is
+`claude_desktop_config.json` — and restart it:
+
+```json
+{
+  "mcpServers": {
+    "launch-planner": {
+      "command": "uv",
+      "args": ["run", "--directory", "/absolute/path/to/launch-planner-agent",
+               "launch-planner-mcp"],
+      "env": { "LPA_DRIFT_BASE_URL": "" }
+    }
+  }
+}
+```
+
+The path must be absolute — the client does not inherit your shell's working
+directory. `LPA_DRIFT_BASE_URL` is optional; see *Drift* below.
+
+To check the server itself before involving a client:
+
+```bash
+uv run launch-planner-mcp        # prints a readiness line on stderr, then waits
+```
+
+It will sit there silently waiting for JSON-RPC on stdin, which is correct — a
+client is what talks to it. Ctrl-C to exit.
+
+### What works immediately, and what needs a step
+
+**Clone the repo, paste the config, and six of the nine tools answer real
+questions with no further setup.** They read the flagship golden plan file
+(`LPA_PLAN_PATH`), not the database, so nothing has to be seeded or committed
+first.
+
+| Tool | Ready on a fresh clone? |
+| --- | --- |
+| `platform.health` | yes |
+| `plan.list` | yes |
+| `plan.get` | yes |
+| `plan.critical_path` | yes |
+| `plan.simulate` | yes |
+| `plan.forecast` | yes |
+| `status.draft` | needs a committed baseline |
+| `drift.check` | needs a drift service |
+| `drift.explain` | needs a drift service |
+
+**`status.draft`** compares the current plan against a committed baseline, so it
+needs one to exist. One command:
+
+```bash
+uv run plan baseline fixtures/jira-cloud-migration/golden/expected-plan.json \
+  --by "Priya Nair" --note "initial plan"
+```
+
+Until then it fails with an explanation rather than returning an empty update —
+"nothing to compare against" and "nothing changed" mean opposite things, and a
+model handed an empty result would report the second.
+
+**Drift** needs `LPA_DRIFT_BASE_URL` pointing at a deployed
+[tpm-automation-platform](https://github.com/snacksnack/tpm-automation-platform)
+with the read-only findings endpoints. Left unset, `drift.check` and
+`drift.explain` report unavailable and every other tool carries on — that is a
+configuration state, not a fault. `platform.health` tells you which it is.
+
+**Nothing here creates a database.** All nine tools treat a missing plan store as
+"no snapshots", because opening one would run its migration and create the file —
+a write, from a server whose whole claim is that it does not write.
+
+### The nine tools
+
+Grouped by the question they answer.
+
+**Orientation — what am I looking at?**
+
+| Tool | Answers | Key arguments |
+| --- | --- | --- |
+| `platform.health` | Is the plan store readable? Is drift answering? | none |
+| `plan.list` | Which plans exist — every snapshot, plus the default | none |
+| `plan.get` | When does this launch, how big is it, where are the milestones? | `ref`, `start`, `detail` |
+
+`plan.list` is the entry point when you have no plan reference. Every response
+from every plan tool echoes a `canonical_ref` you can pass straight back as
+`ref`, so there are no ID formats to guess.
+
+**Analysis — why is the date what it is?**
+
+| Tool | Answers | Key arguments |
+| --- | --- | --- |
+| `plan.critical_path` | Which chains drive the date, who owns them, how much float | `ref`, `start`, `include_near_critical` |
+| `plan.simulate` | What if a task slips N working days? | `task`, `days`, `ref`, `start` |
+| `plan.forecast` | How confident are we — P50/P80/P90, and what is most likely to delay us | `ref`, `start`, `iterations`, `seed` |
+
+These three are easy to confuse, so:
+
+- `plan.critical_path` is **one deterministic pass** over the most-likely
+  estimates. It returns *the* critical chains — plural, because a schedule can
+  have several converging ones (the flagship golden has two).
+- `plan.forecast` **samples** those estimates a thousand times and reports a
+  probability band, plus a *criticality index* — how often each task landed on a
+  critical path. "What drives the date" is the first tool; "how likely is that
+  date" is the second.
+- `plan.simulate` applies one hypothetical slip and re-runs the engine. Read its
+  `outcome` field before reporting anything: a slip smaller than the task's float
+  is **absorbed** and the date holds, which is a real finding and not the same as
+  the change having been rejected.
+
+**Reporting and runtime**
+
+| Tool | Answers | Key arguments |
+| --- | --- | --- |
+| `status.draft` | The weekly exec update against the baseline | `current`, `baseline`, `start`, `period` |
+| `drift.check` | What the drift detector last found | `bucket`, `rule`, `since_run` |
+| `drift.explain` | Why one finding fired | `finding_id` |
+
+`status.draft` drafts and never sends. `drift.check` reports the **last scheduled
+run**, not a live scan — every response carries `run_id`, `run_at` and
+`is_live: false`. Pass a `finding_id` from `drift.check` straight to
+`drift.explain`; do not compose one.
+
+Plan references (`ref`, `current`, `baseline`) all accept the same forms: a
+version number, a content-hash prefix of four or more characters, `latest`,
+`baseline`, or omitted for the default plan.
+
+### Troubleshooting
+
+**The client shows no tools, or fails to connect.**
+Run `uv run launch-planner-mcp` yourself from the repo root. If that prints a
+readiness line and waits, the server is fine and the problem is the client's
+config — most often a relative `--directory` path, or `uv` not being on the PATH
+the client launches with (GUI apps do not always inherit your shell's).
+
+**Where the server's output goes.**
+The client owns the process, so you will not see its output in a terminal.
+**stdout carries the protocol** — anything printed there corrupts the stream and
+breaks every client. Diagnostics go to stderr, which your client surfaces in its
+MCP or developer logs. This is guarded by a test that spawns the real subprocess
+(`apps/mcp/tests/test_stdio.py`), because a stray `print` anywhere in the import
+graph would break clients while every in-process test stayed green.
+
+**A tool returned an error.** They are structured, and the code says what to do:
+
+| Code | Meaning | Do |
+| --- | --- | --- |
+| `plan_not_found` | The plan reference matched nothing | Call `plan.list`; the message lists what exists |
+| `ambiguous_plan_ref` | A hash prefix matched several snapshots | Use more characters, or the version number |
+| `task_not_found` | No task matched that name or id | The message suggests near misses; `plan.critical_path` lists real names |
+| `ambiguous_task_ref` | A task name matched several tasks | Name one exactly, or pass its task id |
+| `invalid_argument` | An argument was out of range or malformed | The message states the accepted range |
+| `drift_unavailable` | The drift service is unset or unreachable | Set `LPA_DRIFT_BASE_URL`, or accept that drift tools are off |
+| `internal_error` | A bug | The message names the exception; the rest of the server is unaffected |
+
+**A number does not match the dashboard.** Check the `ref` in the response — a
+plan of record moves, and a tool answering about version 3 while the dashboard
+renders version 5 is not a disagreement. Forecasts additionally vary by `seed`,
+which is echoed on every response for exactly this reason.
+
+**Changed the code and the client did not notice.** The client spawns the process
+once; restart the client, or disconnect and reconnect the server.
+
+
+---
+
+## 6. Configuration
 
 All settings are env-backed with the `LPA_` prefix (see `apps/api/app/config.py`).
 
@@ -261,7 +441,7 @@ renders a committed snapshot.
 
 ---
 
-## 6. Deploy
+## 7. Deploy
 
 One container (`Dockerfile`): Node builds the web app, Python serves it same-origin
 with the API. Run it locally exactly as it runs in production:
@@ -349,7 +529,7 @@ content hashes, and approvers were verified identical to the source.
 
 ---
 
-## 7. Where to go deeper
+## 8. Where to go deeper
 
 - **[architecture.md](architecture.md)** — the layering, the ports/adapters, why
   `planner-core` cannot import the agents.
@@ -358,6 +538,8 @@ content hashes, and approvers were verified identical to the source.
   assumptions.
 - **[decisions.md](decisions.md)** — the running ADR log: every non-trivial choice
   with its reasoning.
+- **[mcp-demo.md](mcp-demo.md)** — a five-minute conversational demo script for the
+  MCP server: the questions, the tool each should route to, and the numbers to expect.
 - **[case-study.md](case-study.md)** — the agent's plan vs. the real migration.
 - **The flagship fixture** — `fixtures/jira-cloud-migration/`: the PRD, the
   team/constraints, and the hand-reviewed golden plan the whole demo runs on. Its

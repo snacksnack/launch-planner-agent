@@ -158,6 +158,12 @@ Client config (Claude Desktop, or any stdio MCP client):
 `LPA_DRIFT_BASE_URL` is optional — leave it unset and the drift tools report
 unavailable while every planner tool keeps working.
 
+**Six of the nine tools work on a fresh clone with no further setup**, reading the
+flagship golden rather than the database. `status.draft` needs a committed
+baseline and the drift pair need a drift service. The
+[HOWTO](docs/HOWTO.md#5-the-mcp-server--the-planner-in-conversation) covers setup,
+what each tool answers, and troubleshooting; nothing here creates a database.
+
 ### Tools
 
 | Tool | What it answers |

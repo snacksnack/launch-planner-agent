@@ -13,7 +13,6 @@ conclude the whole server is broken.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Literal
 
 from app.config import get_settings
@@ -24,6 +23,7 @@ from pydantic import BaseModel, Field
 from mcp_server import __version__
 from mcp_server.drift import probe
 from mcp_server.errors import legible_errors
+from mcp_server.resolve import plan_store_exists
 
 ComponentState = Literal["ok", "unavailable", "not_configured"]
 
@@ -48,13 +48,11 @@ class PlatformHealth(BaseModel):
 def _plan_store_health() -> ComponentHealth:
     """Read the snapshot count without creating anything.
 
-    Deliberately does *not* open a store that isn't there. `SQLiteEventStore`
-    runs its migration on construction, so probing a missing path would create
-    an empty database — a write, from the one tool whose whole job is to report
-    that this server does not write.
+    Uses the same `plan_store_exists` guard as every other read path — see its
+    docstring for why opening a missing database would be a write.
     """
     sqlite_path = get_settings().sqlite_path
-    if sqlite_path != ":memory:" and not Path(sqlite_path).exists():
+    if not plan_store_exists():
         return ComponentHealth(
             state="ok",
             detail=(
