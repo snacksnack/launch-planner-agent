@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 # installs the full monorepo into one venv (needed for import-linter + tests).
 dependencies = [
     "launch-planner-api",
+    "launch-planner-mcp",
     "planner-core",
     "agents",
 ]
@@ -15,10 +16,11 @@ dependencies = [
 package = false
 
 [tool.uv.workspace]
-members = ["apps/api", "packages/planner-core", "packages/agents"]
+members = ["apps/api", "apps/mcp", "packages/planner-core", "packages/agents"]
 
 [tool.uv.sources]
 launch-planner-api = { workspace = true }
+launch-planner-mcp = { workspace = true }
 planner-core = { workspace = true }
 agents = { workspace = true }
 
@@ -46,20 +48,37 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 testpaths = ["apps", "packages"]
 addopts = "-q"
 
-# import-linter: enforce the architectural rule that the deterministic core
-# can never depend on the LLM layer. This is checked in CI via `lint-imports`.
+# import-linter: enforce the architectural rules that the deterministic core can
+# never depend on the LLM layer, and that the MCP layer can never reach a write
+# path. Both are checked in CI via `lint-imports`.
+#
+# The MCP package is `mcp_server`, not `mcp` — `mcp` is the official SDK's own
+# top-level package, so naming ours the same would both collide in site-packages
+# and point these contracts at the SDK instead of at our code. See ADR-0027.
 [tool.importlinter]
-root_packages = ["planner_core", "agents", "app"]
-# Required because the forbidden contract names an external module (anthropic).
+root_packages = ["planner_core", "agents", "app", "mcp_server"]
+# Required because the forbidden contracts name external modules (anthropic).
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
-name = "planner_core stays deterministic (no LLM / app imports)"
+name = "planner_core stays deterministic (no LLM / app / mcp imports)"
 type = "forbidden"
 source_modules = ["planner_core"]
-forbidden_modules = ["agents", "app", "anthropic"]
+forbidden_modules = ["agents", "app", "mcp_server", "anthropic"]
 
 [[tool.importlinter.contracts]]
-name = "layered architecture: app -> agents -> planner_core"
+name = "layered architecture: mcp_server -> app -> agents -> planner_core"
 type = "layers"
-layers = ["app", "agents", "planner_core"]
+layers = ["mcp_server", "app", "agents", "planner_core"]
+
+# RC1-236: the read-only boundary. The layers contract above says which
+# direction imports may flow; this one narrows what the MCP layer may reach at
+# all. `app.cli` owns every gated action — `plan commit`, `plan jira --real`,
+# and the LLM verbs — so a tool cannot invoke one even by accident. Paired with
+# the allowlist test in apps/mcp/tests; the contract stops a module being
+# reachable, the allowlist stops a tool being exposed. Neither subsumes the other.
+[[tool.importlinter.contracts]]
+name = "mcp_server is read-only (no CLI write paths, no LLM)"
+type = "forbidden"
+source_modules = ["mcp_server"]
+forbidden_modules = ["app.cli", "agents", "anthropic"]

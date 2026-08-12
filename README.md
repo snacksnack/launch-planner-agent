@@ -26,6 +26,7 @@ not a black box.
 apps/
   web/            # Gantt UI + dashboard (Vite): decisions, RAID, simulate, forecast, baseline, status, Jira
   api/            # FastAPI: ingestion, agent orchestration, persistence
+  mcp/            # MCP server (package `mcp_server`): the planner as conversational tools — read-only
 packages/
   planner-core/   # task graph, CPM/critical path, validation, plan-store models — ZERO LLM deps
   agents/         # work breakdown, dependency, RAID, status agents (LLM)
@@ -129,6 +130,63 @@ uv run lint-imports           # enforce planner-core has no LLM/app deps
 uv run pytest                 # Python tests across all packages
 (cd apps/web && npm test)     # frontend unit tests (Vitest) for the UI's pure logic
 ```
+
+## MCP server — the planner as conversational tools
+
+The planner is also an [MCP](https://modelcontextprotocol.io/) server, so any MCP
+client can drive it in conversation: *"what's the P80 launch date if the auth work
+slips a week?"* → tool call → a real number out of the real CPM engine.
+
+```bash
+uv run launch-planner-mcp            # stdio; a client spawns this, you rarely run it by hand
+```
+
+Client config (Claude Desktop, or any stdio MCP client):
+
+```json
+{
+  "mcpServers": {
+    "launch-planner": {
+      "command": "uv",
+      "args": ["run", "--directory", "/absolute/path/to/launch-planner-agent", "launch-planner-mcp"],
+      "env": { "LPA_DRIFT_BASE_URL": "" }
+    }
+  }
+}
+```
+
+`LPA_DRIFT_BASE_URL` is optional — leave it unset and the drift tools report
+unavailable while every planner tool keeps working.
+
+**Read-only, and enforced rather than asserted.** No tool writes to the plan
+store, writes to Jira, calls an LLM, or sends anything. `plan.simulate` takes a
+what-if scenario but applies it to an in-memory copy and persists nothing.
+Committing a plan, generating Jira tickets, and running the agents stay CLI-only
+behind a human approval gate. Two mechanisms hold the line, and they cover
+different things:
+
+- an **allowlist test** (`apps/mcp/tests/test_allowlist.py`) asserting the
+  registered tool set exactly equals `mcp_server.allowlist.TOOL_ALLOWLIST` — a
+  new tool fails CI until someone consciously adds it
+- an **import-linter contract** (`mcp_server is read-only`) stopping the package
+  from importing `app.cli`, `agents`, or `anthropic` at all
+
+The contract stops a module being reachable; the allowlist stops a tool being
+exposed. Elsewhere in this repo read-only is structural — the deployed API simply
+has no write endpoints — but the MCP process runs *inside* the repo and could
+import those paths, so here it is enforced. See
+[ADR-0027](docs/decisions.md#adr-0027--the-mcp-server-lives-in-the-repo-and-trades-a-structural-guarantee-for-an-enforced-one).
+
+### Tools
+
+| Tool | What it answers |
+| --- | --- |
+| `platform.health` | Is the plan store readable? Is the drift service answering? |
+
+Eight more are planned under epic RC1-231 (`plan.list`, `plan.get`,
+`plan.critical_path`, `plan.simulate`, `plan.forecast`, `drift.check`,
+`drift.explain`, `status.draft`). The table grows one story at a time; the
+allowlist is the source of truth for what is actually exposed today.
 
 ## Deploy
 

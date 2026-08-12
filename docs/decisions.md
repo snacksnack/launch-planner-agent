@@ -12,6 +12,69 @@ to).
 
 ---
 
+## ADR-0027 — The MCP server lives in the repo, and trades a structural guarantee for an enforced one
+
+**Date:** 2026-08-11 · **Ticket:** RC1-236 (RC1-231 P1) · **Status:** Accepted
+
+**Context.** RC1-231 exposes the platform as MCP tools. Six of the eight planned
+tools are planner tools; only the drift pair belongs to another service. Two
+questions had to be settled before any code: where the server lives, and what
+the answer costs.
+
+**Explanation.** *In this repo, as a fourth workspace member.* `apps/mcp/` sits
+beside `apps/api` exactly as a second entrypoint should, and `uv sync
+--all-packages` installs it into the same venv. The decisive advantage is that
+the tools **import `planner_core` and `app` in process** rather than calling the
+HTTP API: the CLI-parity requirement (RC1-243) stops being a test of two
+implementations agreeing and becomes tautological, because there is one engine.
+An HTTP client would have been a second caller of the same math with its own
+argument handling to drift.
+
+*The importable package is `mcp_server`, not `mcp`.* The ticket originally said
+`mcp`, which cannot work: `mcp` is the official SDK's own top-level package
+(`from mcp.server import MCPServer`), so a workspace member owning `mcp/` would
+collide with it in site-packages, and `root_packages = ["mcp"]` would point
+import-linter at the SDK instead of at our code. The directory stays `apps/mcp/`
+and the distribution is `launch-planner-mcp`; only the import name changes.
+
+*The cost, stated plainly.* Everywhere else the read-only claim is **structural**:
+the deployed API has no write or LLM endpoints, so `plan commit` and `plan jira`
+are unreachable from the served surface (ADR-0020). An in-repo MCP process breaks
+that — it *can* import those paths. The guarantee therefore drops from
+"impossible" to "enforced", and enforcement is two mechanisms that cover
+different things: an **allowlist test** asserting the registered tool set equals
+`TOOL_ALLOWLIST`, and a third **import-linter `forbidden` contract** stopping
+`mcp_server` reaching `app.cli`, `agents`, or `anthropic`. The contract stops a
+module being reachable; the allowlist stops a tool being exposed. Verified by
+injecting each violation and watching CI go red — notably, `mcp_server` importing
+`app.cli` trips *only* the new contract, so it is not redundant with the existing
+two.
+
+*Both land in the first story, not the last.* The original plan put enforcement
+in the final ticket, which would have left the boundary unguarded across the
+whole build while the demo-worthy tools shipped. ADR-0003 made the same argument
+about import direction — a rule that rots unless something checks it should be
+checked from the first commit — and it applies unchanged here. With one tool the
+allowlist costs nothing, and it starts failing usefully the moment the second
+tool is added.
+
+**Consequences.** A fourth root package, a third import contract, and a fourth
+`layers` entry (`mcp_server -> app -> agents -> planner_core`). `platform.health`
+is the walking skeleton: it proves transport, config, and error mapping, and it
+deliberately does *not* create the SQLite store when the path is missing —
+`SQLiteEventStore` migrates on construction, so probing a missing path would have
+made the one tool that reports "this server does not write" perform a write.
+Errors are mapped to a `ToolError` subclass carrying a stable bracketed code,
+because the SDK renders `str(exc)` as the only thing the model ever sees. The
+drift client is the sole network call in the package, with an explicit timeout
+and a bounded attempt count; a 4xx is never retried, since the service answering
+is not a transport failure. stdio only in v1 — no hosting, no auth surface —
+which also means **stdout belongs to the protocol**, so a stray `print` anywhere
+in the import graph would break every client; `tests/test_stdio.py` spawns the
+real subprocess to catch that class of bug, which no in-process test can.
+
+---
+
 ## ADR-0026 — Correlated durations: a one-factor Gaussian copula
 
 **Date:** 2026-08-09 · **Ticket:** RC1-209 · **Status:** Accepted
