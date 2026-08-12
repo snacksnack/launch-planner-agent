@@ -288,6 +288,65 @@ fly deploy
 fly certs add planner.hihelloreid.com  # then CNAME the subdomain to the Fly app
 ```
 
+### Backing up the plan of record
+
+The store enforces immutability with triggers, which protects the audit trail
+from tampering and not at all from loss — it is one SQLite file on one volume.
+
+```bash
+uv run plan backup            # take one, verify it, prune old ones
+uv run plan backup --list     # what exists, newest last
+```
+
+`plan backup` uses `VACUUM INTO`, so it is safe while the service is running.
+It is **not** a file copy: since [ADR-0028](decisions.md) the store runs in WAL
+mode, and copying the `.db` alone would miss commits still sitting in the `-wal`
+sidecar. The backup is opened and read before it is stored, so a corrupt copy
+never replaces a good one.
+
+Configure the destination:
+
+```bash
+LPA_BACKUP_S3_BUCKET=my-bucket          # unset -> a local directory, which is
+LPA_BACKUP_S3_ENDPOINT_URL=https://...  # not a backup in production
+LPA_BACKUP_S3_PREFIX=plan-store/
+LPA_BACKUP_KEEP=14                      # newest N retained
+```
+
+S3 support needs the extra: `uv sync --all-packages --extra s3`. On Fly, Tigris
+is the low-friction option (`fly storage create`), which sets the AWS-style
+credentials in the app's secrets.
+
+Run it daily from the same scheduler that drives the drift detector. See
+[ADR-0029](decisions.md) for why daily rather than per-commit.
+
+### Restoring
+
+Restore never writes in place — it fetches to a path you name and verifies the
+file opens as a plan store, reporting the snapshot count.
+
+```bash
+uv run plan backup --list
+uv run plan backup --restore launch-planner-20260812T150912Z.db --into ./restored.db
+
+# Inspect before trusting it
+LPA_DATABASE_URL=sqlite:///./restored.db uv run plan history
+```
+
+Swapping it in is a deliberate step with the service stopped:
+
+```bash
+fly scale count 0                                  # stop writers first
+fly ssh console -C "mv /data/launch_planner.db /data/launch_planner.db.bak"
+# copy the restored file to /data/launch_planner.db, then
+fly scale count 1
+```
+
+Keep the displaced database as `.bak` until the restored one has served real
+traffic. A restore procedure nobody has executed is a hypothesis — this one has
+been run end to end against a seeded store, and the restored copy's versions,
+content hashes, and approvers were verified identical to the source.
+
 ---
 
 ## 7. Where to go deeper

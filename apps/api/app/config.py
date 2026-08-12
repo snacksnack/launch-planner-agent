@@ -41,6 +41,15 @@ class Settings(BaseSettings):
     jira_api_token: str | None = Field(default=None, repr=False)
     jira_project_key: str = "PMA"  # the scratch project real mode writes to
 
+    # Backups (RC1-246). All optional: with none of these set, `plan backup`
+    # writes to a local directory, which is fine for development and is NOT a
+    # backup in production — it dies with the volume the database is on.
+    backup_dir: str = "./backups"
+    backup_keep: int = 14  # newest N retained; see ADR-0029 for the cadence
+    backup_s3_bucket: str | None = None
+    backup_s3_prefix: str = "plan-store/"
+    backup_s3_endpoint_url: str | None = None  # Tigris and other S3-compatibles
+
     # Deploy (P3.3). The public demo is read-only by construction (the API has no
     # LLM/write endpoints); this flag makes that explicit and enables rate limiting.
     public_demo: bool = False
@@ -54,6 +63,11 @@ class Settings(BaseSettings):
     @property
     def has_jira_credentials(self) -> bool:
         return bool(self.jira_base_url and self.jira_email and self.jira_api_token)
+
+    @property
+    def backups_go_off_box(self) -> bool:
+        """True when backups leave the machine. A local directory does not."""
+        return bool(self.backup_s3_bucket)
 
     @property
     def sqlite_path(self) -> str:
