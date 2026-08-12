@@ -12,7 +12,15 @@ from collections.abc import Callable, Sequence
 
 from mcp.server import MCPServer
 
-from mcp_server.tools import critical_path, forecast, health, plans, simulate, status
+from mcp_server.tools import (
+    critical_path,
+    drift,
+    forecast,
+    health,
+    plans,
+    simulate,
+    status,
+)
 
 REGISTRARS: Sequence[Callable[[MCPServer], None]] = (
     health.register,
@@ -21,6 +29,7 @@ REGISTRARS: Sequence[Callable[[MCPServer], None]] = (
     simulate.register,
     forecast.register,
     status.register,
+    drift.register,
 )
 
 
