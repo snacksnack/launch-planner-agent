@@ -49,6 +49,42 @@ class DriftUnavailable(PlannerToolError):
     code = "drift_unavailable"
 
 
+class PlanNotFound(PlannerToolError):
+    """The requested plan reference matched nothing.
+
+    Always names what *would* work — a model that gets "not found" with no
+    alternatives will guess another format rather than call `plan.list`.
+    """
+
+    code = "plan_not_found"
+
+
+class AmbiguousPlanRef(PlannerToolError):
+    """A hash prefix matched more than one snapshot.
+
+    Deliberately an error rather than "pick the newest": silently choosing would
+    make the model confidently report a date computed from a plan the user did
+    not ask about, and nothing downstream would reveal it.
+    """
+
+    code = "ambiguous_plan_ref"
+
+    def __init__(self, ref: str, candidates: list[str]) -> None:
+        listed = ", ".join(candidates)
+        super().__init__(
+            f"The reference {ref!r} matches {len(candidates)} snapshots ({listed}). "
+            "Use more characters of the hash, or the version number."
+        )
+        self.candidates = candidates
+
+
+class InvalidArgument(PlannerToolError):
+    """An argument was malformed. Distinct from `plan_not_found`: the caller
+    passed something unusable, rather than naming something that isn't there."""
+
+    code = "invalid_argument"
+
+
 class UnexpectedToolFailure(PlannerToolError):
     """A bug: something the tool did not anticipate. Never a raw traceback."""
 

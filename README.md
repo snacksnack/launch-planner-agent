@@ -182,11 +182,26 @@ import those paths, so here it is enforced. See
 | Tool | What it answers |
 | --- | --- |
 | `platform.health` | Is the plan store readable? Is the drift service answering? |
+| `plan.list` | Which plans exist — every snapshot, plus the default used when no ref is given |
+| `plan.get` | When does this plan launch, how long is it, where are the milestones? |
 
-Eight more are planned under epic RC1-231 (`plan.list`, `plan.get`,
-`plan.critical_path`, `plan.simulate`, `plan.forecast`, `drift.check`,
-`drift.explain`, `status.draft`). The table grows one story at a time; the
-allowlist is the source of truth for what is actually exposed today.
+Six more are planned under epic RC1-231 (`plan.critical_path`, `plan.simulate`,
+`plan.forecast`, `drift.check`, `drift.explain`, `status.draft`). The table grows
+one story at a time; the allowlist is the source of truth for what is actually
+exposed today.
+
+**Plan references.** Tools take a friendly `ref`: a version number, a content-hash
+prefix of 4+ characters, `latest`, `baseline`, or omitted for the default plan.
+Every response echoes back a `canonical_ref` that resolves to exactly that plan,
+so a model never has to guess an ID format. An ambiguous hash prefix is an error
+listing the candidates rather than a silent pick. File paths are deliberately not
+accepted from a caller — the default is set by `LPA_PLAN_PATH`, an operator's
+decision rather than a model's.
+
+**Response sizes.** `plan.get` returns a summary by default — 1.4 KB on the
+flagship golden, against 41.7 KB for the full Gantt payload behind `detail=true`
+(3.4%; most of the difference is per-task provenance blocks carrying verbatim PRD
+quotes). Both are pinned by tests so the summary cannot quietly grow back.
 
 ## Deploy
 

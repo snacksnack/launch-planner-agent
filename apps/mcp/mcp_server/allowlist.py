@@ -35,5 +35,8 @@ TOOL_ALLOWLIST: frozenset[str] = frozenset(
     {
         # RC1-236 — the walking skeleton: transport, config, error mapping.
         "platform.health",
+        # RC1-237 — discovery. Both read the store and schedule in memory.
+        "plan.list",
+        "plan.get",
     }
 )

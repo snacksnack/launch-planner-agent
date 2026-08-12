@@ -12,9 +12,9 @@ from collections.abc import Callable, Sequence
 
 from mcp.server import MCPServer
 
-from mcp_server.tools import health
+from mcp_server.tools import health, plans
 
-REGISTRARS: Sequence[Callable[[MCPServer], None]] = (health.register,)
+REGISTRARS: Sequence[Callable[[MCPServer], None]] = (health.register, plans.register)
 
 
 def register_all(server: MCPServer) -> None:
