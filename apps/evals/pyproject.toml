@@ -1,0 +1,25 @@
+[project]
+name = "launch-planner-evals"
+version = "0.1.0"
+description = "Eval harness: frozen cases, scored characteristics, append-only run records. Measures the other layers; nothing imports it."
+requires-python = ">=3.12"
+dependencies = [
+    "planner-core",
+    "launch-planner-api",
+    "launch-planner-mcp",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+]
+
+[project.scripts]
+evals = "evals.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# Distribution `launch-planner-evals` at `apps/evals/`, importable package
+# `evals` — the same split `apps/mcp` uses (ADR-0027). Unlike that case there is
+# no collision to dodge; the prefix is just the house style for `apps/*`.
+[tool.hatch.build.targets.wheel]
+packages = ["evals"]

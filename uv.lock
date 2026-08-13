@@ -11,6 +11,7 @@ members = [
     "agents",
     "launch-planner-agent",
     "launch-planner-api",
+    "launch-planner-evals",
     "launch-planner-mcp",
     "planner-core",
 ]
@@ -638,6 +639,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "agents" },
     { name = "launch-planner-api" },
+    { name = "launch-planner-evals" },
     { name = "launch-planner-mcp" },
     { name = "planner-core" },
 ]
@@ -654,6 +656,7 @@ dev = [
 requires-dist = [
     { name = "agents", editable = "packages/agents" },
     { name = "launch-planner-api", editable = "apps/api" },
+    { name = "launch-planner-evals", editable = "apps/evals" },
     { name = "launch-planner-mcp", editable = "apps/mcp" },
     { name = "planner-core", editable = "packages/planner-core" },
 ]
@@ -693,6 +696,27 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
 ]
 provides-extras = ["s3"]
+
+[[package]]
+name = "launch-planner-evals"
+version = "0.1.0"
+source = { editable = "apps/evals" }
+dependencies = [
+    { name = "launch-planner-api" },
+    { name = "launch-planner-mcp" },
+    { name = "planner-core" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "launch-planner-api", editable = "apps/api" },
+    { name = "launch-planner-mcp", editable = "apps/mcp" },
+    { name = "planner-core", editable = "packages/planner-core" },
+    { name = "pydantic", specifier = ">=2.7" },
+    { name = "pydantic-settings", specifier = ">=2.3" },
+]
 
 [[package]]
 name = "launch-planner-mcp"
