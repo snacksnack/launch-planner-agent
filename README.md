@@ -27,6 +27,7 @@ apps/
   web/            # Gantt UI + dashboard (Vite): decisions, RAID, simulate, forecast, baseline, status, Jira
   api/            # FastAPI: ingestion, agent orchestration, persistence
   mcp/            # MCP server (package `mcp_server`): the planner as conversational tools — read-only
+  evals/          # quality harness (package `evals`): frozen cases, scored characteristics, run records
 packages/
   planner-core/   # task graph, CPM/critical path, validation, plan-store models — ZERO LLM deps
   agents/         # work breakdown, dependency, RAID, status agents (LLM)
@@ -129,6 +130,7 @@ uv run ruff check .           # lint
 uv run lint-imports           # enforce planner-core has no LLM/app deps
 uv run pytest                 # Python tests across all packages
 (cd apps/web && npm test)     # frontend unit tests (Vitest) for the UI's pure logic
+uv run evals run health       # quality evals — exit 0 pass / 1 failed case / 2 errored
 ```
 
 ## MCP server — the planner as conversational tools

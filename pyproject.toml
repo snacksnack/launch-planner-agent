@@ -8,6 +8,7 @@ requires-python = ">=3.12"
 dependencies = [
     "launch-planner-api",
     "launch-planner-mcp",
+    "launch-planner-evals",
     "planner-core",
     "agents",
 ]
@@ -16,11 +17,12 @@ dependencies = [
 package = false
 
 [tool.uv.workspace]
-members = ["apps/api", "apps/mcp", "packages/planner-core", "packages/agents"]
+members = ["apps/api", "apps/mcp", "apps/evals", "packages/planner-core", "packages/agents"]
 
 [tool.uv.sources]
 launch-planner-api = { workspace = true }
 launch-planner-mcp = { workspace = true }
+launch-planner-evals = { workspace = true }
 planner-core = { workspace = true }
 agents = { workspace = true }
 
@@ -56,20 +58,24 @@ addopts = "-q"
 # top-level package, so naming ours the same would both collide in site-packages
 # and point these contracts at the SDK instead of at our code. See ADR-0027.
 [tool.importlinter]
-root_packages = ["planner_core", "agents", "app", "mcp_server"]
+root_packages = ["planner_core", "agents", "app", "mcp_server", "evals"]
 # Required because the forbidden contracts name external modules (anthropic).
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
-name = "planner_core stays deterministic (no LLM / app / mcp imports)"
+name = "planner_core stays deterministic (no LLM / app / mcp / evals imports)"
 type = "forbidden"
 source_modules = ["planner_core"]
-forbidden_modules = ["agents", "app", "mcp_server", "anthropic"]
+forbidden_modules = ["agents", "app", "mcp_server", "evals", "anthropic"]
 
+# RC1-248: `evals` sits above everything because it measures everything. The
+# direction is the whole point — a measurement tool that something under test
+# imports has stopped being an instrument and become a dependency, and the day
+# `planner_core` imports a scorer is the day the scores stop meaning anything.
 [[tool.importlinter.contracts]]
-name = "layered architecture: mcp_server -> app -> agents -> planner_core"
+name = "layered architecture: evals -> mcp_server -> app -> agents -> planner_core"
 type = "layers"
-layers = ["mcp_server", "app", "agents", "planner_core"]
+layers = ["evals", "mcp_server", "app", "agents", "planner_core"]
 
 # RC1-236: the read-only boundary. The layers contract above says which
 # direction imports may flow; this one narrows what the MCP layer may reach at

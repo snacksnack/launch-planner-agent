@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Python (a `uv` workspace — always run through `uv run`, never a bare `python`/`pytest`):
 
 ```bash
-uv sync --all-packages        # install all three packages into one root .venv
+uv sync --all-packages        # install every workspace member into one root .venv
 uv run ruff check .           # lint (line-length 100, rules E,F,I,UP,B,SIM)
 uv run lint-imports           # enforce the architectural boundary — see below
 uv run pytest                 # whole suite (testpaths = apps, packages)
@@ -28,6 +28,10 @@ cd apps/web && npm run dev                # :5173 (VITE_API_BASE overrides the A
 uv run python -m app                      # config sanity check, no credentials needed
 ```
 
+Evals — `uv run evals run <subject>` / `uv run evals report [run-id]` (RC1-248). Exit codes
+are CI-shaped: `0` all passed, `1` a case failed, `2` a case errored (the subject produced
+nothing to score). `health` is the only subject so far and costs nothing to run.
+
 CLI — `uv run plan <verb>`, from the repo root, paths repo-relative. Deterministic verbs
 (`schedule`, `simulate`, `forecast`, `scenario`, `jira`, `propose`, `commit`, `baseline`,
 `variance`, `status`, `history`, `show`, `diff`) need no API key. Only `breakdown`,
@@ -42,7 +46,7 @@ CI (`.github/workflows/ci.yml`) runs exactly: sync → ruff → lint-imports →
 dependency graph, and it is machine-enforced.
 
 ```
-app (apps/api)  ──▶  agents (LLM)  ──▶  planner-core (deterministic)
+evals  ──▶  mcp_server  ──▶  app (apps/api)  ──▶  agents (LLM)  ──▶  planner-core
 ```
 
 - **`packages/planner-core`** — the deterministic heart: domain models, CPM/critical path
@@ -58,6 +62,11 @@ app (apps/api)  ──▶  agents (LLM)  ──▶  planner-core (deterministic)
   (`jira_client.py`), the Gantt payload builder. `planner_core` does no network or DB I/O.
 - **`apps/web`** — vanilla Vite + `frappe-gantt@0.6.1`. The *tested* contract is the
   backend payload (`app/gantt.py`), not the rendering.
+- **`apps/evals`** — the quality harness (RC1-230). Frozen `Case`s naming *characteristics*
+  rather than expected output, scored per case, appended to a run log carrying subject
+  version, token cost, and latency. Top of the layers contract: it may import everything,
+  nothing may import it. **Deliberately not a shared library yet** — one consumer means any
+  interface is a guess; the extraction is RC1-252. See ADR-0030.
 
 ### The enforced rule
 

@@ -12,6 +12,89 @@ to).
 
 ---
 
+## ADR-0030 — Evals live with the code they test, and the shared library is deferred
+
+**Date:** 2026-08-13 · **Ticket:** RC1-248 · **Status:** Accepted
+
+**Context.** RC1-230 wants a regression suite across five LLM systems spread over
+three repos: the MCP server and the planner agents here, the drift digest in
+`tpm-automation-platform`, the review loop in `pr-request-agent`. Five subjects
+and no majority repo is exactly the shape that argues for a standalone
+`agent-evals` repo, and the epic's first draft said so — the harness is generic,
+each subject would be invoked as a black box through its CLI or HTTP surface,
+and the harness itself becomes one legible portfolio artifact instead of three
+scattered test directories.
+
+**Explanation.** *A standalone repo needs cross-repo dispatch, and that is the
+tell.* The argument survives until the CI story: a prompt edit in
+`tpm-automation-platform` has to fire a suite living somewhere else, which means
+`repository_dispatch`, a token, and a scheduled-run fallback for when the
+dispatch silently stops firing. Plumbing invented to work around a repo choice
+is evidence against the repo choice — the same reasoning that put the MCP server
+in this repo rather than behind the HTTP API in ADR-0027, where the decisive
+argument was that the alternative needed a second caller with its own argument
+handling to drift. **An eval is a test, and tests belong with the code they
+test.** Suites live in each subject repo and ride the
+`ci.yml` already sitting there: a prompt edit runs its evals on the same push,
+with no coordination and no gate that quietly never fires.
+
+*The harness starts here because the first subject is here.* `platform.health`
+and then MCP tool selection (RC1-249) are both `apps/mcp`, so `apps/evals` is a
+fifth workspace member and nothing crosses a repo boundary yet.
+
+*No shared library in this story, deliberately.* The end state does need one —
+`Case`, run records, the calibrated judge, the groundedness scorer — consumed by
+git ref, not published, because it is a library and nothing is deployed. It is
+not built here. There is one consumer, and an interface generalised from a
+single implementation is a guess; the extraction happens in RC1-252, when the
+drift digest becomes the second consumer and the seams are visible rather than
+imagined. So there is no `Subject` protocol and no `Scorer` protocol — a subject
+is a module exposing `NAME`, `CASES`, `version()`, and `run()`, duck-typed, and
+`SUBJECTS` is a dict. The acceptance criterion was written as a prohibition on
+purpose: *if this story produces a shared library, it was built too early.*
+
+*Where that library eventually lives is open.* A `uv` workspace member is not
+cleanly installable from another repo — a consumer would have to depend on
+`git+…launch-planner-agent#subdirectory=apps/evals`, pinning to a SHA that moves
+for unrelated reasons and cloning this whole repo to get it. The likely answer
+is a small library repo of its own, with the suites still living in each subject
+repo. RC1-252 decides; this ADR records that it is a known, deferred question
+rather than an oversight.
+
+*`evals` sits at the top of the import-linter layers*, above `mcp_server`, and is
+added to `planner_core`'s forbidden modules. The direction is the whole point: a
+measurement tool that something under test imports has stopped being an
+instrument and become a dependency, and the day `planner_core` imports a scorer
+is the day the scores stop meaning anything.
+
+*Cases name characteristics, never expected output.* Every subject under RC1-230
+is generative or diagnostic and its output is legitimately variable; a case
+pinning an exact string fails on a harmless rewording, and a brittle assertion
+gets deleted rather than fixed. `Case` is frozen for the same reason the plan
+store is append-only — ground truth a scorer could edit mid-run is not ground
+truth.
+
+*Every run records version, cost, and latency from the first run*, including the
+zero-cost deterministic ones, and `model`/`prompt_version` are explicitly `None`
+rather than absent. A score with no version attached cannot be acted on: quality
+dropped, and nothing says whether the model, the prompt, or the case set moved.
+RC1-254's budgets and RC1-255's trend view are cheap only because the fields
+were there from the start rather than retrofitted.
+
+**Consequences.** Three repos will each grow an eval suite and a CI gate rather
+than one repo orchestrating three. The trend view in RC1-255 has to read run
+records written in three places, which is the real cost of this choice and is
+called out in that story. `RunStore` is append-only by structure and not by
+storage-layer enforcement — a text file has no equivalent of the plan store's
+triggers (ADR-0012) — so a test asserts that appending leaves earlier lines
+byte-identical, and anything wanting to rewrite history has to bypass the class
+visibly. Run ids carry a microsecond stamp rather than the second-precision
+stamp backup keys use (ADR-0029), because re-running a subject twice while
+iterating on a case file is normal and second precision made the second run
+collide.
+
+---
+
 ## ADR-0029 — Backups: `VACUUM INTO`, daily, verified before they are trusted
 
 **Date:** 2026-08-12 · **Ticket:** RC1-246 · **Status:** Accepted

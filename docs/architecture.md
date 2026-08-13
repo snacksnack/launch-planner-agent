@@ -15,8 +15,7 @@
 ## Package layout & dependency direction
 
 ```text
-app  ──▶  agents  ──▶  planner-core
-(apps/api)          (LLM layer)      (deterministic core)
+evals  ──▶  mcp_server  ──▶  app  ──▶  agents  ──▶  planner-core
 ```
 
 - **`planner-core`** — the deterministic heart. Task graph, dependency model,
@@ -27,17 +26,32 @@ app  ──▶  agents  ──▶  planner-core
 - **`app` (apps/api)** — FastAPI. Ingestion, agent orchestration, persistence.
   **Owns the actual database connection**; the plan-store *models* live in
   `planner-core`.
+- **`mcp_server` (apps/mcp)** — the planner as conversational MCP tools. Calls
+  `app` and `planner-core` **in process**, so CLI parity is structural rather
+  than two implementations agreeing (ADR-0027). Read-only by contract.
+- **`evals` (apps/evals)** — the quality harness (ADR-0030). Runs a subject
+  against frozen cases, scores *characteristics* rather than expected output,
+  and appends a run record carrying subject version, token cost, and latency.
 - **`apps/web`** — the Gantt UI (Vite), served/consumed by the API.
+
+The two ends of that chain are the interesting ones: `planner-core` may import
+nothing above it, and `evals` may import everything and is imported by nothing.
+A deterministic core that could reach LLM code stops being trustworthy; a
+measurement tool that something under test imports has stopped being an
+instrument and become a dependency.
 
 ### The enforced rule
 
-`planner-core` must **never** import `agents`, `app`, or `anthropic`. The
-deterministic engine cannot even reference LLM code. This is enforced two ways:
+`planner-core` must **never** import `agents`, `app`, `mcp_server`, `evals`, or
+`anthropic`. The deterministic engine cannot even reference LLM code. This is
+enforced two ways:
 
 1. **CI** runs [import-linter](https://import-linter.readthedocs.io/)
-   (`uv run lint-imports`) with a `forbidden` contract on `planner_core` and a
-   `layers` contract (`app` → `agents` → `planner_core`). A violating import
-   fails the build.
+   (`uv run lint-imports`) with three contracts: a `forbidden` contract on
+   `planner_core`, a `layers` contract (`evals` → `mcp_server` → `app` →
+   `agents` → `planner_core`), and a second `forbidden` contract keeping
+   `mcp_server` out of the write and LLM paths (`app.cli`, `agents`,
+   `anthropic`). A violating import fails the build.
 2. A unit test in `planner-core` asserts `anthropic` is not imported
    transitively.
 

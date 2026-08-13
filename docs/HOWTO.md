@@ -50,6 +50,7 @@ uv run ruff check .          # lint
 uv run lint-imports          # enforce: planner-core imports no LLM/app code
 uv run pytest                # the Python test suite
 (cd apps/web && npm test)    # the frontend unit tests (Vitest)
+uv run evals run health      # the quality harness — see §8
 ```
 
 ---
@@ -529,7 +530,61 @@ content hashes, and approvers were verified identical to the source.
 
 ---
 
-## 8. Where to go deeper
+## 8. The eval harness — how good is the output?
+
+Every other section describes what the system *does*. This one is about the
+question an interviewer asks next: how do you know the output is any good? The
+harness runs a **subject** against frozen **cases**, scores named
+**characteristics** of what came back, and appends a **run record**.
+
+```bash
+uv run evals run health          # run a subject; -v also lists passing characteristics
+uv run evals report              # the most recent run
+uv run evals report <run-id>     # a specific one; --quiet shows only failures
+```
+
+Exit codes are CI-shaped from the start, because RC1-255 turns this into a gate:
+
+| Code | Meaning |
+| --- | --- |
+| `0` | every case passed |
+| `1` | a case failed its characteristics — the subject answered badly |
+| `2` | a case errored — the subject produced nothing to score |
+
+`2` outranks `1` deliberately. "The thing under test is broken" and "the thing
+under test answered badly" need different people looking at them.
+
+**Cases name characteristics, never expected output.** These are generative and
+diagnostic systems whose output is legitimately variable; a case pinning an exact
+string fails on a harmless rewording, and a brittle assertion gets deleted rather
+than fixed. So a case says *"the snapshot count is reported"*, and the subject
+owns the predicate that decides it. A failing characteristic reports what it saw:
+
+```text
+  FAIL health.populated-store  (32 ms)
+    ✗ reports-snapshot-count: expected 1 snapshot(s) in the detail, got 'no plan store at …'
+```
+
+**Every run records what produced it.** Subject version, model, prompt version,
+tokens, cost, and latency — including when the cost is zero, because *"this
+subject costs nothing to evaluate"* is a claim worth being able to make from the
+record rather than from memory. A score with no version attached cannot be acted
+on: quality dropped, and nothing says whether the model, the prompt, or the case
+set moved.
+
+`health` is the only subject so far and is deliberately trivial — a walking
+skeleton proving case → run → score → record before any golden set exists. It is
+not thorough coverage of `platform.health`; `apps/mcp/tests` does that directly
+and more cheaply. Real subjects start with MCP tool selection (RC1-249).
+
+Run records land in `./eval-runs/runs.jsonl` (`LPA_EVALS_RUNS_PATH`), append-only
+and gitignored. See [ADR-0030](decisions.md) for why the harness lives here
+rather than in a repo of its own, and why there is deliberately no shared library
+yet.
+
+---
+
+## 9. Where to go deeper
 
 - **[architecture.md](architecture.md)** — the layering, the ports/adapters, why
   `planner-core` cannot import the agents.
