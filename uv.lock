@@ -702,8 +702,10 @@ name = "launch-planner-evals"
 version = "0.1.0"
 source = { editable = "apps/evals" }
 dependencies = [
+    { name = "anthropic" },
     { name = "launch-planner-api" },
     { name = "launch-planner-mcp" },
+    { name = "mcp" },
     { name = "planner-core" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -711,8 +713,10 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anthropic", specifier = ">=0.40" },
     { name = "launch-planner-api", editable = "apps/api" },
     { name = "launch-planner-mcp", editable = "apps/mcp" },
+    { name = "mcp", specifier = ">=2" },
     { name = "planner-core", editable = "packages/planner-core" },
     { name = "pydantic", specifier = ">=2.7" },
     { name = "pydantic-settings", specifier = ">=2.3" },

@@ -127,25 +127,35 @@ the rest trustworthy:
 
 ## Recording the discoverability result
 
-For RC1-243's acceptance criterion, note for each question whether the model
-picked the intended tool unassisted, and record the outcome here or in the
-ticket. This is a manual pass on purpose: it needs a real model holding the
-tools, and it would otherwise be a nondeterministic, credential-requiring test in
-a suite whose defining property is that it runs credential-free.
+**This is no longer a manual pass** (RC1-249). Every question above runs as an
+eval case, alongside paraphrases and indirect phrasings the script does not
+cover:
 
-| # | Question | Expected tool | Routed correctly? |
-| --- | --- | --- | --- |
-| 1 | What plans do you have? | `plan.list` | |
-| 2a | When does it launch? | `plan.get` | |
-| 2b | What's driving that date? | `plan.critical_path` | |
-| 3 | What if legal sign-off slips a month? | `plan.simulate` | |
-| 4 | How confident are we in that date? | `plan.forecast` | |
-| 5 | Anything drifting? | `drift.check` | |
-| 6 | Why did that fire? | `drift.explain` | |
-| 7 | Draft the weekly status update. | `status.draft` | |
+```bash
+uv run evals run tool-selection        # needs LPA_ANTHROPIC_API_KEY; spends tokens
+```
+
+It reports routing accuracy and a **confusion matrix** — which wrong tool was
+chosen when the intended one wasn't, which is the part that tells you *which
+description to fix*. A wrong pick still means a tool description is wrong; fix
+the description, not the question.
+
+The earlier argument for keeping this manual — that it needs a real model and
+would otherwise put a nondeterministic, credential-requiring test in a suite
+whose defining property is that it runs credential-free — still holds, and is
+why the eval is a **separate command** rather than part of `uv run pytest`. The
+suite stays credential-free; the eval is billed and run deliberately. See
+ADR-0031.
+
+This script remains the **recording** script: it is paced for a five-minute
+walkthrough and says what to narrate. The eval covers a superset of its
+questions and none of its narration.
 
 The pair to watch is **2b vs 4**: "what's driving the date" and "how confident
 are we" are easy to conflate, and both tools talk about critical paths.
 `plan.critical_path` is one deterministic pass; `plan.forecast` is the
 criticality index across sampled runs. Their descriptions name each other
-specifically to keep them apart.
+specifically to keep them apart — and the eval carries that pair as an explicit
+near-miss case in both directions, scoring "chose the right tool" separately
+from "avoided the confusable sibling", because those are two different
+description bugs with two different fixes.

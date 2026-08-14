@@ -25,7 +25,7 @@ from tempfile import TemporaryDirectory
 
 from evals.config import get_eval_settings
 from evals.record import RunRecord, RunStore, new_run_id
-from evals.subjects import SUBJECTS
+from evals.subjects import BILLED, SUBJECTS
 
 _PASS = "pass"
 _FAIL = "FAIL"
@@ -41,6 +41,26 @@ def cmd_run(args: argparse.Namespace) -> int:
         known = ", ".join(sorted(SUBJECTS)) or "(none registered)"
         print(f"unknown subject {args.subject!r}. Known subjects: {known}", file=sys.stderr)
         return 2
+
+    # A subject may declare a precondition (credentials, a reachable service).
+    # Optional and duck-typed: `getattr` rather than a base class, because one
+    # subject needing it is not two implementations to generalise from.
+    check = getattr(subject, "preflight", None)
+    if check is not None:
+        try:
+            check()
+        except Exception as exc:
+            print(f"{args.subject} cannot run: {exc}", file=sys.stderr)
+            return 2
+
+    if args.subject in BILLED:
+        # Said out loud rather than prompted for: this has to run unattended in
+        # CI, and a subject that quietly spends tokens is the kind of surprise
+        # RC1-254's budgets exist to prevent.
+        print(
+            f"{args.subject} drives a real model — {len(subject.CASES)} cases will spend tokens.",
+            file=sys.stderr,
+        )
 
     started_at = datetime.now(UTC)
     results = []
@@ -110,8 +130,74 @@ def _print_report(record: RunRecord, *, verbose: bool) -> None:
         for characteristic in result.characteristics:
             if characteristic.passed and not verbose:
                 continue
-            mark = "✓" if characteristic.passed else "✗"
-            print(f"    {mark} {characteristic.name}: {characteristic.detail}")
+            # An advisory miss gets its own mark and an explicit label: RC1-255
+            # requires the output to distinguish what gates from what merely
+            # reports, so a reader can never mistake one for the other.
+            if characteristic.advisory:
+                mark = "✓" if characteristic.passed else "~"
+                label = "" if characteristic.passed else " [advisory]"
+            else:
+                mark = "✓" if characteristic.passed else "✗"
+                label = ""
+            print(f"    {mark} {characteristic.name}{label}: {characteristic.detail}")
+
+    _print_confusion(record)
+
+
+def _print_confusion(record: RunRecord) -> None:
+    """Which tool was chosen when the intended one wasn't.
+
+    A pass rate says something broke; this says *which description competed*,
+    which is the part you can act on. Only mis-routes are listed — a matrix of
+    mostly-zeroes for nine tools is harder to read than the handful of confusion
+    pairs that actually occurred (RC1-249).
+    """
+    confusions: dict[tuple[str, str], int] = {}
+    routed = 0
+    for result in record.results:
+        expected = result.observations.get("expected_tool")
+        if expected is None:
+            continue
+        routed += 1
+        actual = result.observations.get("actual_tool") or "(no tool called)"
+        if actual != expected:
+            confusions[(expected, actual)] = confusions.get((expected, actual), 0) + 1
+
+    if not routed:
+        return
+
+    reached = sum(
+        1
+        for r in record.results
+        if r.observations.get("expected_tool") in (r.observations.get("tools_called") or [])
+    )
+    direct = routed - sum(confusions.values())
+    print(f"\n  routing      {reached}/{routed} called the intended tool")
+    print(f"  directness   {direct}/{routed} went straight to it, no preparatory call")
+    if not confusions:
+        return
+    # First pick only. A wrong *first* pick is what points at a competing
+    # description; where the intended tool was still reached afterwards, the
+    # row is a detour rather than a miss, and is labelled as such.
+    print("  confusion    intended -> chosen first")
+    for (expected, actual), count in sorted(confusions.items(), key=lambda kv: -kv[1]):
+        # Split the row: a detour still reached the intended tool, a miss never
+        # did. Labelling the whole row by whether *any* case detoured would call
+        # a real miss a detour — which is the opposite of actionable.
+        detours = sum(
+            1
+            for r in record.results
+            if r.observations.get("expected_tool") == expected
+            and r.observations.get("actual_tool") == actual
+            and expected in (r.observations.get("tools_called") or [])
+        )
+        misses = count - detours
+        parts = []
+        if misses:
+            parts.append(f"{misses} miss" + ("es" if misses > 1 else ""))
+        if detours:
+            parts.append(f"{detours} detour" + ("s" if detours > 1 else ""))
+        print(f"               {expected} -> {actual}  ({', '.join(parts)})")
 
 
 def main(argv: list[str] | None = None) -> int:

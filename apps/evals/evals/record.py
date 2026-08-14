@@ -18,6 +18,7 @@ import json
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -72,6 +73,15 @@ class CharacteristicResult(BaseModel):
     name: str
     passed: bool
     detail: str
+    advisory: bool = Field(
+        default=False,
+        description=(
+            "Reported but never gating. RC1-255 requires that dimensions which have not "
+            "earned the right to fail a build cannot do so, and that the output says which "
+            "is which — a measurement worth watching is not automatically one worth "
+            "blocking on."
+        ),
+    )
 
 
 class CaseResult(BaseModel):
@@ -89,10 +99,26 @@ class CaseResult(BaseModel):
     characteristics: list[CharacteristicResult] = Field(default_factory=list)
     usage: Usage
     error: str | None = None
+    observations: dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "Structured facts a report aggregates across cases, distinct from pass/fail. "
+            "A confusion matrix needs to know which wrong tool was chosen, and 'it failed' "
+            "does not carry that — see RC1-249."
+        ),
+    )
 
     @property
     def passed(self) -> bool:
-        return self.error is None and all(c.passed for c in self.characteristics)
+        """Advisory characteristics are excluded — that is what makes them advisory."""
+        return self.error is None and all(
+            c.passed for c in self.characteristics if not c.advisory
+        )
+
+    @property
+    def advisory_failures(self) -> list[CharacteristicResult]:
+        """Failing-but-not-gating. Worth surfacing in a report; never a build break."""
+        return [c for c in self.characteristics if c.advisory and not c.passed]
 
 
 class RunRecord(BaseModel):

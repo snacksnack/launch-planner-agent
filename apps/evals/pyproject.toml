@@ -7,6 +7,11 @@ dependencies = [
     "planner-core",
     "launch-planner-api",
     "launch-planner-mcp",
+    # RC1-249: the tool-selection subject hands the shipped MCP surface to a real
+    # model. `mcp` is here for the stdio client, not the server — the harness is
+    # a client of `apps/mcp`, the same way any other MCP client is.
+    "anthropic>=0.40",
+    "mcp>=2",
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
 ]

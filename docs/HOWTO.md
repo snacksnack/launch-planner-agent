@@ -572,15 +572,46 @@ record rather than from memory. A score with no version attached cannot be acted
 on: quality dropped, and nothing says whether the model, the prompt, or the case
 set moved.
 
-`health` is the only subject so far and is deliberately trivial — a walking
-skeleton proving case → run → score → record before any golden set exists. It is
-not thorough coverage of `platform.health`; `apps/mcp/tests` does that directly
-and more cheaply. Real subjects start with MCP tool selection (RC1-249).
+### The subjects
+
+| Subject | Cost | What it measures |
+| --- | --- | --- |
+| `health` | free | A walking skeleton — proves case → run → score → record. Not thorough coverage of `platform.health`; `apps/mcp/tests` does that directly and more cheaply. |
+| `tool-selection` | **billed** | Whether a real model, handed the shipped MCP tool descriptions, calls the right tool with the right arguments. |
+
+**`tool-selection` spends tokens and needs `LPA_ANTHROPIC_API_KEY`.** It is
+deliberately *not* part of `uv run pytest` — the suite stays credential-free, and
+the eval is a separate command you run on purpose (ADR-0031). The CLI says so on
+stderr before spending anything.
+
+It answers the question §5 leaves open: the nine tools route correctly *because
+of prose in their descriptions*, and nothing else checks that. It spawns
+`python -m mcp_server` over stdio and hands the real definitions to the model —
+a description that only exists as a Python constant is not what a model reads.
+It runs with **no system prompt**, because the claim under test is that the
+descriptions alone are enough.
+
+Its most useful output is not the pass rate but the **confusion matrix**:
+
+```text
+  routing      12/15 to the intended tool
+  confusion    intended -> chosen
+               plan.critical_path -> plan.forecast  (x2)
+               plan.get -> plan.list
+```
+
+A pass rate says something broke. That says *which description competed*, which
+is the thing you can go and fix. Routing accuracy is scored separately from
+"avoided the confusable sibling", because choosing `plan.forecast` when
+`plan.critical_path` was meant is a different description bug from choosing
+something unrelated.
 
 Run records land in `./eval-runs/runs.jsonl` (`LPA_EVALS_RUNS_PATH`), append-only
-and gitignored. See [ADR-0030](decisions.md) for why the harness lives here
-rather than in a repo of its own, and why there is deliberately no shared library
-yet.
+and gitignored. Each carries a `prompt_version` that hashes the tool definitions
+the model saw, so degrading a description changes the recorded version alongside
+the score — attribution without anyone remembering to bump a marker. See
+[ADR-0030](decisions.md) for why the harness lives here rather than in a repo of
+its own, and [ADR-0031](decisions.md) for the billed-vs-free split.
 
 ---
 
