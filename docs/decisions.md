@@ -12,6 +12,60 @@ to).
 
 ---
 
+## ADR-0032 — Tests read no `.env`, enforced from the repo root
+
+**Date:** 2026-08-13 · **Ticket:** RC1-259 · **Status:** Accepted
+
+**Context.** `.env.example` opens with *"Copy to `.env` and fill in as needed."*
+Doing exactly that broke the suite: `Settings()` reads `.env` relative to the
+working directory, the example ships `LPA_BACKUP_S3_BUCKET=` as an empty
+assignment, and pydantic-settings resolves that to `""` rather than `None`, so
+`test_credentials_are_optional_at_boot` failed. CI stayed green because CI has
+no `.env` — the failure only appeared on a configured machine.
+
+**Explanation.** *The one assertion was the symptom.* The gap was that tests read
+the environment of whoever ran them, so the same commit passed or failed
+depending on the machine. That is the class of failure that quietly erodes trust
+in a suite: once a red run might be "just my `.env`", every red run is
+negotiable. `apps/mcp/tests/conftest.py` had already written this trap down for
+its own two settings objects; nothing covered `apps/api`, and nothing covered
+`.env` itself.
+
+*Redirect the file, do not enumerate the variables.* An autouse fixture points
+each settings class's `env_file` at a path that does not exist. The alternative —
+setting every `LPA_*` variable to a known value — fails open: a variable added
+later is unprotected until someone remembers to add it, which is how the gap
+appeared in the first place. Redirecting the source protects every field,
+including ones not yet written.
+
+*Real environment variables still win*, which is load-bearing rather than
+incidental: much of the API suite configures itself with `monkeypatch.setenv`,
+and a fixture that neutered that would have broken far more than it fixed. What
+changes is only that an **unset** value resolves to its declared default instead
+of to whatever is on disk.
+
+*At the repo root, not in one app's tests.* The property worth having is
+workspace-wide — no test anywhere reads a developer's `.env`. The cost is that
+the root `conftest.py` imports all three settings classes and their cached
+accessors, and **a new env-backed settings class must be registered there** or
+its tests silently start reading `.env` again.
+
+*`.env.example` is left alone.* Commenting out its empty optionals would stop
+this particular trip-wire, but the bug is a test reading the developer's
+environment; an example file that happens not to trigger it would hide the
+problem rather than fix it. At runtime the empty string is harmless — every
+credential gate is `bool(...)`, so `""` reads as unconfigured, which is correct.
+That is now pinned by a test rather than left to luck, so a later refactor to
+`is not None` cannot quietly declare an unconfigured service live.
+
+**Consequences.** The suite is machine-independent: verified by running it with
+and without a `.env` and comparing, not assumed. Both regression tests were
+confirmed to fail with the fixture removed. Tests that still do their own
+`get_settings.cache_clear()` dance are now redundant but harmless, and can be
+simplified opportunistically rather than in one sweep.
+
+---
+
 ## ADR-0031 — Billed evals are a separate surface from the credential-free suite
 
 **Date:** 2026-08-13 · **Ticket:** RC1-249 · **Status:** Accepted

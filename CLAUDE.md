@@ -127,6 +127,11 @@ the work to `agents` and pass the result down — not to relax the contract.
   ticket key.
 - Config is env-backed via pydantic-settings with the **`LPA_`** prefix
   (`apps/api/app/config.py`, documented in `.env.example`). Credentials are always
-  optional — the app and the whole demo must keep booting without them.
+  optional — the app and the whole demo must keep booting without them. **Tests read
+  no `.env`**: the root `conftest.py` points every settings class at a file that isn't
+  there, so an unset value resolves to its declared default rather than to whatever is
+  on the developer's machine (ADR-0032). A **new env-backed settings class must be
+  registered in that conftest**, or its tests silently start reading `.env` again.
+  Real environment variables still win, so `monkeypatch.setenv` works as before.
 - The UI surface count is stated in three places (the on-domain overview page,
   `docs/quickstart.html`, and `docs/HOWTO.md` §2); adding a panel means updating all three.
