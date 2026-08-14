@@ -30,7 +30,9 @@ uv run python -m app                      # config sanity check, no credentials 
 
 Evals — `uv run evals run <subject>` / `uv run evals report [run-id]` (RC1-248). Exit codes
 are CI-shaped: `0` all passed, `1` a case failed, `2` a case errored (the subject produced
-nothing to score). `health` is the only subject so far and costs nothing to run.
+nothing to score). Subjects: `health` (free, deterministic) and `tool-selection` (**billed** —
+drives a real model over the shipped stdio MCP surface, needs `LPA_ANTHROPIC_API_KEY`, and is
+deliberately not part of `uv run pytest` so the suite stays credential-free; ADR-0031).
 
 CLI — `uv run plan <verb>`, from the repo root, paths repo-relative. Deterministic verbs
 (`schedule`, `simulate`, `forecast`, `scenario`, `jira`, `propose`, `commit`, `baseline`,
@@ -66,7 +68,9 @@ evals  ──▶  mcp_server  ──▶  app (apps/api)  ──▶  agents (LLM)
   rather than expected output, scored per case, appended to a run log carrying subject
   version, token cost, and latency. Top of the layers contract: it may import everything,
   nothing may import it. **Deliberately not a shared library yet** — one consumer means any
-  interface is a guess; the extraction is RC1-252. See ADR-0030.
+  interface is a guess; the extraction is RC1-252. See ADR-0030. Billed subjects drive a
+  real model and stay out of the credential-free suite (ADR-0031); prices are a dated local
+  snapshot in `evals/pricing.py`, and an unknown model raises rather than costing zero.
 
 ### The enforced rule
 

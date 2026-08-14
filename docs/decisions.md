@@ -12,6 +12,78 @@ to).
 
 ---
 
+## ADR-0031 — Billed evals are a separate surface from the credential-free suite
+
+**Date:** 2026-08-13 · **Ticket:** RC1-249 · **Status:** Accepted
+
+**Context.** `docs/mcp-demo.md` argued, correctly, that the RC1-243
+discoverability check had to stay a manual pass: *"it needs a real model holding
+the tools, and it would otherwise be a nondeterministic, credential-requiring
+test in a suite whose defining property is that it runs credential-free."* Both
+halves of that are still true. RC1-249 nevertheless has to automate the check,
+because nine tool descriptions with no regression test is exactly the silent
+failure the epic exists to catch.
+
+**Explanation.** *The suite's credential-free property is preserved by not
+putting the eval in the suite.* `uv run pytest` never reaches a model: the
+tool-selection subject takes an injectable client, the tests drive it with a
+fake, and CI is unchanged. The eval is a separate command — `uv run evals run
+tool-selection` — that requires `LPA_ANTHROPIC_API_KEY` and spends tokens. The
+demo doc's objection was to putting a billed, nondeterministic test *in the
+suite*; it was never an argument against automating the check at all.
+`evals.subjects.BILLED` names the subjects that cost money, and the CLI says so
+on stderr before spending anything.
+
+*What is under test is a surface, not a function.* The subject spawns
+`python -m mcp_server` over stdio and hands the descriptions it gets back to the
+Messages API. A description that only exists as a Python constant is not what a
+model reads. This is the same argument `apps/mcp/tests/test_stdio.py` makes for
+driving the real transport.
+
+*No system prompt, and no sampling overrides.* The claim under test is that the
+tool descriptions **alone** route correctly, so a system prompt nudging tool
+choice would confound the measurement. Sampling parameters are not an option
+regardless — current models reject non-default `temperature`, `top_p`, and
+`top_k` outright, so determinism cannot be bought there, and disabling thinking
+measurably changes how readily a model reaches for tools, which would bias the
+exact thing being measured. The eval runs the API defaults and treats variance
+as a property to report rather than one to suppress.
+
+*Which means a single wrong pick is weak evidence, and the confusion matrix is
+the real output.* A pass rate says something broke; *which* wrong tool was
+chosen, across the whole case set, says which description to fix. The report
+lists only the confusion pairs that actually occurred — a nine-by-nine matrix of
+mostly zeroes is harder to read than the two or three collisions that happened.
+
+*`prompt_version` is a hash of the tool definitions the model saw.* That makes
+attribution mechanical rather than narrative: degrade a description and the run
+record's prompt version changes with it, so a score drop points at a specific
+surface. It is the same instinct as the `version 1` marker in
+`templates/drift_digest.md`, minus the requirement that a human remember to bump
+it.
+
+*Tool names are translated, and it is load-bearing.* MCP names them `plan.list`;
+the Messages API restricts tool names to `^[a-zA-Z0-9_-]{1,64}$`, so a dot is
+rejected. Every MCP client performs some version of this mapping, and the model
+therefore routes on `plan__list`. The bridge translates back before scoring so
+the report names shipped tools, and a test asserts every shipped name survives
+the round trip — if that ever fails, the whole surface is unusable from a model,
+silently, as a 400 per request.
+
+**Consequences.** There are now two eval surfaces with different contracts: free
+and deterministic (`health`, and the deterministic half of everything later),
+versus billed and variable. RC1-255 has to gate them differently — a billed
+subject cannot run on every push without a token budget, which is RC1-254's
+problem to solve first. Prices live in `evals/pricing.py` as a dated local
+snapshot rather than a live lookup, because a run costed against a price list
+that changed underneath it is not comparable to an earlier run; an unknown model
+raises rather than costing zero. `docs/mcp-demo.md` keeps its manual script — it
+is a recording script, and the automated eval covers a superset of its
+questions — but its "recording the discoverability result" section now points at
+the eval instead of asking a human to fill in a table.
+
+---
+
 ## ADR-0030 — Evals live with the code they test, and the shared library is deferred
 
 **Date:** 2026-08-13 · **Ticket:** RC1-248 · **Status:** Accepted
