@@ -326,20 +326,119 @@ def _asserted_about_the_plan(lowered: str, phrase: str) -> bool:
     return False
 
 
-def must_not_say(output: str, forbidden: list[str]) -> list[Violation]:
+def mentions(output: str, value: object) -> bool:
+    """Does the output state this value, in any form a narrative would use?
+
+    The mirror of the unsupported-claim check, and it needs the same care for
+    the opposite reason: a must-say check that misses a fact stated as
+    "November 13, 2026" when the fact is `2026-11-13` reports a completeness
+    failure that is not one. False negatives here are as corrosive as false
+    positives there — both end with the check muted.
+
+    Dates match in either direction (ISO or prose); numbers match on the
+    absolute value, since the sign lives in the prose ("pulled in 3 days");
+    everything else is a case-insensitive substring.
+    """
+    if value is None:
+        return False
+    text = output.lower()
+
+    if isinstance(value, str):
+        iso = _ISO_DATE.fullmatch(value.strip())
+        if iso:
+            year, month, day = (int(part) for part in iso.groups())
+            if value in output:
+                return True
+            for match in _PROSE_DATE.finditer(output):
+                found_year = int(match.group(3)) if match.group(3) else year
+                if (
+                    _MONTHS[match.group(1).lower()] == month
+                    and int(match.group(2)) == day
+                    and found_year == year
+                ):
+                    return True
+            return False
+        if value.lower() in text:
+            return True
+        # Identifier-shaped facts are stated in prose, not quoted verbatim: a
+        # status update says "the regulatory cutoff deadline", never
+        # "constraint-regulatory-cutoff". Requiring the raw id reported an
+        # omission for a fact the narrative had plainly stated — the mirror of
+        # the over-literal failure the unsupported-claim checks avoid.
+        humanised = _humanise(value)
+        # Normalise separators on *both* sides: the id humanises to
+        # "legal sign off" while the narrative writes "Legal sign-off", and a
+        # comparison that only normalised one side would still miss it.
+        return bool(humanised) and humanised in re.sub(r"[-_]", " ", text)
+
+    if isinstance(value, int | float):
+        target = abs(int(value))
+        return any(int(m.group(1)) == target for m in _DAY_COUNT.finditer(output)) or bool(
+            re.search(rf"\b{target}\b", output)
+        )
+
+    return str(value).lower() in text
+
+
+def _humanise(identifier: str) -> str:
+    """`constraint-regulatory-cutoff` -> `regulatory cutoff`.
+
+    Drops a leading namespace segment (`constraint-`, `task-`, `risk-`) and
+    turns separators into spaces. Returns "" for anything that is not
+    identifier-shaped, so ordinary prose is never loosened.
+    """
+    if " " in identifier or not re.fullmatch(r"[A-Za-z0-9]+([-_][A-Za-z0-9]+)+", identifier):
+        return ""
+    parts = re.split(r"[-_]", identifier.lower())
+    if parts[0] in {"constraint", "task", "risk", "issue", "milestone", "dep"}:
+        parts = parts[1:]
+    return " ".join(parts)
+
+
+def missing(output: str, required: list[object]) -> list[Violation]:
+    """Must-say, checked. RC1-252 requires it enforced beside must-not-say —
+    an output can invent nothing and still omit the fact that mattered."""
+    return [
+        Violation("omitted_required_fact", str(value), f"output never states {value!r}")
+        for value in required
+        if not mentions(output, value)
+    ]
+
+
+def must_not_say(
+    output: str, forbidden: list[str], *, negation_aware: bool = False
+) -> list[Violation]:
     """Declared must-not-say, alongside the derived health check.
 
     A first-class expectation rather than an afterthought: RC1-251 requires it
     beside must-say, because an output can state only true things and still
     violate its brief — editorialising severity the model was told not to decide
     is the example the drift digest prompt calls out.
+
+    `negation_aware` is opt-in rather than the default because it depends
+    entirely on what is forbidden. For event words ("slipped", "breach") a
+    negated mention is the *correct* thing to write about a quiet week — "no
+    tasks slipped" is accurate reporting, and flagging it is the same
+    false-positive class as reading "no red flags" as a red assessment. But some
+    forbidden phrases *begin* with a negator ("no changes" narrating an absent
+    baseline), and skipping those would disable the check entirely.
     """
     lowered = output.lower()
-    return [
-        Violation("said_forbidden_thing", phrase, f"output contains {phrase!r}, which it must not")
-        for phrase in forbidden
-        if phrase.lower() in lowered
-    ]
+    found = []
+    for phrase in forbidden:
+        for match in re.finditer(rf"\b{re.escape(phrase.lower())}", lowered):
+            window = lowered[max(0, match.start() - 30) : match.start()]
+            if negation_aware and any(n in window for n in _NEGATORS):
+                continue
+            found.append(
+                Violation(
+                    "said_forbidden_thing",
+                    phrase,
+                    f"output contains {phrase!r}, which it must not",
+                )
+            )
+            break
+    return found
 
 
 def rate_across(reports: list[Report]) -> float:

@@ -14,10 +14,18 @@ without anything to configure or discover.
 
 from __future__ import annotations
 
-from evals.subjects import groundedness, health, tool_selection
+from evals.subjects import (
+    groundedness,
+    health,
+    status_fallback,
+    status_narrative,
+    tool_selection,
+)
 
 SUBJECTS = {
     groundedness.NAME: groundedness,
+    status_narrative.NAME: status_narrative,
+    status_fallback.NAME: status_fallback,
     health.NAME: health,
     tool_selection.NAME: tool_selection,
 }
@@ -25,6 +33,14 @@ SUBJECTS = {
 #: Subjects that reach a real model. They cost tokens, need
 #: `LPA_ANTHROPIC_API_KEY`, and are therefore not part of `uv run pytest` —
 #: which stays credential-free by design. See ADR-0031.
-BILLED = frozenset({tool_selection.NAME})
+BILLED = frozenset({tool_selection.NAME, status_narrative.NAME})
 
-__all__ = ["BILLED", "SUBJECTS", "groundedness", "health", "tool_selection"]
+__all__ = [
+    "BILLED",
+    "SUBJECTS",
+    "groundedness",
+    "health",
+    "status_fallback",
+    "status_narrative",
+    "tool_selection",
+]
