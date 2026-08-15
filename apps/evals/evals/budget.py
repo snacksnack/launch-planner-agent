@@ -51,6 +51,28 @@ CEILINGS: dict[str, Ceiling] = {
         max_latency_ms=5_000,
         note="deterministic — any cost at all means a model crept in",
     ),
+    # RC1-257. Measured on 2026-08-15 across the runs that built these subjects.
+    # These are the slowest in the suite by a wide margin — the flagship PRD is
+    # 101 lines and the agents emit 16k-token structured output, so a minute-plus
+    # per case is the shape of the work rather than a problem to tune.
+    "work-breakdown": Ceiling(
+        subject="work-breakdown",
+        max_cost_usd=Decimal("0.60"),
+        max_latency_ms=300_000,
+        note="observed $0.276 / 127s over 3 cases on claude-sonnet-5",
+    ),
+    "dependency": Ceiling(
+        subject="dependency",
+        max_cost_usd=Decimal("0.50"),
+        max_latency_ms=240_000,
+        note="observed $0.227 / 111s over 2 cases on claude-sonnet-5",
+    ),
+    "raid": Ceiling(
+        subject="raid",
+        max_cost_usd=Decimal("0.40"),
+        max_latency_ms=240_000,
+        note="observed $0.192 / 105s over 2 cases on claude-sonnet-5",
+    ),
     "health": Ceiling(
         subject="health",
         max_cost_usd=Decimal("0"),

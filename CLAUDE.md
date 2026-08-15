@@ -38,9 +38,14 @@ scorer) → `evals calibrate`. **Two gate**: `facts-correct` (deterministic, `ag
 `evals construct --scorer <name>` on a label set *before* calibrating it — three passes
 were wasted before that tripwire existed. Exit codes
 are CI-shaped: `0` all passed, `1` a case failed, `2` a case errored (the subject produced
-nothing to score). Subjects: `health` (free, deterministic) and `tool-selection` (**billed** —
-drives a real model over the shipped stdio MCP surface, needs `LPA_ANTHROPIC_API_KEY`, and is
-deliberately not part of `uv run pytest` so the suite stays credential-free; ADR-0031).
+nothing to score). Subjects: `health`, `groundedness` and `status-narrative-fallback` (free,
+deterministic); `tool-selection`, `status-narrative`, `work-breakdown`, `dependency` and `raid`
+(**billed** — they drive a real model, need `LPA_ANTHROPIC_API_KEY`, and are deliberately not
+part of `uv run pytest` so the suite stays credential-free; ADR-0031). The three planning
+subjects (RC1-257, ADR-0036) gate on **structure only** — provenance tracing, orphan and
+duplicate detection, roster membership, dependency rejections and cycle repairs, RAID recall
+and severity. No judge is used in any of them. A **new billed subject must get a measured
+ceiling** in `evals/budget.py` or `test_budget.py` fails.
 
 CLI — `uv run plan <verb>`, from the repo root, paths repo-relative. Deterministic verbs
 (`schedule`, `simulate`, `forecast`, `scenario`, `jira`, `propose`, `commit`, `baseline`,

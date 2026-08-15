@@ -18,6 +18,7 @@ from planner_core import (
     coverage_gaps,
     markdown_sections,
 )
+from planner_core.validation import flag_unverifiable_quotes
 
 PRD = """\
 # Project Skyline
@@ -129,3 +130,48 @@ def test_work_breakdown_container_round_trips():
         tasks=[_task(epic_id="epic-1")],
     )
     assert WorkBreakdown.model_validate_json(wb.model_dump_json()) == wb
+
+
+# --- RC1-257: quote matching ignores markdown decoration -------------------
+
+
+def _quoting(quote: str) -> Plan:
+    return _plan(
+        tasks=[
+            Task(id="t-1", name="Do the thing", estimate=_est(), provenance=_prov(quote)),
+        ]
+    )
+
+
+def test_a_quote_wrapped_in_markdown_emphasis_is_verifiable():
+    """RC1-257, found by running the agent rather than by a passing test.
+
+    The shipped `product-launch` PRD bolds whole clauses, and the agent quotes
+    what a reader sees rather than the markup — the right reading of "copied
+    verbatim from the PRD". Three faithful quotes were being reported as
+    hallucinated provenance.
+    """
+    prd = (
+        "## Goals\n\nAurora collects data, and **the privacy review has to be\n"
+        "signed off first.**\n"
+    )
+    quote = "the privacy review has to be signed off first."
+    assert not flag_unverifiable_quotes(_quoting(quote), prd), (
+        "markdown emphasis is decoration, not part of the quote"
+    )
+
+
+def test_a_quote_the_prd_does_not_contain_is_still_flagged():
+    """The decoration fix must not become a licence to invent."""
+    prd = "## Goals\n\nAurora collects data, and **the privacy review has to be signed off.**\n"
+    assert flag_unverifiable_quotes(_quoting("the security review has to be signed off."), prd)
+
+
+def test_bold_transliterated_as_a_double_quote_is_tolerated():
+    """`...the public launch** and Apple's...` came back as `...launch" and Apple's...`."""
+    prd = (
+        "## Goals\n\nIt is a mobile app, so **App Store approval is required\n"
+        "before launch** and timing slips.\n"
+    )
+    quote = 'App Store approval is required before launch" and timing slips.'
+    assert not flag_unverifiable_quotes(_quoting(quote), prd)
