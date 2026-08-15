@@ -3,6 +3,13 @@
     uv run evals run health
     uv run evals report health-20260813T174233Z
 
+Judge calibration (RC1-250) is the other half:
+
+    uv run evals seed          # generate the seed set (billed, run once)
+    uv run evals label         # score it by hand — free, resumable
+    uv run evals judge         # score the same set with the judge (billed)
+    uv run evals calibrate     # per-dimension agreement, and what may gate
+
 Exit codes are CI-shaped from the start, because RC1-255 turns this into a gate
 and a gate that always exits 0 is a report nobody opens:
 
@@ -23,12 +30,21 @@ from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from evals import agreement, construct, judge, labelling, seedgen
 from evals.config import get_eval_settings
 from evals.record import RunRecord, RunStore, new_run_id
+from evals.rubric import DIMENSION_KEYS, DIMENSIONS, RUBRIC_VERSION
+from evals.seeds import LabelStore, SeedStore, unlabelled
 from evals.subjects import BILLED, SUBJECTS
 
 _PASS = "pass"
 _FAIL = "FAIL"
+
+#: Committed alongside the code. The seed set and the human labels are the
+#: deliverable of RC1-250 — a calibration nobody can reproduce is an assertion.
+_DATA = Path(__file__).resolve().parents[1] / "calibration"
+SEEDS_PATH = _DATA / "seeds.jsonl"
+LABELS_PATH = _DATA / "labels.jsonl"
 
 
 def _store(args: argparse.Namespace) -> RunStore:
@@ -200,6 +216,204 @@ def _print_confusion(record: RunRecord) -> None:
         print(f"               {expected} -> {actual}  ({', '.join(parts)})")
 
 
+def cmd_seed(args: argparse.Namespace) -> int:
+    """Generate the seed set. Billed, and refuses to run twice by accident."""
+    store = SeedStore(Path(args.seeds_path or SEEDS_PATH))
+    if store.all() and not args.force:
+        print(
+            f"{store.path} already holds {len(store.all())} seed(s). Regenerating would "
+            "invalidate every label collected against them — pass --force if that is "
+            "really what you want.",
+            file=sys.stderr,
+        )
+        return 2
+    try:
+        seedgen.preflight()
+    except Exception as exc:
+        print(f"cannot generate: {exc}", file=sys.stderr)
+        return 2
+
+    fact_sets = len(seedgen.FACT_SETS)
+    print(
+        f"generating {fact_sets * 3} seeds from {fact_sets} fact sets (2 of 3 variants are billed)…"
+    )
+    for seed in seedgen.generate():
+        store.append(seed)
+        print(f"  {seed.id}")
+    print(f"\nwrote {store.path}")
+    return 0
+
+
+def cmd_label(args: argparse.Namespace) -> int:
+    """Score the seed set by hand. Free, resumable, and the actual deliverable."""
+    seeds = SeedStore(Path(args.seeds_path or SEEDS_PATH)).all()
+    if not seeds:
+        print("no seeds yet — run `evals seed` first", file=sys.stderr)
+        return 2
+    if args.limit:
+        # A careful pass over fewer items beats a fast pass over many: the first
+        # attempt at this set was 36 seeds x 4 dimensions = 144 judgements, and
+        # the labeller said afterwards not to trust it. `n` is reported, so a
+        # smaller careful set is honest where a larger careless one is not.
+        seeds = labelling.shuffled(seeds)[: args.limit]
+
+    dimension = None
+    if args.dimension:
+        dimension = next((d for d in DIMENSIONS if d.key == args.dimension), None)
+        if dimension is None:
+            print(
+                f"unknown dimension {args.dimension!r}. One of: {', '.join(DIMENSION_KEYS)}",
+                file=sys.stderr,
+            )
+            return 2
+
+    store = LabelStore(Path(args.labels_path or LABELS_PATH))
+    existing = store.by_scorer(args.scorer)
+    have = {seed_id: dict(label.scores) for seed_id, label in existing.items()}
+
+    if dimension:
+        todo = [s for s in labelling.shuffled(seeds) if dimension.key not in have.get(s.id, {})]
+    else:
+        todo = labelling.shuffled(unlabelled(seeds, existing))
+
+    if existing:
+        print(f"scorer {args.scorer!r}: {len(existing)} seed(s) already have some scores.")
+
+    labelling.run_session(
+        todo,
+        store,
+        read=input,
+        write=print,
+        dimension=dimension,
+        scorer=args.scorer,
+        existing=have,
+    )
+    return 0
+
+
+def cmd_judge(args: argparse.Namespace) -> int:
+    """Score the same seeds with the judge. Billed."""
+    seeds = SeedStore(Path(args.seeds_path or SEEDS_PATH)).all()
+    if not seeds:
+        print("no seeds yet — run `evals seed` first", file=sys.stderr)
+        return 2
+    try:
+        judge.preflight()
+    except Exception as exc:
+        print(f"cannot run the judge: {exc}", file=sys.stderr)
+        return 2
+
+    store = LabelStore(Path(args.labels_path or LABELS_PATH))
+    done = store.by_scorer(judge.JUDGE_VERSION)
+    todo = [seed for seed in seeds if seed.id not in done] if not args.force else seeds
+    print(f"{judge.JUDGE_VERSION} scoring {len(todo)} seed(s)…")
+    failures = []
+    for seed in todo:
+        # One unscoreable seed must not abandon a run that has already spent
+        # money on the rest. Re-running resumes, so a transient failure costs
+        # one seed rather than the whole set.
+        try:
+            store.append(judge.score(seed))
+            print(f"  {seed.id}")
+        except Exception as exc:
+            failures.append((seed.id, str(exc)))
+            print(f"  {seed.id}  FAILED", file=sys.stderr)
+
+    if failures:
+        print(f"\n{len(failures)} seed(s) could not be scored:", file=sys.stderr)
+        for seed_id, message in failures:
+            print(f"  {seed_id}: {message}", file=sys.stderr)
+        print("re-run to retry only these", file=sys.stderr)
+        return 2
+    return 0
+
+
+def cmd_calibrate(args: argparse.Namespace) -> int:
+    """The story's headline: per-dimension agreement, and what earns gating."""
+    store = LabelStore(Path(args.labels_path or LABELS_PATH))
+    left_name = args.scorer
+    right_name = args.against or judge.JUDGE_VERSION
+    human = {k: v.scores for k, v in store.by_scorer(left_name).items()}
+    machine = {k: v.scores for k, v in store.by_scorer(right_name).items()}
+    if not human or not machine:
+        print(
+            f"need labels from both scorers ({left_name}: {len(human)}, "
+            f"{right_name}: {len(machine)})",
+            file=sys.stderr,
+        )
+        return 2
+
+    results = agreement.compare(human, machine)
+    print(f"rubric  {RUBRIC_VERSION}")
+    print(f"compare {left_name}  vs  {right_name}")
+    print(f"floor   weighted kappa >= {agreement.GATING_FLOOR} to gate a build\n")
+    print(f"  {'dimension':<16} {'n':>3}  {'raw':>5}  {'kappa':>6}  {'weighted':>8}  verdict")
+    for result in results:
+        raw = f"{result.raw_agreement:.0%}"
+        plain = "  n/a" if result.kappa is None else f"{result.kappa:+.2f}"
+        verdict = "gates" if result.gates else "ADVISORY"
+        print(
+            f"  {result.dimension:<16} {result.n:>3}  {raw:>5}  {plain:>6}  "
+            f"{result.headline:>8}  {verdict}"
+        )
+        if result.note:
+            print(f"    {result.note}")
+
+    if args.verbose:
+        for dimension in DIMENSION_KEYS:
+            table = agreement.confusion(human, machine, dimension)
+            disagreements = {k: v for k, v in table.items() if k[0] != k[1]}
+            if disagreements:
+                print(f"\n  {dimension} — human -> judge, where they differed")
+                for (h, j), count in sorted(disagreements.items(), key=lambda kv: -kv[1]):
+                    print(f"    {h} -> {j}  (x{count})")
+
+    advisory = [r.dimension for r in results if not r.gates]
+    if advisory:
+        print(f"\n  advisory (cannot fail a build in RC1-255): {', '.join(advisory)}")
+    return 0
+
+
+def cmd_construct(args: argparse.Namespace) -> int:
+    """Does the judge detect degradation we planted ourselves? No human needed."""
+    seeds = SeedStore(Path(args.seeds_path or SEEDS_PATH)).all()
+    variants = {seed.id: seed.variant for seed in seeds}
+    store = LabelStore(Path(args.labels_path or LABELS_PATH))
+    scorer = args.scorer or judge.JUDGE_VERSION
+    labels = {k: v.scores for k, v in store.by_scorer(scorer).items()}
+    if not labels:
+        print(f"no labels for scorer {scorer!r}", file=sys.stderr)
+        return 2
+
+    print(f"scorer  {scorer}")
+    print(f"check   does a '{construct.CLEAN}' output outrank a '{construct.PLANTED}' one?")
+    print("        clean is grounded by construction; planted is degraded by construction")
+    print("        only checked where the planted degradation targets the dimension\n")
+    print(
+        f"  {'dimension':<16} {'clean':>6} {'planted':>8} {'pairs':>6} {'ranked ok':>10}  verdict"
+    )
+    worst = 1.0
+    for result in construct.separation(labels, variants):
+        if not result.targeted:
+            print(
+                f"  {result.dimension:<16} {'—':>6} {'—':>8} {'—':>6} {'—':>10}  "
+                "not targeted by the planted degradation"
+            )
+            continue
+        verdict = "detects" if result.detects else "NO SIGNAL"
+        print(
+            f"  {result.dimension:<16} {result.clean_mean:>6.2f} {result.planted_mean:>8.2f} "
+            f"{result.pairs:>6} {result.headline:>10}  {verdict}"
+        )
+        worst = min(worst, result.rate)
+
+    print(
+        "\n  Passing this earns no gating rights — it shows the judge is measuring "
+        "something\n  real, not that it agrees with a careful human. See docs/judging.md."
+    )
+    return 0 if worst >= construct.SEPARATION_FLOOR else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="evals", description="Run and report quality evals for the planner's LLM systems."
@@ -224,6 +438,59 @@ def main(argv: list[str] | None = None) -> int:
         "-q", "--quiet", action="store_true", help="Show only failing characteristics."
     )
     report.set_defaults(func=cmd_report)
+
+    # --- judge calibration (RC1-250) ---------------------------------------
+    parser.add_argument("--seeds-path", help="Override the seed set location.")
+    parser.add_argument("--labels-path", help="Override the label store location.")
+
+    seed = sub.add_parser("seed", help="Generate the calibration seed set (billed, run once).")
+    seed.add_argument(
+        "--force", action="store_true", help="Regenerate even if seeds already exist."
+    )
+    seed.set_defaults(func=cmd_seed)
+
+    label = sub.add_parser("label", help="Score the seed set by hand. Free and resumable.")
+    label.add_argument(
+        "--dimension",
+        help=(
+            "Score ONE dimension across the whole set. Far more consistent than "
+            "switching rubric on every item."
+        ),
+    )
+    label.add_argument(
+        "--scorer",
+        default=labelling.HUMAN,
+        help="Store under this scorer name. A second pass under a new name measures "
+        "whether you agree with yourself.",
+    )
+    label.add_argument("--limit", type=int, help="Only offer the first N seeds.")
+    label.set_defaults(func=cmd_label)
+
+    judge_cmd = sub.add_parser("judge", help="Score the seed set with the judge (billed).")
+    judge_cmd.add_argument(
+        "--force", action="store_true", help="Re-score seeds this judge version already did."
+    )
+    judge_cmd.set_defaults(func=cmd_judge)
+
+    calibrate = sub.add_parser("calibrate", help="Human-vs-judge agreement, per dimension.")
+    calibrate.add_argument(
+        "-v", "--verbose", action="store_true", help="Also show where they disagreed."
+    )
+    calibrate.add_argument(
+        "--scorer", default=labelling.HUMAN, help="The left-hand scorer (default: human)."
+    )
+    calibrate.add_argument(
+        "--against",
+        help="The right-hand scorer (default: the judge). Pass a second human pass "
+        "to measure whether you agree with yourself — the ceiling on any judge.",
+    )
+    calibrate.set_defaults(func=cmd_calibrate)
+
+    con = sub.add_parser(
+        "construct", help="Does a scorer detect the degradation we planted? No human needed."
+    )
+    con.add_argument("--scorer", help="Default: the judge.")
+    con.set_defaults(func=cmd_construct)
 
     args = parser.parse_args(argv)
     return args.func(args)
