@@ -31,6 +31,7 @@ from planner_core import (
 )
 
 from agents.schema import ProposedDependencies, ProposedDependency, ProposedProvenance
+from agents.usage import AgentUsage
 
 AGENT_NAME = "dependency"
 DEFAULT_MODEL = "claude-sonnet-5"
@@ -188,6 +189,8 @@ class DependencyAgent:
             ],
             output_format=ProposedDependencies,
         )
+        # Side channel: the return type is unchanged, so no caller breaks.
+        self.last_usage = AgentUsage.of(response, self._model)
         return response.parsed_output
 
     def _to_dependency(self, edge: ProposedDependency, index: int, ts: datetime) -> Dependency:

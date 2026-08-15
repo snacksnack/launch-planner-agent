@@ -29,7 +29,8 @@ uv run python -m app                      # config sanity check, no credentials 
 ```
 
 Evals — `uv run evals run <subject>` / `uv run evals report [run-id]` (RC1-248).
-Judge calibration (RC1-250): `evals seed` (billed, once) → `evals label --dimension X`
+Cost: every run record carries tokens/cost/latency; ceilings live in `evals/budget.py` and a
+breach is advisory, printed beside the quality findings. Judge calibration (RC1-250): `evals seed` (billed, once) → `evals label --dimension X`
 (free, resumable) → `evals judge` (billed) → `evals construct` (free sanity check on any
 scorer) → `evals calibrate`. **Two gate**: `facts-correct` (deterministic, `evals.groundedness`) and
 `no-unsupported-claims` (judge, κ 0.86, 98% of its CI above the floor). `completeness`,

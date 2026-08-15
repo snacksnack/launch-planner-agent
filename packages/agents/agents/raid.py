@@ -27,6 +27,7 @@ from planner_core import (
 )
 
 from agents.schema import ProposedRaidItem, ProposedRaidLog
+from agents.usage import AgentUsage
 
 AGENT_NAME = "raid"
 DEFAULT_MODEL = "claude-sonnet-5"
@@ -127,11 +128,11 @@ class RaidAgent:
             model=self._model,
             max_tokens=16000,
             system=SYSTEM_PROMPT,
-            messages=[
-                {"role": "user", "content": build_user_prompt(prd_text, facts, team)}
-            ],
+            messages=[{"role": "user", "content": build_user_prompt(prd_text, facts, team)}],
             output_format=ProposedRaidLog,
         )
+        # Side channel: the return type is unchanged, so no caller breaks.
+        self.last_usage = AgentUsage.of(response, self._model)
         return response.parsed_output
 
     def _to_item(self, proposed: ProposedRaidItem, ts: datetime) -> RaidItem:

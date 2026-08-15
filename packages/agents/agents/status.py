@@ -16,6 +16,8 @@ from typing import Any
 
 from planner_core import StatusFacts, StatusNarrative
 
+from agents.usage import AgentUsage
+
 AGENT_NAME = "status"
 DEFAULT_MODEL = "claude-sonnet-5"
 
@@ -82,9 +84,7 @@ def build_user_prompt(facts: StatusFacts) -> str:
 class StatusAgent:
     """Writes the exec summary + 'what changed' narrative from the status facts."""
 
-    def __init__(
-        self, *, model: str | None = None, client: StructuredClient | None = None
-    ) -> None:
+    def __init__(self, *, model: str | None = None, client: StructuredClient | None = None) -> None:
         self._model = model or os.environ.get("LPA_ANTHROPIC_MODEL", DEFAULT_MODEL)
         self._client = client
 
@@ -97,6 +97,8 @@ class StatusAgent:
             messages=[{"role": "user", "content": build_user_prompt(facts)}],
             output_format=StatusNarrative,
         )
+        # Side channel: the return type is unchanged, so no caller breaks.
+        self.last_usage = AgentUsage.of(response, self._model)
         return response.parsed_output
 
     def _default_client(self) -> StructuredClient:
