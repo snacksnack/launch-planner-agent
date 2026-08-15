@@ -33,9 +33,15 @@ from tempfile import TemporaryDirectory
 from evals import agreement, construct, judge, labelling, seedgen
 from evals.config import LABELS_PATH, SEEDS_PATH, get_eval_settings
 from evals.record import RunRecord, RunStore, new_run_id
-from evals.rubric import DIMENSION_KEYS, DIMENSIONS, RUBRIC_VERSION
+from evals.rubric import JUDGED, JUDGED_KEYS, RUBRIC_VERSION
 from evals.seeds import LabelStore, SeedStore, unlabelled
 from evals.subjects import BILLED, SUBJECTS
+
+#: A dimension gates only if the point estimate clears the floor *and* the risk
+#: of the true value being below it is under this. RC1-250 measured 0.66 with
+#: 34% below and the honest call was not to gate; encoding that beats
+#: re-litigating it each time.
+_MAX_RISK_OF_NOT_GATING = 0.20
 
 _PASS = "pass"
 _FAIL = "FAIL"
@@ -260,10 +266,10 @@ def cmd_label(args: argparse.Namespace) -> int:
 
     dimension = None
     if args.dimension:
-        dimension = next((d for d in DIMENSIONS if d.key == args.dimension), None)
+        dimension = next((d for d in JUDGED if d.key == args.dimension), None)
         if dimension is None:
             print(
-                f"unknown dimension {args.dimension!r}. One of: {', '.join(DIMENSION_KEYS)}",
+                f"unknown dimension {args.dimension!r}. One of: {', '.join(JUDGED_KEYS)}",
                 file=sys.stderr,
             )
             return 2
@@ -348,20 +354,32 @@ def cmd_calibrate(args: argparse.Namespace) -> int:
     print(f"rubric  {RUBRIC_VERSION}")
     print(f"compare {left_name}  vs  {right_name}")
     print(f"floor   weighted kappa >= {agreement.GATING_FLOOR} to gate a build\n")
-    print(f"  {'dimension':<16} {'n':>3}  {'raw':>5}  {'kappa':>6}  {'weighted':>8}  verdict")
+    header = f"  {'dimension':<22} {'n':>3}  {'raw':>5}  {'weighted':>8}  {'95% CI':>15}  verdict"
+    print(header)
     for result in results:
         raw = f"{result.raw_agreement:.0%}"
-        plain = "  n/a" if result.kappa is None else f"{result.kappa:+.2f}"
-        verdict = "gates" if result.gates else "ADVISORY"
+        interval = agreement.bootstrap(human, machine, result.dimension)
+        if interval is None:
+            ci, risk = "—", None
+        else:
+            lo, hi, risk = interval
+            ci = f"{lo:+.2f} to {hi:+.2f}"
+        # The interval decides, not the point estimate alone: RC1-250 measured
+        # 0.66 with 34% of the distribution below the floor, and the honest call
+        # was not to gate. Encoding that beats re-litigating it every time.
+        gates = result.gates and risk is not None and risk <= _MAX_RISK_OF_NOT_GATING
+        verdict = "gates" if gates else "ADVISORY"
         print(
-            f"  {result.dimension:<16} {result.n:>3}  {raw:>5}  {plain:>6}  "
-            f"{result.headline:>8}  {verdict}"
+            f"  {result.dimension:<22} {result.n:>3}  {raw:>5}  {result.headline:>8}  "
+            f"{ci:>15}  {verdict}"
         )
+        if risk is not None:
+            print(f"    {risk:.0%} of the interval is below the {agreement.GATING_FLOOR} floor")
         if result.note:
             print(f"    {result.note}")
 
     if args.verbose:
-        for dimension in DIMENSION_KEYS:
+        for dimension in JUDGED_KEYS:
             table = agreement.confusion(human, machine, dimension)
             disagreements = {k: v for k, v in table.items() if k[0] != k[1]}
             if disagreements:

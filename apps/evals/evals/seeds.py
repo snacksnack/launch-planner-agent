@@ -18,7 +18,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from evals.rubric import DIMENSION_KEYS, RUBRIC_VERSION, Score
+from evals.rubric import JUDGED_KEYS, RUBRIC_VERSION, Score
 
 
 class Seed(BaseModel):
@@ -133,10 +133,10 @@ def parse_scores(raw: dict[str, int]) -> dict[str, Score]:
     Partial sets are rejected: a missing dimension would silently drop that seed
     from one dimension's agreement calculation and quietly change its n.
     """
-    missing = set(DIMENSION_KEYS) - set(raw)
+    missing = set(JUDGED_KEYS) - set(raw)
     if missing:
         raise ValueError(f"missing score(s) for: {', '.join(sorted(missing))}")
-    unknown = set(raw) - set(DIMENSION_KEYS)
+    unknown = set(raw) - set(JUDGED_KEYS)
     if unknown:
         raise ValueError(f"unknown dimension(s): {', '.join(sorted(unknown))}")
     return {key: Score(value) for key, value in raw.items()}

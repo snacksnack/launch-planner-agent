@@ -31,7 +31,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from evals.rubric import DIMENSION_KEYS, Score
+from evals.rubric import JUDGED_KEYS, Score
 
 #: Grounded by construction, and degraded by construction. The pair the check
 #: is built on — the two variants whose relative ranking is known before anyone
@@ -52,7 +52,7 @@ PLANTED = "degraded"
 #: completeness came back at 33%, below chance, because the planted outputs are
 #: genuinely the more complete ones. That is the check being wrong, not the
 #: judge — so those dimensions are reported as out of scope rather than scored.
-TARGETED: frozenset[str] = frozenset({"groundedness", "tone"})
+TARGETED: frozenset[str] = frozenset({"no-unsupported-claims", "tone"})
 
 #: Below this, the judge is not reliably separating planted degradation. Not a
 #: gating threshold — nothing here gates. It is the line under which the judge
@@ -106,7 +106,7 @@ def separation(
     to any single fact set being unusual.
     """
     results = []
-    for dimension in DIMENSION_KEYS:
+    for dimension in JUDGED_KEYS:
         clean = [
             int(scores[dimension])
             for seed_id, scores in labels.items()
