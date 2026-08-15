@@ -14,9 +14,10 @@ without anything to configure or discover.
 
 from __future__ import annotations
 
-from evals.subjects import health, tool_selection
+from evals.subjects import groundedness, health, tool_selection
 
 SUBJECTS = {
+    groundedness.NAME: groundedness,
     health.NAME: health,
     tool_selection.NAME: tool_selection,
 }
@@ -26,4 +27,4 @@ SUBJECTS = {
 #: which stays credential-free by design. See ADR-0031.
 BILLED = frozenset({tool_selection.NAME})
 
-__all__ = ["BILLED", "SUBJECTS", "health", "tool_selection"]
+__all__ = ["BILLED", "SUBJECTS", "groundedness", "health", "tool_selection"]

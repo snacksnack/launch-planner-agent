@@ -37,3 +37,11 @@ class EvalSettings(BaseSettings):
 @lru_cache
 def get_eval_settings() -> EvalSettings:
     return EvalSettings()
+
+
+#: The calibration corpus, committed alongside the code. Lives here rather than
+#: in the CLI because subjects read it too, and a subject importing the CLI is a
+#: cycle — the CLI is a consumer of these paths, not their owner.
+CALIBRATION_DIR = Path(__file__).resolve().parents[1] / "calibration"
+SEEDS_PATH = CALIBRATION_DIR / "seeds.jsonl"
+LABELS_PATH = CALIBRATION_DIR / "labels.jsonl"
