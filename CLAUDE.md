@@ -28,7 +28,13 @@ cd apps/web && npm run dev                # :5173 (VITE_API_BASE overrides the A
 uv run python -m app                      # config sanity check, no credentials needed
 ```
 
-Evals — `uv run evals run <subject>` / `uv run evals report [run-id]` (RC1-248). Exit codes
+Evals — `uv run evals run <subject>` / `uv run evals report [run-id]` (RC1-248).
+Judge calibration (RC1-250): `evals seed` (billed, once) → `evals label --dimension X`
+(free, resumable) → `evals judge` (billed) → `evals construct` (free sanity check on any
+scorer) → `evals calibrate`. **No dimension gates** — groundedness is closest (weighted κ 0.66, n=24, but 34% of its
+bootstrap CI below the 0.6 floor); the rest are unlabelled. `docs/judging.md` has the numbers and the limits. Always run
+`evals construct --scorer <name>` on a label set *before* calibrating it — three passes
+were wasted before that tripwire existed. Exit codes
 are CI-shaped: `0` all passed, `1` a case failed, `2` a case errored (the subject produced
 nothing to score). Subjects: `health` (free, deterministic) and `tool-selection` (**billed** —
 drives a real model over the shipped stdio MCP surface, needs `LPA_ANTHROPIC_API_KEY`, and is

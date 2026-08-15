@@ -111,9 +111,7 @@ class CaseResult(BaseModel):
     @property
     def passed(self) -> bool:
         """Advisory characteristics are excluded — that is what makes them advisory."""
-        return self.error is None and all(
-            c.passed for c in self.characteristics if not c.advisory
-        )
+        return self.error is None and all(c.passed for c in self.characteristics if not c.advisory)
 
     @property
     def advisory_failures(self) -> list[CharacteristicResult]:
