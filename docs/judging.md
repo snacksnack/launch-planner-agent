@@ -315,3 +315,49 @@ Two things learned the hard way and worth repeating:
   wording is not the same measurement.
 * **Prompt caching and cost.** The judge is billed and runs outside
   `uv run pytest`, which stays credential-free (ADR-0031).
+
+## Cost, and the model choice it informs (RC1-254)
+
+Every run record carries tokens, cost and latency, and each subject declares a
+ceiling in `apps/evals/evals/budget.py` with the measurement it was set from. A
+breach prints beside the quality findings rather than in a report of its own —
+the decision a budget informs is *"can this move to a cheaper model"*, and that is
+only answerable with quality and cost on one view.
+
+**Breaches are advisory.** A run that cost more has not produced a wrong answer,
+and failing a build on it would be failing on the weather. RC1-255 gates on
+correctness.
+
+### The comparison
+
+`tool-selection` is the right subject for this: routing accuracy needs no judge,
+so the quality signal is trustworthy in a way a rubric score is not.
+
+| Model | Routed correctly | Went direct | Cost | Latency |
+| --- | --- | --- | --- | --- |
+| `claude-sonnet-5` | **14/14** | 13/14 | $0.2351 | 35s |
+| `claude-haiku-4-5` | 13/14 | 13/14 | **$0.0629** | **19s** |
+
+**Haiku is 3.7× cheaper and 1.8× faster, and misses one case.** The miss is
+`honest.ambiguous-task-name`: asked what happens if "review" slips, it called
+`plan.list` instead of `plan.simulate`. It still handled the ambiguity correctly
+once there — it was the routing that went wrong, not the honesty.
+
+**Recommendation: Sonnet for the eval, Haiku worth testing for interactive use.**
+The eval's whole job is to detect routing regressions, and a model that misses a
+case on its own is a noisier instrument. For a user-facing MCP session — where a
+wrong first pick costs one round trip and the model recovers — 3.7× is a real
+saving on a small quality difference.
+
+That mirrors the decision already taken in the job-search agent, where skill-match
+assessment is pinned to a cheaper subagent and cached: use the cheap model where
+a mistake is recoverable, the expensive one where it is the measurement.
+
+### What the comparison also caught
+
+Running a second model surfaced a bug in the eval rather than the model. Haiku
+answered *"the drift service isn't currently configured"* — exactly the honest
+report the case demands — and the checker failed it, because its phrase list held
+the literal `"not configured"`. Negation is expressible a dozen ways; the check
+now matches the shape rather than the words. **A second model is a cheap way to
+find where a checker has been overfitted to the first one's phrasing.**

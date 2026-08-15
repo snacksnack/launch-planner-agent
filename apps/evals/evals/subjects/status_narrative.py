@@ -47,6 +47,7 @@ from planner_core import StatusFacts, fallback_narrative
 
 from evals import groundedness
 from evals.case import Case
+from evals.pricing import cost_usd
 from evals.record import CaseResult, CharacteristicResult, SubjectVersion, Usage
 from evals.seedgen import FACT_SETS
 
@@ -245,10 +246,19 @@ def run(case: Case, tmp_root: Path, client=None) -> CaseResult:
             error=f"{type(exc).__name__}: {exc}",
         )
     latency_ms = (time.perf_counter() - started) * 1000
-    text = _render(narrative)
-    # Token counts are not returned by `messages.parse` here, so cost is left at
-    # zero rather than guessed — an invented figure would poison RC1-254.
-    return _score(case, facts, text, Usage(latency_ms=latency_ms))
+    # RC1-254: this reported $0 while spending 39s against a real model, because
+    # `StatusAgent.run` returned only the parsed output. `last_usage` is the side
+    # channel that fixed it — see `agents.usage`.
+    used = agent.last_usage
+    usage = Usage(latency_ms=latency_ms)
+    if used is not None:
+        usage = Usage(
+            input_tokens=used.input_tokens,
+            output_tokens=used.output_tokens,
+            cost_usd=cost_usd(used.model, used.input_tokens, used.output_tokens),
+            latency_ms=latency_ms,
+        )
+    return _score(case, facts, _render(narrative), usage)
 
 
 def run_fallback(case: Case, tmp_root: Path) -> CaseResult:

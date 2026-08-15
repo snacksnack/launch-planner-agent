@@ -30,7 +30,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from evals import agreement, construct, judge, labelling, seedgen
+from evals import agreement, budget, construct, judge, labelling, seedgen
 from evals.config import LABELS_PATH, SEEDS_PATH, get_eval_settings
 from evals.record import RunRecord, RunStore, new_run_id
 from evals.rubric import JUDGED, JUDGED_KEYS, RUBRIC_VERSION
@@ -138,6 +138,7 @@ def _print_report(record: RunRecord, *, verbose: bool) -> None:
     # Only when something actually measured it — a subject that checks no claims
     # must not report 0.0%, which reads as "nothing was hallucinated" rather
     # than "nothing was checked" (RC1-251).
+    _print_budget(record)
     if (rate := record.hallucination_rate) is not None:
         checked = sum(r.observations.get("claims_checked", 0) for r in record.results)
         flagged = sum(r.observations.get("violations", 0) for r in record.results)
@@ -165,6 +166,31 @@ def _print_report(record: RunRecord, *, verbose: bool) -> None:
             print(f"    {mark} {characteristic.name}{label}: {characteristic.detail}")
 
     _print_confusion(record)
+
+
+def _print_budget(record: RunRecord) -> None:
+    """Cost and quality on one view.
+
+    The decision a budget informs is "can this move to a cheaper model", and
+    that is only answerable if the quality delta and the cost delta are visible
+    together — which is why this prints beside the case count rather than in a
+    report of its own (RC1-254).
+    """
+    ceiling = budget.for_subject(record.subject_version.subject)
+    if ceiling is None:
+        return
+    breaches = ceiling.breaches(record.total_cost_usd, record.total_latency_ms)
+    if not breaches:
+        print(
+            f"  budget        within ceiling (${ceiling.max_cost_usd} · "
+            f"{ceiling.max_latency_ms / 1000:.0f}s)"
+        )
+        return
+    # Advisory: a run that cost more has not produced a wrong answer. Loud, but
+    # never a build failure — RC1-255 gates on correctness.
+    for breach in breaches:
+        print(f"  budget        ~ BREACH [advisory]: {breach}")
+    print(f"                ceiling set from: {ceiling.note}")
 
 
 def _print_confusion(record: RunRecord) -> None:

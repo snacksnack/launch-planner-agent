@@ -17,6 +17,7 @@ from typing import Any
 from planner_core import Epic, Provenance, Task, TeamMember, WorkBreakdown
 
 from agents.schema import ProposedProvenance, ProposedWorkBreakdown
+from agents.usage import AgentUsage
 
 AGENT_NAME = "work-breakdown"
 DEFAULT_MODEL = "claude-sonnet-5"
@@ -105,6 +106,8 @@ class WorkBreakdownAgent:
             messages=[{"role": "user", "content": build_user_prompt(prd_text, team)}],
             output_format=ProposedWorkBreakdown,
         )
+        # Side channel: the return type is unchanged, so no caller breaks.
+        self.last_usage = AgentUsage.of(response, self._model)
         return response.parsed_output
 
     def _stamp(self, proposal: ProposedWorkBreakdown) -> WorkBreakdown:
