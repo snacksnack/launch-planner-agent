@@ -37,6 +37,31 @@ def normalize_whitespace(text: str) -> str:
     return " ".join(text.split())
 
 
+#: Markdown emphasis and quote punctuation, removed before a quote is matched.
+#:
+#: RC1-257 found this by running the work-breakdown agent against the shipped
+#: PRDs: three faithful quotes were reported as unverifiable because the PRD
+#: wraps them in `**`, and the agent quotes what a reader *sees* rather than the
+#: markup — which is the right reading of "copied verbatim from the PRD".
+#:
+#: Double quotes are stripped for a related reason: the agent transliterates a
+#: closing `**` as `"`, so `...the public launch** and Apple's...` came back as
+#: `...the public launch" and Apple's...`. Apostrophes are deliberately *not*
+#: stripped — they are part of words, and removing them would let a quote match
+#: text it does not actually contain.
+_DECORATION = re.compile(r"[*`\"“”]")
+
+
+def normalize_for_quote_match(text: str) -> str:
+    """Whitespace- and markup-insensitive form used for provenance matching.
+
+    Deliberately *not* used for anything but quote comparison. It is a matcher,
+    not a canonical form — stripping decoration from text that is then displayed
+    would quietly rewrite the PRD.
+    """
+    return normalize_whitespace(_DECORATION.sub("", text))
+
+
 # Backwards-compatible internal alias.
 _normalize = normalize_whitespace
 
@@ -108,14 +133,15 @@ def flag_unverifiable_quotes(plan: Plan, source_text: str) -> list[ValidationIss
     """Flag any source_quote that does not appear verbatim in the source document.
 
     This is the hallucination guard: provenance is only trustworthy if the quote
-    is real. Matching is whitespace-normalized so PRD line-wrapping doesn't cause
-    false positives.
+    is real. Matching ignores line-wrapping and markdown decoration — see
+    `normalize_for_quote_match` for the false positives that bought each of
+    those, all found by running the agent rather than by a passing test.
     """
-    haystack = _normalize(source_text)
+    haystack = normalize_for_quote_match(source_text)
     issues: list[ValidationIssue] = []
     for kind, items in (("epic", plan.epics), ("task", plan.tasks)):
         for item in items:
-            quote = _normalize(item.provenance.source_quote)
+            quote = normalize_for_quote_match(item.provenance.source_quote)
             if quote not in haystack:
                 issues.append(
                     ValidationIssue(

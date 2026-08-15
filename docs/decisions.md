@@ -12,6 +12,73 @@ to).
 
 ---
 
+## ADR-0036 — Planning goldens: gate on structure, and let the corpus argue about restraint
+
+**Date:** 2026-08-15 · **Ticket:** RC1-257 · **Status:** Accepted
+
+**Context.** RC1-230's goal statement named "launch-planner work breakdowns" as a
+subject under test. Stories existed for the MCP surface, the narratives and the
+drift digest; `work_breakdown`, `dependency` and `raid` had none, despite all
+three being in production and living in the same repo as the harness.
+
+**Decision.** Three billed subjects — `work-breakdown`, `dependency`, `raid` —
+scored on **deterministic structure only**. No judge is used anywhere in them.
+
+The shared checks live in `evals/planning.py`: provenance traces to the PRD, no
+dangling epic references, no duplicate ids, owners on the roster. Two PRDs were
+authored for the evals (`apps/evals/prds/`): a two-paragraph `thin.md` and a
+deliberately boring `low-risk.md`.
+
+**Explanation.** Three things this story settled, each by running the subjects
+rather than by reasoning about them.
+
+**1. The eval found a bug in shipped validation.** The first run reported five of
+28 items on the flagship and three of 16 on `product-launch` as citing text not
+in the PRD. They were faithful. The PRDs bold whole clauses, and the agent quotes
+what a reader *sees* rather than the markup — which is the right reading of
+"copied verbatim from the PRD". `planner_core.validation.flag_unverifiable_quotes`
+had the same defect and had never surfaced it, because the only thing testing it
+was hand-authored goldens that include the asterisks. The fix is
+`normalize_for_quote_match`, and it repairs the shipped validator and the eval
+together. It also tolerates the agent transliterating a closing `**` as `"`.
+Apostrophes are deliberately not stripped: they are part of words, and removing
+them would let a quote match text it does not contain.
+
+**2. `no-cycles` on the dependency output measures the wrong thing.**
+`DependencyAgent.run` calls `resolve_cycles` before returning, so the result is
+acyclic by construction and the check passes no matter how the model behaves.
+It is kept and honestly relabelled as a regression guard on `resolve_cycles`.
+The evidence about the *agent* is what the repair had to do — `rejections` (edges
+naming tasks that do not exist) and `cycle_breaks` (edges removed to make the
+graph schedulable), both gated at zero on the flagship, where the task list is
+given. Both came back zero over 26 and 10 edges.
+
+**3. A ceiling on RAID entries punished the agent for doing the job.** The
+low-risk case first failed at five entries against a cap of four. The five were
+two assumptions the PRD states outright, two risks at severity 4 of 25, and one
+decision — a proportionate log. Assumptions and decisions are the A and D of
+RAID. The bound is now on **risks and their worst severity**, not on the size of
+the log, because "how many risks does a rehearsed version bump have" has a
+defensible answer where "how many entries should a RAID log have" does not.
+
+The thin PRD works as intended: two epics and seven tasks against ceilings of
+three and eight, versus eight epics and 22 tasks for the flagship. Restraint's
+other half — whether the agent *said* it was inferring — is recorded as a
+confidence mix in the observations rather than gated, because the prompt asks
+for medium/low on inferred work without saying how much.
+
+**Consequences.** Five billed subjects now exist and none runs in CI (ADR-0031).
+The three new ceilings in `evals/budget.py` are measured, and they are the
+slowest in the suite by a wide margin — a minute-plus per case, which is the
+shape of 16k-token structured output over a 101-line PRD rather than something
+to tune.
+
+Recall and noise are reported separately for `raid` and must stay that way.
+Merging them yields a number that a reviewer flagging everything can max out,
+which is the exact failure the low-risk case exists to catch.
+
+---
+
 ## ADR-0035 — Extract the harness to `agent-evals`; the subjects stay here
 
 **Date:** 2026-08-15 · **Ticket:** RC1-261 · **Status:** Accepted
