@@ -1,53 +1,22 @@
-"""Declared ceilings per subject, and what happens when one is crossed.
+"""What each subject in *this* repo is expected to cost.
 
-RC1-254 asks for cost, latency and token budgets with real numbers attached. The
-numbers here are **measured, not guessed** — each ceiling is set from an observed
-run with headroom, and the observation is recorded next to it so a future reader
-can tell a deliberate limit from a number someone liked the look of.
+`Ceiling` and the breach formatting live in `agent_evals.budget`. What stays
+here is the part no library could supply: the numbers. A ceiling is a claim
+about a specific subject on a specific model, measured on a specific day — it
+belongs with the thing it constrains, and a shared package holding it would be
+asserting a limit on code it has never seen (RC1-261).
 
-## A breach is a finding, not an exception
-
-It appears in the same report as the quality findings, because the decision it
-informs — *can this subject move to a cheaper model* — is answered by looking at
-cost and quality together. Splitting them into two reports is how the cost one
-stops being read.
-
-## Breaches are advisory
-
-A run that costs more than expected has not produced a wrong answer, and failing
-a build on it would be failing on the weather. RC1-255 gates on correctness;
-cost is surfaced, tracked, and left for a human. The one thing a budget must not
-do is go unnoticed, and `CharacteristicResult.advisory` already carries exactly
-that distinction through the run record.
+See `agent_evals.budget` for why a breach is advisory rather than a build
+failure.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from decimal import Decimal
 
+from agent_evals.budget import Ceiling, breaches_for
 
-@dataclass(frozen=True)
-class Ceiling:
-    """What a subject is expected to cost, and why that number."""
-
-    subject: str
-    max_cost_usd: Decimal
-    max_latency_ms: float
-    note: str
-
-    def breaches(self, cost: Decimal, latency_ms: float) -> list[str]:
-        found = []
-        if cost > self.max_cost_usd:
-            over = (cost / self.max_cost_usd - 1) * 100 if self.max_cost_usd else Decimal(0)
-            found.append(f"cost ${cost} exceeds ${self.max_cost_usd} ceiling by {over:.0f}%")
-        if latency_ms > self.max_latency_ms:
-            found.append(
-                f"latency {latency_ms / 1000:.0f}s exceeds "
-                f"{self.max_latency_ms / 1000:.0f}s ceiling"
-            )
-        return found
-
+__all__ = ["CEILINGS", "Ceiling", "breaches_for", "for_subject"]
 
 #: Measured on 2026-08-15, with headroom. A ceiling set below what a subject
 #: actually costs is a ceiling that fires every run and gets ignored; one set far

@@ -12,6 +12,61 @@ to).
 
 ---
 
+## ADR-0035 — Extract the harness to `agent-evals`; the subjects stay here
+
+**Date:** 2026-08-15 · **Ticket:** RC1-261 · **Status:** Accepted
+
+**Context.** ADR-0030 argued for keeping the harness a plain workspace member
+until a second consumer existed, on the grounds that an interface guessed from
+one implementation is how a harness ends up the wrong shape. The drift digest in
+`tpm-automation-platform` is that second consumer, so the condition ADR-0030 set
+has been met and the extraction is now due.
+
+The question was where to draw the line, and the coupling was easier to read
+than expected: ten of the modules imported nothing from this repo at all.
+`case`, `record`, `rubric`, `agreement`, `construct`, `seeds`, `labelling`,
+`pricing` and `groundedness` were already generic. Exactly two modules were
+entangled — `judge` reached for `app.config.get_settings()`, and `budget`
+shipped the `Ceiling` type together with this repo's ceilings.
+
+**Decision.** `agent-evals` (a separate repo, pinned by tag) holds the harness:
+the case and record types, the rubric, the deterministic groundedness checker,
+and the calibration machinery. `apps/evals` keeps everything that is *about this
+repo* — the subjects, the fact-set generator, the MCP bridge, the CLI, the
+config, and the measured cost ceilings.
+
+**Explanation.** The line is "would a second repo want this, unchanged?" Two
+things were moved across it deliberately rather than left behind:
+
+* **`judge` takes a resolved API key and model as arguments** rather than
+  reading settings. Each consumer prefixes its environment differently; a
+  library that reached for `LPA_ANTHROPIC_API_KEY` would work in exactly one
+  repo. Resolving credentials is the consumer's job, and `cmd_judge` does it.
+* **`Ceiling` moved; `CEILINGS` did not.** A limit is a claim about a specific
+  subject on a specific model measured on a specific day. A shared package
+  holding one would be asserting a budget for code it has never seen.
+
+What stayed behind matters as much. The groundedness tests asserting **zero
+false positives over the committed corpus** are still here, because they assert
+against this repo's fixtures. The library keeps the unit-level regressions for
+each of the five false-positive classes; this repo keeps the corpus guarantee.
+Moving it would have meant either dragging 36 narratives into a library that has
+no use for them, or losing the assertion — and that assertion is the reason the
+checker is trusted enough to gate.
+
+**Consequences.** The harness is now pinned by **tag, not branch**: if the ruler
+can move under a run, a changed score no longer tells you whether the subject
+drifted or the measurement did. Upgrading is a deliberate pin bump, and a bump
+that moves a score is itself the finding. The cost is that a harness fix now
+takes two PRs in two repos; that is the price of the thing being shared, and it
+is the right trade only because the harness is now the more stable half.
+
+`from evals import Case` still resolves — `apps/evals/evals/__init__.py`
+re-exports the moved names. Which half a name lives in is a packaging fact, and
+subjects should not have to track it.
+
+---
+
 ## ADR-0034 — Split groundedness: what is checkable is checked, what is judged is judged
 
 **Date:** 2026-08-15 · **Ticket:** RC1-260 · **Status:** Accepted

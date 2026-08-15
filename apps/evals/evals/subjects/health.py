@@ -29,15 +29,14 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
+from agent_evals.case import Case
+from agent_evals.record import CaseResult, CharacteristicResult, SubjectVersion, Usage
 from app.config import get_settings
 from app.store import SQLiteEventStore
 from mcp_server import __version__ as mcp_version
 from mcp_server.config import get_mcp_settings
 from mcp_server.server import build_server
 from planner_core import Plan, Snapshot, SnapshotKind, content_hash
-
-from evals.case import Case
-from evals.record import CaseResult, CharacteristicResult, SubjectVersion, Usage
 
 NAME = "health"
 

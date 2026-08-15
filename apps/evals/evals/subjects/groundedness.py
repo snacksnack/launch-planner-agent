@@ -4,7 +4,7 @@ RC1-251 asks for a per-subject hallucination rate reported over time rather than
 a boolean. This is the subject that produces it.
 
 Every case is one of the 36 status narratives in `apps/evals/calibration`,
-scored by `evals.groundedness` — deterministic, no model, no tokens, no
+scored by `agent_evals.groundedness` — deterministic, no model, no tokens, no
 credentials. That matters twice over: it can run on every push in CI, and unlike
 the judge (advisory at weighted kappa 0.66, RC1-250) **it is trustworthy enough
 to fail a build**.
@@ -37,11 +37,12 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from evals import groundedness as scorer
-from evals.case import Case
+from agent_evals import groundedness as scorer
+from agent_evals.case import Case
+from agent_evals.record import CaseResult, CharacteristicResult, SubjectVersion, Usage
+from agent_evals.seeds import Seed, SeedStore
+
 from evals.config import SEEDS_PATH
-from evals.record import CaseResult, CharacteristicResult, SubjectVersion, Usage
-from evals.seeds import Seed, SeedStore
 
 NAME = "groundedness"
 

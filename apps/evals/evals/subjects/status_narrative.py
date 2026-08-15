@@ -25,7 +25,7 @@ much the prose is worth and what it costs.
   the facts rather than hand-written per case, so a new fact set cannot silently
   ship with no expectations.
 * **must-not-say** — no unsupported claims, and no health state the facts
-  contradict. Both come from `evals.groundedness`, which RC1-251 validated to
+  contradict. Both come from `agent_evals.groundedness`, which RC1-251 validated to
   zero false positives on the committed corpus.
 * **the two edges** — a week with nothing to report must not manufacture
   activity, and a period with no baseline must say there is nothing to compare
@@ -41,14 +41,14 @@ import time
 from pathlib import Path
 from typing import Any
 
+from agent_evals import groundedness
+from agent_evals.case import Case
+from agent_evals.pricing import cost_usd
+from agent_evals.record import CaseResult, CharacteristicResult, SubjectVersion, Usage
 from agents.status import DEFAULT_MODEL, SYSTEM_PROMPT, StatusAgent
 from app.config import get_settings
 from planner_core import StatusFacts, fallback_narrative
 
-from evals import groundedness
-from evals.case import Case
-from evals.pricing import cost_usd
-from evals.record import CaseResult, CharacteristicResult, SubjectVersion, Usage
 from evals.seedgen import FACT_SETS
 
 NAME = "status-narrative"

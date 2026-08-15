@@ -8,9 +8,9 @@ gets muted, and a muted checker catches nothing.
 
 from __future__ import annotations
 
-from evals import groundedness
+from agent_evals import groundedness
+from agent_evals.seeds import SeedStore
 from evals.config import SEEDS_PATH
-from evals.seeds import SeedStore
 
 FACTS = {
     "period_label": "Week of 2026-08-17",
