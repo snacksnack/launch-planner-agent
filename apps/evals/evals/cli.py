@@ -31,7 +31,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from evals import agreement, construct, judge, labelling, seedgen
-from evals.config import get_eval_settings
+from evals.config import LABELS_PATH, SEEDS_PATH, get_eval_settings
 from evals.record import RunRecord, RunStore, new_run_id
 from evals.rubric import DIMENSION_KEYS, DIMENSIONS, RUBRIC_VERSION
 from evals.seeds import LabelStore, SeedStore, unlabelled
@@ -39,12 +39,6 @@ from evals.subjects import BILLED, SUBJECTS
 
 _PASS = "pass"
 _FAIL = "FAIL"
-
-#: Committed alongside the code. The seed set and the human labels are the
-#: deliverable of RC1-250 — a calibration nobody can reproduce is an assertion.
-_DATA = Path(__file__).resolve().parents[1] / "calibration"
-SEEDS_PATH = _DATA / "seeds.jsonl"
-LABELS_PATH = _DATA / "labels.jsonl"
 
 
 def _store(args: argparse.Namespace) -> RunStore:
@@ -135,6 +129,13 @@ def _print_report(record: RunRecord, *, verbose: bool) -> None:
     # Printed even when it is zero: "this subject costs nothing to evaluate" is
     # a claim worth being able to make from the record rather than from memory.
     print(f"  cost          ${record.total_cost_usd} · {record.total_latency_ms:.0f} ms total")
+    # Only when something actually measured it — a subject that checks no claims
+    # must not report 0.0%, which reads as "nothing was hallucinated" rather
+    # than "nothing was checked" (RC1-251).
+    if (rate := record.hallucination_rate) is not None:
+        checked = sum(r.observations.get("claims_checked", 0) for r in record.results)
+        flagged = sum(r.observations.get("violations", 0) for r in record.results)
+        print(f"  hallucination {rate:.1%}  ({flagged} unsupported of {checked} checkable claims)")
 
     for result in record.results:
         if result.error:

@@ -150,6 +150,23 @@ class RunRecord(BaseModel):
     def total_latency_ms(self) -> float:
         return sum(r.usage.latency_ms for r in self.results)
 
+    @property
+    def hallucination_rate(self) -> float | None:
+        """Unsupported claims as a fraction of checkable ones, across the run.
+
+        Weighted by claims rather than by case: a long narrative with one
+        invention and a one-line all-clear do not carry equal evidence, and
+        averaging per-case rates would pretend they do (RC1-251).
+
+        `None` when no case reported claim counts — a subject that does not
+        measure groundedness should not report a rate of zero, which would read
+        as "nothing was hallucinated" rather than "nothing was checked".
+        """
+        checked = sum(r.observations.get("claims_checked", 0) for r in self.results)
+        if not checked:
+            return None
+        return sum(r.observations.get("violations", 0) for r in self.results) / checked
+
 
 def new_run_id(subject: str, when: datetime | None = None) -> str:
     """`<subject>-<UTC timestamp>`, e.g. `health-20260813T174233.481852Z`.
