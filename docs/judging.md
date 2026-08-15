@@ -29,7 +29,7 @@ narrative**: the numbers are wrong, and it made something up. One is exact, one
 is judged, and each is checked by the instrument suited to it.
 
 `facts-correct` needs no calibration because it is not a judgement —
-`evals.groundedness` checks every ticket key, date and day-count against the
+`agent_evals.groundedness` checks every ticket key, date and day-count against the
 input, with zero false positives on the committed corpus (RC1-251).
 
 `no-unsupported-claims` clears the floor with **98% of its bootstrap interval
@@ -39,7 +39,7 @@ fail a build.
 ## The rubric, and why it was split
 
 Five dimensions, scored 0 (fails) / 1 (partial) / 2 (meets), defined in
-`apps/evals/evals/rubric.py` and versioned as `status-narrative-v2`.
+`agent_evals/rubric.py` (RC1-261: the rubric moved to the shared harness) and versioned as `status-narrative-v2`.
 
 **v1 had a single `groundedness` dimension, and it was asking two questions.**
 Its own wording collided: `2 (MEETS)` said *"appears in the facts, **or follows
@@ -57,7 +57,7 @@ v2 splits them:
 
 | | Question | Scored by |
 | --- | --- | --- |
-| `facts-correct` | Do the values match the input? | `evals.groundedness` — exact, free |
+| `facts-correct` | Do the values match the input? | `agent_evals.groundedness` — exact, free |
 | `no-unsupported-claims` | Does it assert anything beyond them? | the judge |
 
 and states the boundary the collision hid: *a causal, evaluative or attributive

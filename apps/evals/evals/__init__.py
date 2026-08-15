@@ -11,24 +11,25 @@ This is the top layer. It may import `mcp_server`, `app`, `agents`, and
 which also keeps `evals` out of `planner_core`'s reachable set — a measurement
 tool must never become a dependency of the thing it measures.
 
-**Deliberately not a library yet.** RC1-230 will eventually run evals in three
-repos, which implies a shared package. It is not built here, and that is the
-point: the harness has one consumer (the MCP server), and an interface guessed
-before there are two implementations is how a harness ends up with the wrong
-shape and a refactor nobody wants to do. The extraction happens in RC1-252, when
-the drift digest becomes the second consumer and the seams are known rather than
-imagined. Until then this is a plain workspace member with no abstraction layer:
-no `Subject` protocol, no `Scorer` protocol, no plugin registry beyond a dict.
-See ADR-0030.
+**The reusable half now lives in `agent_evals`** (RC1-261). `Case`, run records,
+the deterministic groundedness checker, the rubric and the calibration machinery
+were extracted once the drift digest became a second consumer — the sequencing
+ADR-0030 argued for, where the seams get read off two implementations instead of
+guessed from one. What remains here is everything that is *about this repo*: the
+subjects, the fact-set generator, the MCP bridge, the CLI, the config, and the
+measured cost ceilings.
+
+The re-exports below are kept so `from evals import Case` still resolves. Which
+half of the harness a name lives in is a packaging fact, not something every
+subject should have to track.
 """
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
-from evals.case import Case  # noqa: E402
-from evals.config import EvalSettings, get_eval_settings  # noqa: E402
-from evals.record import (  # noqa: E402
+from agent_evals.case import Case  # noqa: E402
+from agent_evals.record import (  # noqa: E402
     CaseResult,
     CharacteristicResult,
     DuplicateRunId,
@@ -38,6 +39,8 @@ from evals.record import (  # noqa: E402
     Usage,
     new_run_id,
 )
+
+from evals.config import EvalSettings, get_eval_settings  # noqa: E402
 
 __all__ = [
     "__version__",

@@ -8,9 +8,10 @@ the commands themselves cost money (ADR-0031, ADR-0033).
 from __future__ import annotations
 
 import pytest
-from evals import judge, seedgen
-from evals.rubric import JUDGED_KEYS, RUBRIC_VERSION, Score
-from evals.seeds import Seed
+from agent_evals import judge
+from agent_evals.rubric import JUDGED_KEYS, RUBRIC_VERSION, Score
+from agent_evals.seeds import Seed
+from evals import seedgen
 
 
 class _Parsed:
@@ -69,7 +70,7 @@ def test_the_judge_scores_every_dimension_and_records_its_version():
 def test_the_judge_reads_the_same_rubric_the_human_does():
     """A judge scoring against different wording is not a calibration, it is two
     unrelated measurements."""
-    from evals.rubric import rubric_text
+    from agent_evals.rubric import rubric_text
 
     client = FakeClient(_Parsed(_scored()))
     judge.score(_seed(), client=client, model="claude-sonnet-5")

@@ -53,12 +53,12 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
+from agent_evals.case import Case
+from agent_evals.pricing import cost_usd
+from agent_evals.record import CaseResult, CharacteristicResult, SubjectVersion, Usage
 from app.config import get_settings
 
-from evals.case import Case
 from evals.mcp_bridge import Surface, ToolCall, call, discover, to_api_name, to_mcp_name
-from evals.pricing import cost_usd
-from evals.record import CaseResult, CharacteristicResult, SubjectVersion, Usage
 
 NAME = "tool-selection"
 

@@ -30,11 +30,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from evals import agreement, budget, construct, judge, labelling, seedgen
+from agent_evals import agreement, construct, judge, labelling
+from agent_evals.record import RunRecord, RunStore, new_run_id
+from agent_evals.rubric import JUDGED, JUDGED_KEYS, RUBRIC_VERSION
+from agent_evals.seeds import LabelStore, SeedStore, unlabelled
+from agents.status import DEFAULT_MODEL
+from app.config import get_settings
+
+from evals import budget, seedgen
 from evals.config import LABELS_PATH, SEEDS_PATH, get_eval_settings
-from evals.record import RunRecord, RunStore, new_run_id
-from evals.rubric import JUDGED, JUDGED_KEYS, RUBRIC_VERSION
-from evals.seeds import LabelStore, SeedStore, unlabelled
 from evals.subjects import BILLED, SUBJECTS
 
 #: A dimension gates only if the point estimate clears the floor *and* the risk
@@ -330,11 +334,17 @@ def cmd_judge(args: argparse.Namespace) -> int:
     if not seeds:
         print("no seeds yet — run `evals seed` first", file=sys.stderr)
         return 2
+    # RC1-261: the library takes a resolved key and a resolved model rather than
+    # reaching for configuration itself. Resolving them is this repo's job —
+    # `LPA_` is our prefix, and `agent_evals` runs in three repos that each spell
+    # it differently.
+    settings = get_settings()
     try:
-        judge.preflight()
+        client = judge.client_for(settings.anthropic_api_key)
     except Exception as exc:
-        print(f"cannot run the judge: {exc}", file=sys.stderr)
+        print(f"cannot run the judge: {exc} (set LPA_ANTHROPIC_API_KEY)", file=sys.stderr)
         return 2
+    model = settings.anthropic_model or DEFAULT_MODEL
 
     store = LabelStore(Path(args.labels_path or LABELS_PATH))
     done = store.by_scorer(judge.JUDGE_VERSION)
@@ -346,7 +356,7 @@ def cmd_judge(args: argparse.Namespace) -> int:
         # money on the rest. Re-running resumes, so a transient failure costs
         # one seed rather than the whole set.
         try:
-            store.append(judge.score(seed))
+            store.append(judge.score(seed, client, model))
             print(f"  {seed.id}")
         except Exception as exc:
             failures.append((seed.id, str(exc)))
@@ -419,6 +429,26 @@ def cmd_calibrate(args: argparse.Namespace) -> int:
     return 0
 
 
+def _no_labels(store: LabelStore, scorer: str) -> str:
+    """Explain an empty label set, distinguishing 'never scored' from 'scored
+    under an older rubric'.
+
+    `by_scorer` excludes labels from a superseded rubric on purpose — a 1 under
+    different wording is not the same measurement. But reporting that as a bare
+    "no labels" sends you off to re-label something you already labelled. The
+    36 `human` labels from RC1-250 are exactly this case.
+    """
+    stale = sorted({label.rubric_version for label in store.all() if label.scorer == scorer})
+    if not stale:
+        known = sorted({label.scorer for label in store.all()})
+        return f"no labels for scorer {scorer!r} (have: {', '.join(known) or 'none'})"
+    return (
+        f"no labels for scorer {scorer!r} under the current rubric {RUBRIC_VERSION!r} — "
+        f"it has labels under {', '.join(stale)}, which are excluded rather than merged. "
+        "Re-label under the current rubric, or calibrate a scorer from the same version."
+    )
+
+
 def cmd_construct(args: argparse.Namespace) -> int:
     """Does the judge detect degradation we planted ourselves? No human needed."""
     seeds = SeedStore(Path(args.seeds_path or SEEDS_PATH)).all()
@@ -427,7 +457,7 @@ def cmd_construct(args: argparse.Namespace) -> int:
     scorer = args.scorer or judge.JUDGE_VERSION
     labels = {k: v.scores for k, v in store.by_scorer(scorer).items()}
     if not labels:
-        print(f"no labels for scorer {scorer!r}", file=sys.stderr)
+        print(_no_labels(store, scorer), file=sys.stderr)
         return 2
 
     print(f"scorer  {scorer}")

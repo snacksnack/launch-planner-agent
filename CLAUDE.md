@@ -29,10 +29,10 @@ uv run python -m app                      # config sanity check, no credentials 
 ```
 
 Evals — `uv run evals run <subject>` / `uv run evals report [run-id]` (RC1-248).
-Cost: every run record carries tokens/cost/latency; ceilings live in `evals/budget.py` and a
-breach is advisory, printed beside the quality findings. Judge calibration (RC1-250): `evals seed` (billed, once) → `evals label --dimension X`
+Cost: every run record carries tokens/cost/latency; the measured ceilings live in
+`evals/budget.py` and a breach is advisory, printed beside the quality findings. Judge calibration (RC1-250): `evals seed` (billed, once) → `evals label --dimension X`
 (free, resumable) → `evals judge` (billed) → `evals construct` (free sanity check on any
-scorer) → `evals calibrate`. **Two gate**: `facts-correct` (deterministic, `evals.groundedness`) and
+scorer) → `evals calibrate`. **Two gate**: `facts-correct` (deterministic, `agent_evals.groundedness`) and
 `no-unsupported-claims` (judge, κ 0.86, 98% of its CI above the floor). `completeness`,
 `actionability` and `tone` stay advisory — see ADR-0034 for why that is on the merits. `docs/judging.md` has the numbers and the limits. Always run
 `evals construct --scorer <name>` on a label set *before* calibrating it — three passes
@@ -72,13 +72,20 @@ evals  ──▶  mcp_server  ──▶  app (apps/api)  ──▶  agents (LLM)
   (`jira_client.py`), the Gantt payload builder. `planner_core` does no network or DB I/O.
 - **`apps/web`** — vanilla Vite + `frappe-gantt@0.6.1`. The *tested* contract is the
   backend payload (`app/gantt.py`), not the rendering.
-- **`apps/evals`** — the quality harness (RC1-230). Frozen `Case`s naming *characteristics*
-  rather than expected output, scored per case, appended to a run log carrying subject
-  version, token cost, and latency. Top of the layers contract: it may import everything,
-  nothing may import it. **Deliberately not a shared library yet** — one consumer means any
-  interface is a guess; the extraction is RC1-252. See ADR-0030. Billed subjects drive a
-  real model and stay out of the credential-free suite (ADR-0031); prices are a dated local
-  snapshot in `evals/pricing.py`, and an unknown model raises rather than costing zero.
+- **`apps/evals`** — *this repo's* eval subjects (RC1-230). Frozen `Case`s naming
+  *characteristics* rather than expected output, scored per case, appended to a run log
+  carrying subject version, token cost, and latency. Top of the layers contract: it may
+  import everything, nothing may import it. **The harness itself now lives in
+  [`agent-evals`](https://github.com/snacksnack/agent-evals)** (RC1-261, ADR-0035), pinned
+  by tag in the root `[tool.uv.sources]`. What stays here is what is about this repo: the
+  subjects, `seedgen`, `mcp_bridge`, the CLI, the config, and the measured `CEILINGS`.
+  Billed subjects drive a real model and stay out of the credential-free suite (ADR-0031);
+  prices are a dated local snapshot in `agent_evals/pricing.py`, and an unknown model
+  raises rather than costing zero.
+
+  **Changing the harness is two PRs in two repos** — land it in `agent-evals`, tag, then
+  bump the pin here. Pin bumps are deliberate: a score that moves on a bump is a finding
+  about the ruler, which is exactly what pinning by tag is for.
 
 ### The enforced rule
 

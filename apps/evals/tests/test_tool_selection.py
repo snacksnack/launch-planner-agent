@@ -15,8 +15,8 @@ from __future__ import annotations
 from decimal import Decimal
 
 import pytest
+from agent_evals.case import Case
 from app.config import get_settings
-from evals.case import Case
 from evals.mcp_bridge import Surface, to_api_name, to_mcp_name
 from evals.subjects import tool_selection
 

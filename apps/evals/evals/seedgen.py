@@ -28,12 +28,11 @@ from __future__ import annotations
 
 from datetime import date
 
+from agent_evals.seeds import Seed
 from agents.status import DEFAULT_MODEL, StatusAgent, build_user_prompt
 from app.config import get_settings
 from planner_core import StatusFacts, StatusNarrative, fallback_narrative
 from planner_core.status import Breach, Health, MilestoneDrift, NamedChange, RaidChange
-
-from evals.seeds import Seed
 
 SUBJECT = "status-narrative"
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import os
 
-from evals.case import Case
+from agent_evals.case import Case
 from evals.subjects import health
 
 

@@ -7,7 +7,7 @@ stated is as corrosive as one that flags a correct claim — both end muted.
 
 from __future__ import annotations
 
-from evals import groundedness
+from agent_evals import groundedness
 from evals.seedgen import FACT_SETS
 from evals.subjects import status_fallback, status_narrative
 

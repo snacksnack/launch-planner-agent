@@ -7,9 +7,9 @@ gate that gets wired up wrongly.
 
 from __future__ import annotations
 
-from evals.case import Case
+from agent_evals.case import Case
+from agent_evals.record import CaseResult, CharacteristicResult, RunStore, SubjectVersion, Usage
 from evals.cli import main
-from evals.record import CaseResult, CharacteristicResult, RunStore, SubjectVersion, Usage
 from evals.subjects import SUBJECTS, health
 
 
@@ -178,3 +178,33 @@ def test_a_second_run_appends_rather_than_replacing(tmp_path):
     records = RunStore(runs).all()
     assert len(records) == 2
     assert records[0].run_id != records[1].run_id
+
+
+def test_stale_rubric_labels_are_explained_not_reported_as_absent(tmp_path):
+    """A scorer with labels under a superseded rubric must not read as unlabelled.
+
+    `by_scorer` excludes them deliberately, and the bare "no labels" it used to
+    print sent you off to re-label 36 seeds that were already labelled.
+    """
+    from agent_evals.rubric import RUBRIC_VERSION
+    from agent_evals.seeds import Label, LabelStore
+    from evals.cli import _no_labels
+
+    path = tmp_path / "labels.jsonl"
+    store = LabelStore(path)
+    store.append(
+        Label(
+            seed_id="s1",
+            scorer="human",
+            rubric_version="a-superseded-version",
+            scores={"no-unsupported-claims": 2},
+        )
+    )
+
+    message = _no_labels(store, "human")
+    assert "a-superseded-version" in message, "must name the version the labels are under"
+    assert RUBRIC_VERSION in message, "must name the version they would need to be under"
+
+    absent = _no_labels(store, "never-scored-anything")
+    assert "a-superseded-version" not in absent, "a genuinely unlabelled scorer is a different case"
+    assert "human" in absent, "should say which scorers do exist"
