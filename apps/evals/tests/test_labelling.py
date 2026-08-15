@@ -8,7 +8,7 @@ labelling forty things twice.
 from __future__ import annotations
 
 from evals import labelling
-from evals.rubric import DIMENSION_KEYS, RUBRIC_VERSION, Score
+from evals.rubric import JUDGED_KEYS, RUBRIC_VERSION, Score
 from evals.seeds import LabelStore, Seed, unlabelled
 
 
@@ -43,14 +43,14 @@ class _Script:
 
 def test_a_full_pass_stores_one_label_per_seed(tmp_path):
     store = LabelStore(tmp_path / "labels.jsonl")
-    script = _Script(*(["2"] * len(DIMENSION_KEYS) * 2))
+    script = _Script(*(["2"] * len(JUDGED_KEYS) * 2))
 
     done = labelling.run_session([_seed(0), _seed(1)], store, read=script.read, write=script.write)
 
     assert done == 2
     labels = store.all()
     assert len(labels) == 2
-    assert set(labels[0].scores) == set(DIMENSION_KEYS)
+    assert set(labels[0].scores) == set(JUDGED_KEYS)
     assert labels[0].rubric_version == RUBRIC_VERSION
 
 
@@ -58,7 +58,7 @@ def test_quitting_saves_everything_scored_so_far(tmp_path):
     """The resume contract: closing the terminal must never cost a session's
     work, or nobody finishes a forty-item set."""
     store = LabelStore(tmp_path / "labels.jsonl")
-    script = _Script(*(["2"] * len(DIMENSION_KEYS)), "q")
+    script = _Script(*(["2"] * len(JUDGED_KEYS)), "q")
 
     labelling.run_session([_seed(0), _seed(1)], store, read=script.read, write=script.write)
 
@@ -69,7 +69,7 @@ def test_a_second_session_only_offers_what_is_left(tmp_path):
     store = LabelStore(tmp_path / "labels.jsonl")
     seeds = [_seed(0), _seed(1), _seed(2)]
     labelling.run_session(
-        seeds[:1], store, read=_Script(*(["2"] * len(DIMENSION_KEYS))).read, write=lambda _: None
+        seeds[:1], store, read=_Script(*(["2"] * len(JUDGED_KEYS))).read, write=lambda _: None
     )
 
     remaining = unlabelled(seeds, store.by_scorer(labelling.HUMAN))
@@ -97,7 +97,7 @@ def test_a_typo_re_prompts_rather_than_scoring(tmp_path):
     labelling.run_session([_seed(0)], store, read=script.read, write=script.write)
 
     assert "not a score" in script.transcript
-    assert store.all()[0].scores["groundedness"] == Score.MEETS
+    assert store.all()[0].scores["no-unsupported-claims"] == Score.MEETS
 
 
 def test_the_labeller_is_shown_the_facts_and_never_the_variant(tmp_path):
@@ -105,7 +105,7 @@ def test_the_labeller_is_shown_the_facts_and_never_the_variant(tmp_path):
     output came from the degraded prompt would score it low for that reason —
     calibrating the judge against a hint the judge never gets."""
     store = LabelStore(tmp_path / "labels.jsonl")
-    script = _Script(*(["2"] * len(DIMENSION_KEYS)))
+    script = _Script(*(["2"] * len(JUDGED_KEYS)))
 
     labelling.run_session([_seed(0, "degraded")], store, read=script.read, write=script.write)
 

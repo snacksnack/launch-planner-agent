@@ -29,7 +29,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 
-from evals.rubric import DIMENSION_KEYS, Score
+from evals.rubric import JUDGED_KEYS, Score
 
 #: Below this, a dimension does not gate a build (RC1-255); it is reported as
 #: advisory. Landis & Koch call 0.61-0.80 "substantial"; 0.6 is the bottom of
@@ -110,7 +110,7 @@ def compare(
     """
     shared = sorted(set(human) & set(judge))
     results = []
-    for dimension in DIMENSION_KEYS:
+    for dimension in JUDGED_KEYS:
         # Per dimension, not per seed: a dimension-by-dimension labelling pass
         # produces labels that are complete for the dimension being worked on
         # and absent for the rest, and that should calibrate as soon as it is
@@ -138,6 +138,55 @@ def compare(
             )
         )
     return results
+
+
+def bootstrap(
+    human: dict[str, dict[str, Score]],
+    judge: dict[str, dict[str, Score]],
+    dimension: str,
+    *,
+    rounds: int = 4000,
+    seed: int = 7,
+) -> tuple[float, float, float] | None:
+    """`(lo, hi, p_below_floor)` — a 95% interval, and the risk of not gating.
+
+    First-class rather than a script, because RC1-250 turned on exactly this
+    number and nearly shipped the wrong conclusion without it. Twelve seeds gave
+    kappa 0.82, which clears the floor; doubling to 24 moved it to 0.66 with a
+    third of the distribution below. **A point estimate above the floor is not
+    the same as having cleared it**, and a report that shows only the point
+    estimate invites that mistake every time.
+
+    Seeded, so the same labels always produce the same interval — a confidence
+    interval that moves when you re-read it is not evidence.
+    """
+    import random
+
+    shared = [
+        seed_id
+        for seed_id in sorted(set(human) & set(judge))
+        if dimension in human[seed_id] and dimension in judge[seed_id]
+    ]
+    if len(shared) < 2:
+        return None
+
+    rng = random.Random(seed)
+    draws = []
+    for _ in range(rounds):
+        sample = [rng.choice(shared) for _ in shared]
+        left = {f"s{i}": human[x] for i, x in enumerate(sample)}
+        right = {f"s{i}": judge[x] for i, x in enumerate(sample)}
+        result = next(r for r in compare(left, right) if r.dimension == dimension)
+        if result.weighted_kappa is not None:
+            draws.append(result.weighted_kappa)
+    if not draws:
+        return None
+
+    draws.sort()
+    lo = draws[int(0.025 * len(draws))]
+    hi = draws[min(len(draws) - 1, int(0.975 * len(draws)))]
+    below = sum(1 for k in draws if k < GATING_FLOOR) / len(draws)
+    return lo, hi, below
 
 
 def confusion(

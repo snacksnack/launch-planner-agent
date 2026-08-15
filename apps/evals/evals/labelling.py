@@ -26,7 +26,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 
-from evals.rubric import DIMENSIONS, RUBRIC_VERSION, Score
+from evals.rubric import JUDGED, RUBRIC_VERSION, Score
 from evals.seeds import Label, Seed
 
 HUMAN = "human"
@@ -134,12 +134,12 @@ def run_session(
         write("Nothing left to label — the set is complete.")
         return 0
 
-    dimensions = [dimension] if dimension else list(DIMENSIONS)
+    dimensions = [dimension] if dimension else list(JUDGED)
     if dimension:
         write(f"Scoring ONE dimension across {total} seed(s): {dimension.key}")
         write(f"  {dimension.question}\n")
     else:
-        write(f"{total} seed(s), all {len(DIMENSIONS)} dimensions each.")
+        write(f"{total} seed(s), all {len(JUDGED)} judged dimensions each.")
     write("Scores are 0 (fails) / 1 (partial) / 2 (meets).")
     write("Every answer is saved as you go; quit any time and rerun to resume.\n")
 
@@ -177,7 +177,7 @@ def run_session(
         # a complete label rather than three unusable partial ones.
         merged = dict(existing.get(seed.id, {})) if existing else {}
         merged.update(scores)
-        if len(merged) != len(DIMENSIONS):
+        if len(merged) != len(JUDGED):
             write("  saved (partial — other dimensions still to do).\n")
         else:
             write("  saved.\n")

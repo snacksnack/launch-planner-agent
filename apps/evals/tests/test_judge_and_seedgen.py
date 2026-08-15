@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 from evals import judge, seedgen
-from evals.rubric import DIMENSION_KEYS, RUBRIC_VERSION, Score
+from evals.rubric import JUDGED_KEYS, RUBRIC_VERSION, Score
 from evals.seeds import Seed
 
 
@@ -33,11 +33,11 @@ class FakeClient:
 
 
 def _scored(**overrides):
-    values = {key: 2 for key in DIMENSION_KEYS}
-    values.update(overrides)
+    values = {key: 2 for key in JUDGED_KEYS}
+    values.update({k.replace("_", "-"): v for k, v in overrides.items()})
     return judge._Scored(
-        **{f"{key}_reason": f"because of {key}" for key in DIMENSION_KEYS},
-        **values,
+        **{f"{judge._attr(k)}_reason": f"because of {k}" for k in JUDGED_KEYS},
+        **{judge._attr(k): v for k, v in values.items()},
     )
 
 
@@ -56,11 +56,11 @@ def _seed(seed_id="status-narrative-00-agent"):
 
 
 def test_the_judge_scores_every_dimension_and_records_its_version():
-    client = FakeClient(_Parsed(_scored(groundedness=1, tone=0)))
+    client = FakeClient(_Parsed(_scored(no_unsupported_claims=1, tone=0)))
     label = judge.score(_seed(), client=client, model="claude-sonnet-5")
 
-    assert set(label.scores) == set(DIMENSION_KEYS)
-    assert label.scores["groundedness"] == Score.PARTIAL
+    assert set(label.scores) == set(JUDGED_KEYS)
+    assert label.scores["no-unsupported-claims"] == Score.PARTIAL
     assert label.scores["tone"] == Score.FAILS
     assert label.scorer == judge.JUDGE_VERSION, "not 'judge' — two prompt versions must not merge"
     assert label.rubric_version == RUBRIC_VERSION

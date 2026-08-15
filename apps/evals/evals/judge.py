@@ -22,11 +22,11 @@ import json
 from app.config import get_settings
 from pydantic import BaseModel, ConfigDict, Field
 
-from evals.rubric import DIMENSION_KEYS, RUBRIC_VERSION, Score, rubric_text
+from evals.rubric import JUDGED_KEYS, RUBRIC_VERSION, Score, rubric_text
 from evals.seeds import Label, Seed
 
 #: Bump on any change to `SYSTEM_PROMPT` or the scoring schema.
-JUDGE_VERSION = "judge-v1"
+JUDGE_VERSION = "judge-v2"
 
 SYSTEM_PROMPT = f"""\
 You are scoring a weekly executive status update against a fixed rubric.
@@ -39,6 +39,10 @@ Score each dimension independently. An update can be perfectly grounded and
 useless, or well written and wrong; those are different dimensions and a low
 score on one is not a reason to lower another.
 
+Whether the numbers, dates and names are *correct* is checked separately and is
+NOT your job. Do not lower a score because a value looks wrong — judge only
+whether the output claims things the facts do not contain.
+
 RUBRIC
 
 {rubric_text()}
@@ -49,12 +53,19 @@ update or the facts, then the score.
 
 
 class _Scored(BaseModel):
-    """Schema-forced so the judge cannot answer in prose."""
+    """Schema-forced so the judge cannot answer in prose.
+
+    `facts-correct` is absent on purpose: it is adjudicated by
+    `evals.groundedness`, exactly and for free. Asking the judge for it would
+    add cost, add a second opinion on a settled question, and invite it to
+    lower `no-unsupported-claims` for a wrong number — which is the conflation
+    v1 had (RC1-260).
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    groundedness_reason: str
-    groundedness: int = Field(ge=0, le=2)
+    no_unsupported_claims_reason: str
+    no_unsupported_claims: int = Field(ge=0, le=2)
     completeness_reason: str
     completeness: int = Field(ge=0, le=2)
     actionability_reason: str
@@ -63,10 +74,10 @@ class _Scored(BaseModel):
     tone: int = Field(ge=0, le=2)
 
     def scores(self) -> dict[str, Score]:
-        return {key: Score(getattr(self, key)) for key in DIMENSION_KEYS}
+        return {key: Score(getattr(self, _attr(key))) for key in JUDGED_KEYS}
 
     def reasons(self) -> str:
-        return " | ".join(f"{key}: {getattr(self, f'{key}_reason')}" for key in DIMENSION_KEYS)
+        return " | ".join(f"{k}: {getattr(self, f'{_attr(k)}_reason')}" for k in JUDGED_KEYS)
 
 
 def preflight() -> None:
@@ -98,6 +109,12 @@ def build_user_prompt(seed: Seed) -> str:
 #: is on by default on current models — so a budget that looks generous for the
 #: visible answer is not.
 _MAX_TOKENS = 4096
+
+
+def _attr(key: str) -> str:
+    """`no-unsupported-claims` -> `no_unsupported_claims`. Rubric keys are
+    hyphenated for reading; Python attributes cannot be."""
+    return key.replace("-", "_")
 
 
 class JudgeRefused(Exception):

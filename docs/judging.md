@@ -14,27 +14,66 @@ This document is the honest state of that check.
 
 ## The short version
 
-| Dimension | Human agreement (weighted κ) | n | 95% CI | May gate a build |
-| --- | --- | --- | --- | --- |
-| groundedness | 0.66 | 24 | 0.33 – 0.93 | **no** |
-| completeness | not established | 0 | — | no |
-| actionability | not established | 0 | — | no |
-| tone | not established | 0 | — | no |
+Rubric `status-narrative-v2`, judge `judge-v2`.
 
-**No dimension gates.** All four are advisory: they appear in every run and
-cannot fail a build, which is the state RC1-255 must respect.
+| Dimension | Scored by | κ (weighted) | n | 95% CI | Gates |
+| --- | --- | --- | --- | --- | --- |
+| `facts-correct` | **deterministic** | n/a — exact | 36 | — | **yes** |
+| `no-unsupported-claims` | judge | **0.86** | 24 | +0.63 to +1.00 | **yes** |
+| `completeness` | judge | not established | 0 | — | no |
+| `actionability` | judge | not established | 0 | — | no |
+| `tone` | judge | not established | 0 | — | no |
 
-Groundedness is the closest, and the decision not to gate it is deliberate
-rather than a missing measurement. Its point estimate clears the 0.6 floor, but
-**34% of the bootstrap distribution sits below it**. The epic's own rule about
-gates applies: *a flaky gate gets disabled within a week, which is worse than no
-gate*. A gate with one-in-three odds of not having earned its authority is that
-gate.
+**Two dimensions gate, and they are the two failure modes that matter for a
+narrative**: the numbers are wrong, and it made something up. One is exact, one
+is judged, and each is checked by the instrument suited to it.
 
-## The rubric
+`facts-correct` needs no calibration because it is not a judgement —
+`evals.groundedness` checks every ticket key, date and day-count against the
+input, with zero false positives on the committed corpus (RC1-251).
 
-Four dimensions, scored 0 (fails) / 1 (partial) / 2 (meets), defined in
-`apps/evals/evals/rubric.py` and versioned as `status-narrative-v1`. A human and
+`no-unsupported-claims` clears the floor with **98% of its bootstrap interval
+above it**. The other three remain advisory: visible in every run, unable to
+fail a build.
+
+## The rubric, and why it was split
+
+Five dimensions, scored 0 (fails) / 1 (partial) / 2 (meets), defined in
+`apps/evals/evals/rubric.py` and versioned as `status-narrative-v2`.
+
+**v1 had a single `groundedness` dimension, and it was asking two questions.**
+Its own wording collided: `2 (MEETS)` said *"appears in the facts, **or follows
+from them**"* while `1 (PARTIAL)` said *"includes a **soft claim the facts do not
+support**"*. An output whose numbers are all correct but which adds *"reflecting
+improved schedule buffer"* satisfies one clause and violates the other.
+
+Three of the five human-vs-judge disagreements in RC1-250 sat exactly there. The
+human scored 2 (the numbers are right); the judge scored 1 (the gloss is
+unsupported). **Both readings were correct — of different questions.** No amount
+of extra labelling resolves that, which is why doubling n moved the estimate
+without narrowing the interval.
+
+v2 splits them:
+
+| | Question | Scored by |
+| --- | --- | --- |
+| `facts-correct` | Do the values match the input? | `evals.groundedness` — exact, free |
+| `no-unsupported-claims` | Does it assert anything beyond them? | the judge |
+
+and states the boundary the collision hid: *a causal, evaluative or attributive
+phrase counts as an unsupported claim **even when every number is correct***.
+
+The result, on the same three seeds, re-scored:
+
+| Seed | `facts-correct` | `no-unsupported-claims` |
+| --- | --- | --- |
+| `08-agent` | 2 | 1 — *"'driven by' … adds causal framing not stated"* |
+| `10-agent` | 2 | 1 — *"'reflecting improved schedule buffer'"* |
+| `11-agent` | 2 | 1 — *"'due to delays' … 'less buffer than before'"* |
+
+The disagreement dissolved rather than being argued away: both scorers had been
+right, and the rubric now has a place for each answer. Agreement went from
+**κ 0.66 (34% of the interval below the floor)** to **κ 0.86 (2% below)**. A human and
 the judge read the *same text* — `rubric_text()` is the single source, because a
 judge scoring against different wording than the human is not a calibration but
 two unrelated measurements.
@@ -76,7 +115,7 @@ the run record, and the CLI marks advisory misses with `~` and the word
 
 ## What went wrong with the human labels
 
-The seed set is 36 outputs, and human labelling took four attempts.
+The seed set is 36 outputs. Under v1, human labelling took four attempts.
 
 | Pass | Scope | Result |
 | --- | --- | --- |
@@ -140,30 +179,40 @@ reported as out of scope rather than scored.
 
 ### The result
 
+Under `status-narrative-v2`:
+
+| Scorer | `no-unsupported-claims` | `tone` |
+| --- | --- | --- |
+| `judge-v2` | **89%** | **99%** |
+| `human-v4` (the usable pass) | **83%** | not scored |
+
+And under v1, which is why the tripwire exists at all:
+
 | Scorer | groundedness | tone |
 | --- | --- | --- |
-| `judge-v1` | **71%** | **100%** |
-| `human-v3` (the usable pass) | **71%** | not scored |
+| `judge-v1` | 71% | 100% |
+| `human-v3` | 71% | not scored |
 | `human` (fast) | 53% — chance | 50% — chance |
-| `human-careful` | 0% — inverted | not scored |
-| `human-v2` | 0% — inverted | not scored |
+| `human-careful` | **0% — inverted** | not scored |
+| `human-v2` | **0% — inverted** | not scored |
 
 The judge separates outputs we degraded on purpose, and so does the one careful
 human pass — at exactly the same rate. The three unusable passes do not, which
 is what makes this a useful tripwire: **run it on a label set before spending
 effort calibrating against it.** All three could have been discarded in seconds.
 
-## The groundedness calibration, in full
+## The `no-unsupported-claims` calibration, in full
 
-Twenty-four seeds, scored by a human and by `judge-v1` independently.
+Twenty-four seeds, scored by a human and by `judge-v2` independently, under
+`status-narrative-v2`.
 
-| | 0 (fails) | 1 (partial) | 2 (meets) |
-| --- | --- | --- | --- |
-| human | 2 | 9 | 13 |
-| judge | 1 | 12 | 11 |
+    no-unsupported-claims   24   92%   κ 0.86   CI +0.63 to +1.00   gates
+      2% of the interval is below the 0.6 floor
 
-Nineteen of twenty-four agree exactly (83%). Both scorers used all three scores,
-so this is not the degenerate case where kappa is undefined.
+Twenty-two of twenty-four agree exactly. `judge-v2` used all three scores across
+the corpus (12 / 13 / 11), so there is real variance to measure — v1's
+groundedness was lopsided at 1 / 12 / 23, which is part of why its kappa was both
+lower and less stable.
 
 ### Why n was doubled, and what that showed
 
@@ -202,11 +251,11 @@ articulate is in a different position from one whose disagreements are noise.
 
 ## What this establishes, and what it does not
 
-**Establishes:** on groundedness, `judge-v1` and a human applying the same rubric
-agree substantially more than chance — κ 0.66 over 24 items, 83% exact agreement,
-both using the full scale. That is a real signal and far from the noise an
-uncalibrated judge would produce. It also detects planted degradation on
-groundedness and tone without needing any labels at all.
+**Establishes:** on `no-unsupported-claims`, `judge-v2` and a human applying the
+same rubric agree at κ 0.86 over 24 items, with 98% of the bootstrap interval
+above the floor. Combined with `facts-correct` — which is exact rather than
+judged — the two failure modes that matter for a narrative are both covered by an
+instrument suited to them.
 
 **Does not establish** — and these are the reasons the other three dimensions
 stay advisory:
@@ -224,24 +273,30 @@ stay advisory:
 * **One subject, one model, one rubric version.** Nothing here says the judge
   behaves the same on the drift digest (RC1-252).
 
-## Closing the remaining gap
+## Adding a dimension later
 
-Same shape as the pass that worked — small, single-dimension, tripwire first:
+Same shape as the passes that worked — small, single-dimension, tripwire first:
 
 ```bash
-uv run evals label --dimension completeness --scorer human-v4 --limit 12
-uv run evals construct --scorer human-v4    # seconds: is this pass usable?
-uv run evals calibrate --scorer human-v4    # the kappa
+uv run evals label --dimension actionability --scorer human-v5 --limit 24
+uv run evals construct --scorer human-v5    # seconds: is this pass usable?
+uv run evals calibrate --scorer human-v5    # kappa and interval
 ```
 
-Step two is the part worth keeping regardless of what it returns. Three passes
-were wasted before it existed; each could have been discarded in seconds rather
-than after a full calibration. **Run it on any label set before trusting one.**
+Step two is the part worth keeping regardless of what it returns. Three v1
+passes were wasted before it existed; each could have been discarded in seconds
+rather than after a full calibration. **Run it on any label set before trusting
+one.**
 
-To extend the *bottom* of the scale, the cheapest route is a fourth generator
-variant that plants outright fabrications — an invented ticket key or a date not
-in the facts — so 0 has seeds to attach to. The `degraded` prompt produces soft
-unsupported claims, which is a 1, and that is why no 0 appeared.
+Two things learned the hard way and worth repeating:
+
+* **Scope, not volume.** 36 seeds × 4 dimensions is 144 judgements and produced
+  labels the labeller told us to discard. 24 seeds × 1 dimension produced two
+  usable calibrations in a row.
+* **The interval decides, not the point estimate.** `calibrate` now prints a
+  bootstrap CI and withholds gating when more than 20% of it sits below the
+  floor. RC1-250 measured 0.66 — above the floor — and the honest call was still
+  not to gate.
 
 ## Limits worth stating plainly
 
@@ -254,8 +309,8 @@ unsupported claims, which is a 1, and that is why no 0 appeared.
   low agreement can mean either. Intra-rater agreement — does a human agree with
   themselves? — would separate them, and has not been measured, because no pass
   was careful enough to serve as either side of that comparison.
-* **The judge is one model at one version.** `judge-v1` and
-  `status-narrative-v1` are recorded on every label. Comparing labels across
+* **The judge is one model at one version.** `judge-v2` and
+  `status-narrative-v2` are recorded on every label. Comparing labels across
   versions is refused rather than averaged, because a score of 1 under different
   wording is not the same measurement.
 * **Prompt caching and cost.** The judge is billed and runs outside

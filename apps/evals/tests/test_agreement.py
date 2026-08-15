@@ -4,22 +4,22 @@ conclusion in `docs/judging.md` is downstream of these numbers."""
 from __future__ import annotations
 
 from evals.agreement import GATING_FLOOR, compare, confusion
-from evals.rubric import DIMENSION_KEYS, Score
+from evals.rubric import JUDGED_KEYS, Score
 
 
 def _labels(*per_seed):
     """`_labels((2, 2, 2, 2), ...)` -> {seed_id: {dimension: Score}}."""
     return {
-        f"s{index}": dict(zip(DIMENSION_KEYS, [Score(v) for v in scores], strict=True))
+        f"s{index}": dict(zip(JUDGED_KEYS, [Score(v) for v in scores], strict=True))
         for index, scores in enumerate(per_seed)
     }
 
 
 def _one_dimension(human_scores, judge_scores):
-    """Vary only groundedness; hold the rest identical so it is isolated."""
+    """Vary only the first judged dimension; hold the rest identical so it is isolated."""
     human = _labels(*[(s, 2, 2, 2) for s in human_scores])
     judge = _labels(*[(s, 2, 2, 2) for s in judge_scores])
-    return next(r for r in compare(human, judge) if r.dimension == "groundedness")
+    return next(r for r in compare(human, judge) if r.dimension == "no-unsupported-claims")
 
 
 def test_perfect_agreement_with_variance_is_kappa_one():
@@ -72,12 +72,14 @@ def test_only_seeds_scored_by_both_are_compared():
     wrong output — and `n` has to say how many actually contributed."""
     human = _labels((2, 2, 2, 2), (0, 2, 2, 2), (1, 2, 2, 2))
     judge = {"s0": human["s0"], "s2": human["s2"]}
-    result = next(r for r in compare(human, judge) if r.dimension == "groundedness")
+    result = next(r for r in compare(human, judge) if r.dimension == "no-unsupported-claims")
     assert result.n == 2
 
 
 def test_no_shared_seeds_is_reported_rather_than_crashing():
-    result = next(r for r in compare(_labels((2, 2, 2, 2)), {}) if r.dimension == "groundedness")
+    result = next(
+        r for r in compare(_labels((2, 2, 2, 2)), {}) if r.dimension == "no-unsupported-claims"
+    )
     assert result.n == 0
     assert result.weighted_kappa is None
     assert not result.gates
@@ -95,11 +97,11 @@ def test_the_confusion_table_says_how_they_disagree():
     consistently one point generous needs a different fix from a random one."""
     human = _labels((2, 2, 2, 2), (1, 2, 2, 2), (1, 2, 2, 2))
     judge = _labels((2, 2, 2, 2), (2, 2, 2, 2), (2, 2, 2, 2))
-    table = confusion(human, judge, "groundedness")
+    table = confusion(human, judge, "no-unsupported-claims")
     assert table[(1, 2)] == 2, "judge scored 2 where the human scored 1, twice"
     assert table[(2, 2)] == 1
 
 
 def test_every_dimension_is_reported():
     results = compare(_labels((2, 1, 0, 2)), _labels((2, 1, 0, 2)))
-    assert [r.dimension for r in results] == list(DIMENSION_KEYS)
+    assert [r.dimension for r in results] == list(JUDGED_KEYS)

@@ -18,12 +18,12 @@ one. `docs/judging.md` says so plainly; this constant is what makes it checkable
 
 from __future__ import annotations
 
-from enum import IntEnum
+from enum import IntEnum, StrEnum
 
 #: Bump on any change to a dimension's text or the scale. Labels record the
 #: version they were collected under, and calibrating across versions is a
 #: category error the loader refuses rather than silently averages.
-RUBRIC_VERSION = "status-narrative-v1"
+RUBRIC_VERSION = "status-narrative-v2"
 
 
 class Score(IntEnum):
@@ -35,17 +35,41 @@ class Score(IntEnum):
     MEETS = 2
 
 
+class ScoredBy(StrEnum):
+    """Who adjudicates a dimension.
+
+    The v1 rubric had no such distinction and conflated two different questions
+    inside `groundedness`: *are the facts right* (checkable) and *does it claim
+    anything beyond them* (a judgement). Three of the five human-vs-judge
+    disagreements in RC1-250 sat exactly on that seam, and no amount of extra
+    labelling would have resolved them — the rubric was asking two questions and
+    accepting one answer.
+    """
+
+    DETERMINISTIC = "deterministic"
+    JUDGE = "judge"
+
+
 class Dimension:
     """One scored axis, with the text a human and the judge both read."""
 
-    __slots__ = ("key", "question", "meets", "partial", "fails")
+    __slots__ = ("key", "question", "meets", "partial", "fails", "scored_by")
 
-    def __init__(self, key: str, question: str, meets: str, partial: str, fails: str) -> None:
+    def __init__(
+        self,
+        key: str,
+        question: str,
+        meets: str,
+        partial: str,
+        fails: str,
+        scored_by: ScoredBy = ScoredBy.JUDGE,
+    ) -> None:
         self.key = key
         self.question = question
         self.meets = meets
         self.partial = partial
         self.fails = fails
+        self.scored_by = scored_by
 
     def as_prompt(self) -> str:
         return (
@@ -56,22 +80,37 @@ class Dimension:
         )
 
 
-GROUNDEDNESS = Dimension(
-    key="groundedness",
+FACTS_CORRECT = Dimension(
+    key="facts-correct",
     question=(
-        "Is every claim in the narrative supported by the FACTS? "
-        "Judge only support, not usefulness — a dull but accurate summary scores 2."
+        "Does every ticket key, date, name and number in the output appear in the facts? "
+        "Nothing about interpretation — only whether the values are the ones given."
+    ),
+    meets="Every value in the output appears in the facts.",
+    partial="(not used — a value is in the facts or it is not)",
+    fails="A ticket key, date, name or number appears that is not in the facts.",
+    scored_by=ScoredBy.DETERMINISTIC,
+)
+
+NO_UNSUPPORTED_CLAIMS = Dimension(
+    key="no-unsupported-claims",
+    question=(
+        "Setting the numbers aside — they are checked separately — does the output assert "
+        "anything the facts do not contain? Causes, attributions, sentiment, or a severity "
+        "the facts do not state."
     ),
     meets=(
-        "Every number, date, name, and health state appears in the facts, or follows from them."
+        "Every statement is either a fact from the input or a direct restatement of one. "
+        "Naming a value the facts contain, however plainly, is not an unsupported claim."
     ),
     partial=(
-        "Broadly faithful, but includes at least one soft claim the facts do not support "
-        "(a cause, an attribution, a 'the team has absorbed it')."
+        "Adds at least one claim the facts do not contain. **A causal, evaluative or "
+        "attributive phrase counts** — 'driven by', 'reflecting', 'due to', 'warrants "
+        "attention', 'the team is confident' — even when every number is correct."
     ),
     fails=(
-        "Contains a number, date, task name, or health state that is not in the facts, or "
-        "contradicts one that is. An invented figure alone is a 0."
+        "Asserts a state the facts contradict, or its unsupported claims carry the "
+        "substance of the update rather than decorating it."
     ),
 )
 
@@ -120,7 +159,20 @@ TONE = Dimension(
     ),
 )
 
-DIMENSIONS: tuple[Dimension, ...] = (GROUNDEDNESS, COMPLETENESS, ACTIONABILITY, TONE)
+DIMENSIONS: tuple[Dimension, ...] = (
+    FACTS_CORRECT,
+    NO_UNSUPPORTED_CLAIMS,
+    COMPLETENESS,
+    ACTIONABILITY,
+    TONE,
+)
+
+#: The dimensions a human or a judge actually scores. `facts-correct` is
+#: excluded: it is adjudicated by `evals.groundedness`, which is exact, free, and
+#: already gating — asking a person to hand-score it would be asking them to be a
+#: slower regex.
+JUDGED: tuple[Dimension, ...] = tuple(d for d in DIMENSIONS if d.scored_by is ScoredBy.JUDGE)
+JUDGED_KEYS: tuple[str, ...] = tuple(d.key for d in JUDGED)
 DIMENSION_KEYS: tuple[str, ...] = tuple(d.key for d in DIMENSIONS)
 
 
@@ -130,4 +182,4 @@ def rubric_text() -> str:
     One source: a judge scoring against different words than the human read is
     not a calibration, it is two unrelated measurements.
     """
-    return "\n\n".join(d.as_prompt() for d in DIMENSIONS)
+    return "\n\n".join(d.as_prompt() for d in JUDGED)

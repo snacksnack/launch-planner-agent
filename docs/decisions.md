@@ -12,6 +12,66 @@ to).
 
 ---
 
+## ADR-0034 — Split groundedness: what is checkable is checked, what is judged is judged
+
+**Date:** 2026-08-15 · **Ticket:** RC1-260 · **Status:** Accepted
+
+**Context.** ADR-0033 left every dimension advisory. Groundedness came closest at
+weighted kappa 0.66 with a third of its bootstrap interval below the gating
+floor, and doubling the sample from 12 to 24 moved the estimate down without
+narrowing the range — the signature of systematic disagreement rather than a
+small sample.
+
+**Explanation.** *The rubric was asking two questions and accepting one answer.*
+v1's groundedness dimension said `2 (MEETS)` meant values that *"appear in the
+facts, **or follow from them**"* and `1 (PARTIAL)` meant *"a **soft claim the
+facts do not support**"*. An output whose numbers are all correct but which adds
+"reflecting improved schedule buffer" satisfies the first clause and violates the
+second. Three of the five measured disagreements sat exactly on that seam: the
+human scored 2 because the numbers were right, the judge scored 1 because the
+gloss was unsupported, and **both were correct about different questions**. No
+quantity of additional labelling resolves an ambiguity in the instrument.
+
+*So the dimension is split along the line that already existed in the code.*
+`facts-correct` is adjudicated by `evals.groundedness` — every ticket key, date
+and day-count checked against the input, exactly, for free, with zero false
+positives on the committed corpus (ADR-0033's successor work in RC1-251). It is
+not calibrated because it is not a judgement. `no-unsupported-claims` is what
+remains for the judge, and it is a narrower question, which is why it calibrates
+better: **kappa 0.86, with 98% of its bootstrap interval above the floor**,
+against 0.66 and 66% before.
+
+*`Dimension` now records who scores it.* A `scored_by` field keeps the judge
+prompt, the labelling CLI, the agreement calculation and the construct check all
+reading the same list — asking a human to hand-score `facts-correct` would be
+asking them to be a slower regex, and asking the judge for it would invite it to
+lower a claims score because a number looked wrong, which is the conflation this
+ADR removes.
+
+*The interval gates, not the point estimate.* `calibrate` now computes a seeded
+bootstrap CI as a first-class output and withholds gating when more than 20% of
+it falls below the floor. ADR-0033 measured 0.66 — above the floor — and the
+honest call was still not to gate; encoding that rule beats re-deriving it under
+pressure each time.
+
+*Two dimensions gate, and deliberately not more.* They are the two failure modes
+that matter for a narrative: the numbers are wrong, and it made something up.
+`completeness` stays advisory on the merits rather than for want of labels — the
+judge places 34 of 36 outputs at the top, the same class imbalance that produced
+a negative kappa under v1, so the fix is a harder case set. `actionability` and
+`tone` have real spread but are the most subjective, and the epic's own rule is
+to gate strictly on deterministic checks and loosely on judged ones.
+
+**Consequences.** A rubric edit invalidates every label collected under the old
+version, and the loader refuses to merge across versions rather than averaging —
+so `status-narrative-v2` cost a clean redo of 24 human judgements and 36 judge
+calls, and the v1 labels remain on file as history. That cost is the argument for
+settling rubric wording *before* labelling further dimensions. RC1-255 now has
+two gating signals to wire and three advisory ones, with the advisory/gating
+distinction carried through the run record rather than reconstructed at the gate.
+
+---
+
 ## ADR-0033 — A judge earns gating rights from human agreement, not from looking plausible
 
 **Date:** 2026-08-14 · **Ticket:** RC1-250 · **Status:** Accepted

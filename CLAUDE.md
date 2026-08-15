@@ -31,8 +31,9 @@ uv run python -m app                      # config sanity check, no credentials 
 Evals — `uv run evals run <subject>` / `uv run evals report [run-id]` (RC1-248).
 Judge calibration (RC1-250): `evals seed` (billed, once) → `evals label --dimension X`
 (free, resumable) → `evals judge` (billed) → `evals construct` (free sanity check on any
-scorer) → `evals calibrate`. **No dimension gates** — groundedness is closest (weighted κ 0.66, n=24, but 34% of its
-bootstrap CI below the 0.6 floor); the rest are unlabelled. `docs/judging.md` has the numbers and the limits. Always run
+scorer) → `evals calibrate`. **Two gate**: `facts-correct` (deterministic, `evals.groundedness`) and
+`no-unsupported-claims` (judge, κ 0.86, 98% of its CI above the floor). `completeness`,
+`actionability` and `tone` stay advisory — see ADR-0034 for why that is on the merits. `docs/judging.md` has the numbers and the limits. Always run
 `evals construct --scorer <name>` on a label set *before* calibrating it — three passes
 were wasted before that tripwire existed. Exit codes
 are CI-shaped: `0` all passed, `1` a case failed, `2` a case errored (the subject produced
