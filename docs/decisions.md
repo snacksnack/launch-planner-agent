@@ -12,6 +12,44 @@ to).
 
 ---
 
+## ADR-0037 — Run records go to a shared Postgres store, not git and not only the local file
+
+**Date:** 2026-08-16 · **Ticket:** RC1-263 · **Status:** Accepted
+
+**Context.** RC1-255 needed the trend view to read every consumer's run records.
+The first design committed them as JSONL into each consumer repo, and the
+evidence against it arrived storage-shaped: push protection refused a record
+that had observed a planted credential, the PR review agent refused an artifact
+too large to appear in a diff, git re-stores a growing blob on every append, and
+the workarounds — monthly rotation, a scanning test, six `.gitignore` edits —
+were exactly the smell RC1-248 rejected a design over. All five record-committing
+PRs were closed unmerged; nothing reached any `main`.
+
+**Decision.** A dedicated Heroku Postgres addon (deliberately not the resume
+site's database, which holds real visitor data) is the shared store. The evals
+CLI writes to it through `agent_evals.sql_store.SqlRunStore` when
+`EVAL_DATABASE_URL` is set in the **process environment** — never `.env`. An
+explicit `--runs-path` still wins, and with neither, records land in the local
+gitignored JSONL exactly as before. The pin moves to `agent-evals[sql]` v0.2.0.
+
+**Explanation.** The database enforces what the file could only promise: a
+`BEFORE UPDATE OR DELETE` trigger makes append-only a storage property, the same
+move as the plan store's SQLite triggers (ADR-0012). Reading the credential from
+the process environment keeps it in one place outside every repo and keeps the
+test suite credential-free — the ADR-0032 conftest guarantee is untouched, and
+the library's own CI tests the store against a service container. An unreachable
+store fails the run loudly; a silent fallback to the file would fork the record
+history. The full storage decision, including why CI ends up holding no
+credential at all, is recorded in `agent-evals/docs/trend.md`.
+
+**Consequences.** Suite runs on a machine with `EVAL_DATABASE_URL` write to the
+shared store, and the trend page is rendered and published from that same
+machine (`agent-evals/scripts/publish_trend.sh`). Heroku rotates credentials
+during maintenance, so an auth failure on a suite run usually means re-fetching
+`heroku config:get DATABASE_URL`, not a leak. Per ADR-0035, a score that moves
+on this pin bump is a finding about the ruler — the billed suites get rerun once
+the store is provisioned, and any movement investigated.
+
 ## ADR-0036 — Planning goldens: gate on structure, and let the corpus argue about restraint
 
 **Date:** 2026-08-15 · **Ticket:** RC1-257 · **Status:** Accepted
