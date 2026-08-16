@@ -14,8 +14,8 @@ __pycache__/
 .env
 *.db
 
-# Eval run log (RC1-248). Local runs are noise; RC1-255 decides whether CI runs
-# get committed as artifacts to render the trend view from.
+# Eval run log (RC1-248). Local JSONL fallback only — the shared store is
+# Postgres (RC1-263), and run records never get committed.
 eval-runs/
 
 # Node / Vite (apps/web)
