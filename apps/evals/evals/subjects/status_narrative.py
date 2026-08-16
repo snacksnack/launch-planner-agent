@@ -52,6 +52,15 @@ from planner_core import StatusFacts, fallback_narrative
 from evals.seedgen import FACT_SETS
 
 NAME = "status-narrative"
+
+#: See `work_breakdown.PROMPT_CONTRACT` for why this exists (RC1-255).
+#:
+#: Deliberately short. The must-say list is *derived from the facts* rather than
+#: written into the prompt, so most of this subject's scoring does not depend on
+#: prompt wording at all — which is a property worth having, not a gap.
+PROMPT_CONTRACT: tuple[tuple[str, str], ...] = (
+    ("facts", "no-unsupported-claims scores against the supplied facts"),
+)
 FALLBACK_NAME = "status-narrative-fallback"
 
 _MAX_TOKENS = 2000

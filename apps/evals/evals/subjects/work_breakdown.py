@@ -44,6 +44,23 @@ from evals import planning
 
 NAME = "work-breakdown"
 
+#: Clauses in the agent's system prompt that this subject's characteristics
+#: depend on. Asserted free, in CI, by `tests/test_prompt_contracts.py`.
+#:
+#: RC1-255: before this, every prompt-dependent check lived in a billed subject
+#: that by design never runs in CI (ADR-0031) — so a prompt edit that broke a
+#: characteristic passed ruff, passed pytest, and passed the free subjects. The
+#: regression was real and invisible. The same gap in `tpm-automation-platform`
+#: was demonstrated by deleting a rule `evals degrade` had measured as
+#: load-bearing and watching CI stay green.
+PROMPT_CONTRACT: tuple[tuple[str, str], ...] = (
+    ("source_quote", "traces-to-the-prd reads provenance.source_quote"),
+    ("VERBATIM", "traces-to-the-prd matches the quote against the PRD"),
+    ("Never invent an owner", "owners-are-on-the-roster"),
+    ("smaller, defensible", "shows-restraint on the thin PRD"),
+    ("optimistic <= likely", "the schema rejects a disordered estimate before scoring"),
+)
+
 #: The themes any competent breakdown of the flagship migration has to propose.
 #: Matched on either of two words so the check is about the *theme* rather than
 #: the wording — an epic called "Data Migration" and one called "Migrate Jira
