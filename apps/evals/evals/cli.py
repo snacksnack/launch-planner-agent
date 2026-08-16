@@ -25,7 +25,6 @@ into one non-zero code loses that.
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -34,8 +33,8 @@ from tempfile import TemporaryDirectory
 from agent_evals import agreement, construct, judge, labelling
 from agent_evals.record import RunRecord, RunStore, new_run_id
 from agent_evals.rubric import JUDGED, JUDGED_KEYS, RUBRIC_VERSION
+from agent_evals.runner import store_from_env
 from agent_evals.seeds import LabelStore, SeedStore, unlabelled
-from agent_evals.sql_store import SqlRunStore
 from agents.status import DEFAULT_MODEL
 from app.config import get_settings
 
@@ -53,21 +52,14 @@ _PASS = "pass"
 _FAIL = "FAIL"
 
 
-def _store(args: argparse.Namespace) -> RunStore | SqlRunStore:
+def _store(args: argparse.Namespace):
     """An explicit --runs-path is a request to work with a local file and wins.
-    Otherwise the shared Postgres store when EVAL_DATABASE_URL is set — read
-    from the process environment, never .env, so the credential lives in one
-    place outside every repo (RC1-263) — else the local JSONL default. An
-    unreachable store fails the run loudly; a silent fallback would fork the
-    record history."""
+    Otherwise `agent_evals.runner.store_from_env` (RC1-262): the shared
+    Postgres store when EVAL_DATABASE_URL is in the process environment, else
+    this repo's configured local JSONL."""
     if args.runs_path:
         return RunStore(Path(args.runs_path))
-    dsn = os.environ.get("EVAL_DATABASE_URL")
-    if dsn:
-        store = SqlRunStore(dsn)
-        store.ensure_schema()
-        return store
-    return RunStore(get_eval_settings().runs_path)
+    return store_from_env(get_eval_settings().runs_path)
 
 
 def cmd_run(args: argparse.Namespace) -> int:
