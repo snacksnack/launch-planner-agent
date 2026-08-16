@@ -47,6 +47,12 @@ from evals import planning
 
 NAME = "dependency"
 
+#: See `work_breakdown.PROMPT_CONTRACT` for why this exists (RC1-255).
+PROMPT_CONTRACT: tuple[tuple[str, str], ...] = (
+    ("predecessor", "orders-the-required-pairs reads edge direction"),
+    ("successor", "orders-the-required-pairs reads edge direction"),
+)
+
 #: Precedence the flagship PRD states outright: you cannot cut over before the
 #: data is migrated, and you cannot decommission before you have cut over.
 #: Expressed as task-name substrings rather than golden ids, because the ids

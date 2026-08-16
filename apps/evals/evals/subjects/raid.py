@@ -40,6 +40,12 @@ from evals import planning
 
 NAME = "raid"
 
+#: See `work_breakdown.PROMPT_CONTRACT` for why this exists (RC1-255).
+PROMPT_CONTRACT: tuple[tuple[str, str], ...] = (
+    ("probability", "scores-risks-it-raises"),
+    ("impact", "scores-risks-it-raises"),
+)
+
 #: Risks the flagship PRD states outright. Each is a tuple of alternatives — any
 #: one of them counts as having surfaced it, because the eval is checking that
 #: the *risk* was found, not that it was named a particular way.
