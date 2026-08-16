@@ -606,8 +606,10 @@ is the thing you can go and fix. Routing accuracy is scored separately from
 `plan.critical_path` was meant is a different description bug from choosing
 something unrelated.
 
-Run records land in `./eval-runs/runs.jsonl` (`LPA_EVALS_RUNS_PATH`), append-only
-and gitignored. Each carries a `prompt_version` that hashes the tool definitions
+Run records land in the shared Postgres store when `EVAL_DATABASE_URL` is set
+in the process environment (RC1-263), else in `./eval-runs/runs.jsonl`
+(`LPA_EVALS_RUNS_PATH`), append-only and gitignored. Each carries a
+`prompt_version` that hashes the tool definitions
 the model saw, so degrading a description changes the recorded version alongside
 the score — attribution without anyone remembering to bump a marker. See
 [ADR-0030](decisions.md) for why the harness lives here rather than in a repo of

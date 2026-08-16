@@ -25,6 +25,7 @@ into one non-zero code loses that.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -34,6 +35,7 @@ from agent_evals import agreement, construct, judge, labelling
 from agent_evals.record import RunRecord, RunStore, new_run_id
 from agent_evals.rubric import JUDGED, JUDGED_KEYS, RUBRIC_VERSION
 from agent_evals.seeds import LabelStore, SeedStore, unlabelled
+from agent_evals.sql_store import SqlRunStore
 from agents.status import DEFAULT_MODEL
 from app.config import get_settings
 
@@ -51,8 +53,21 @@ _PASS = "pass"
 _FAIL = "FAIL"
 
 
-def _store(args: argparse.Namespace) -> RunStore:
-    return RunStore(Path(args.runs_path) if args.runs_path else get_eval_settings().runs_path)
+def _store(args: argparse.Namespace) -> RunStore | SqlRunStore:
+    """An explicit --runs-path is a request to work with a local file and wins.
+    Otherwise the shared Postgres store when EVAL_DATABASE_URL is set — read
+    from the process environment, never .env, so the credential lives in one
+    place outside every repo (RC1-263) — else the local JSONL default. An
+    unreachable store fails the run loudly; a silent fallback would fork the
+    record history."""
+    if args.runs_path:
+        return RunStore(Path(args.runs_path))
+    dsn = os.environ.get("EVAL_DATABASE_URL")
+    if dsn:
+        store = SqlRunStore(dsn)
+        store.ensure_schema()
+        return store
+    return RunStore(get_eval_settings().runs_path)
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -114,7 +129,8 @@ def cmd_report(args: argparse.Namespace) -> int:
     record = store.get(args.run_id) if args.run_id else store.latest(args.subject)
     if record is None:
         which = f"run {args.run_id!r}" if args.run_id else "any run"
-        print(f"no record found for {which} in {store.path}", file=sys.stderr)
+        where = getattr(store, "path", None) or "the shared store (EVAL_DATABASE_URL)"
+        print(f"no record found for {which} in {where}", file=sys.stderr)
         return 2
 
     _print_report(record, verbose=not args.quiet)

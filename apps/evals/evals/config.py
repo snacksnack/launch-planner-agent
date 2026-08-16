@@ -25,8 +25,9 @@ class EvalSettings(BaseSettings):
         extra="ignore",
     )
 
-    # Where run records accumulate. One JSONL file, append-only, committed as an
-    # artifact rather than served — RC1-255 decides how the trend view reads it.
+    # Where local run records accumulate when EVAL_DATABASE_URL is not set.
+    # The shared store is Postgres (RC1-263); this JSONL file is the
+    # credential-free default for local iteration, and stays gitignored.
     evals_runs_path: str = "./eval-runs/runs.jsonl"
 
     @property
