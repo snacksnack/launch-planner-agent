@@ -45,7 +45,9 @@ part of `uv run pytest` so the suite stays credential-free; ADR-0031). The three
 subjects (RC1-257, ADR-0036) gate on **structure only** — provenance tracing, orphan and
 duplicate detection, roster membership, dependency rejections and cycle repairs, RAID recall
 and severity. No judge is used in any of them. A **new billed subject must get a measured
-ceiling** in `evals/budget.py` or `test_budget.py` fails.
+ceiling** in `evals/budget.py` or `test_budget.py` fails. Runs publish to the shared
+[trend page](https://snacksnack.github.io/agent-evals/); the end-to-end measurement runbook
+is [`agent-evals/docs/measuring.md`](https://github.com/snacksnack/agent-evals/blob/main/docs/measuring.md).
 
 CLI — `uv run plan <verb>`, from the repo root, paths repo-relative. Deterministic verbs
 (`schedule`, `simulate`, `forecast`, `scenario`, `jira`, `propose`, `commit`, `baseline`,
