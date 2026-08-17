@@ -543,49 +543,48 @@ uv run evals report              # the most recent run
 uv run evals report <run-id>     # a specific one; --quiet shows only failures
 ```
 
-Exit codes are CI-shaped from the start, because RC1-255 turns this into a gate:
+The harness itself lives in
+[`agent-evals`](https://github.com/snacksnack/agent-evals) (ADR-0035); its
+README carries the methodology — cases name characteristics rather than
+expected output, exit codes are CI-shaped (`0`/`1`/`2`, failed vs errored),
+runs are attributed — and its
+[`docs/measuring.md`](https://github.com/snacksnack/agent-evals/blob/main/docs/measuring.md)
+is the runbook for taking a measurement end to end. What is documented here is
+what is *this repo's*: the subjects, their cases, and `LPA_ANTHROPIC_API_KEY`.
 
-| Code | Meaning |
-| --- | --- |
-| `0` | every case passed |
-| `1` | a case failed its characteristics — the subject answered badly |
-| `2` | a case errored — the subject produced nothing to score |
-
-`2` outranks `1` deliberately. "The thing under test is broken" and "the thing
-under test answered badly" need different people looking at them.
-
-**Cases name characteristics, never expected output.** These are generative and
-diagnostic systems whose output is legitimately variable; a case pinning an exact
-string fails on a harmless rewording, and a brittle assertion gets deleted rather
-than fixed. So a case says *"the snapshot count is reported"*, and the subject
-owns the predicate that decides it. A failing characteristic reports what it saw:
+A case says *"the snapshot count is reported"*, the subject owns the predicate
+that decides it, and a failing characteristic reports what it saw:
 
 ```text
   FAIL health.populated-store  (32 ms)
     ✗ reports-snapshot-count: expected 1 snapshot(s) in the detail, got 'no plan store at …'
 ```
 
-**Every run records what produced it.** Subject version, model, prompt version,
-tokens, cost, and latency — including when the cost is zero, because *"this
-subject costs nothing to evaluate"* is a claim worth being able to make from the
-record rather than from memory. A score with no version attached cannot be acted
-on: quality dropped, and nothing says whether the model, the prompt, or the case
-set moved.
+**Every run records what produced it** — subject version, model, prompt
+version, tokens, cost, latency — so a score that moves can be attributed
+rather than guessed at.
 
 ### The subjects
 
 | Subject | Cost | What it measures |
 | --- | --- | --- |
 | `health` | free | A walking skeleton — proves case → run → score → record. Not thorough coverage of `platform.health`; `apps/mcp/tests` does that directly and more cheaply. |
+| `groundedness` | free | Deterministic fact-support over the 36-narrative calibration corpus — the per-subject hallucination rate, no model, no tokens (RC1-251). |
+| `status-narrative-fallback` | free | The rule-written narrative producer on the same cases as `status-narrative`, recorded as its own subject version with `model: None` (RC1-252). |
 | `tool-selection` | **billed** | Whether a real model, handed the shipped MCP tool descriptions, calls the right tool with the right arguments. |
+| `status-narrative` | **billed** | Fresh generation against must-say / must-not-say goldens — "did the *agent* change", where `groundedness` answers "did the checker change". |
+| `work-breakdown` | **billed** | Planning goldens: provenance to the PRD, no orphans or duplicates — structure gates, restraint stays advisory (RC1-257, ADR-0036). |
+| `dependency` | **billed** | Dependency goldens — the output is acyclic by construction, so the rejection and cycle-repair counts are the real signal (RC1-257). |
+| `raid` | **billed** | Planted-risk recall, reported beside the noise it costs — recall alone is gameable by flagging everything (RC1-257). |
 
-**`tool-selection` spends tokens and needs `LPA_ANTHROPIC_API_KEY`.** It is
-deliberately *not* part of `uv run pytest` — the suite stays credential-free, and
-the eval is a separate command you run on purpose (ADR-0031). The CLI says so on
-stderr before spending anything.
+**The five billed subjects spend tokens and need `LPA_ANTHROPIC_API_KEY`.** They
+are deliberately *not* part of `uv run pytest` — the suite stays credential-free,
+and an eval is a separate command you run on purpose (ADR-0031). The CLI says so
+on stderr before spending anything.
 
-It answers the question §5 leaves open: the nine tools route correctly *because
-of prose in their descriptions*, and nothing else checks that. It spawns
+`tool-selection` answers the question §5 leaves open: the nine tools route
+correctly *because of prose in their descriptions*, and nothing else checks
+that. It spawns
 `python -m mcp_server` over stdio and hands the real definitions to the model —
 a description that only exists as a Python constant is not what a model reads.
 It runs with **no system prompt**, because the claim under test is that the
@@ -611,9 +610,13 @@ in the process environment (RC1-263), else in `./eval-runs/runs.jsonl`
 (`LPA_EVALS_RUNS_PATH`), append-only and gitignored. Each carries a
 `prompt_version` that hashes the tool definitions
 the model saw, so degrading a description changes the recorded version alongside
-the score — attribution without anyone remembering to bump a marker. See
-[ADR-0030](decisions.md) for why the harness lives here rather than in a repo of
-its own, and [ADR-0031](decisions.md) for the billed-vs-free split.
+the score — attribution without anyone remembering to bump a marker. Published
+runs from every consumer render to the shared
+**[quality trend page](https://snacksnack.github.io/agent-evals/)**; the
+suite-then-publish habit is the library's
+[runbook](https://github.com/snacksnack/agent-evals/blob/main/docs/measuring.md).
+See [ADR-0030](decisions.md) for why the subjects live here rather than in the
+library, and [ADR-0031](decisions.md) for the billed-vs-free split.
 
 ---
 
