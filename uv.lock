@@ -18,8 +18,8 @@ members = [
 
 [[package]]
 name = "agent-evals"
-version = "0.3.0"
-source = { git = "https://github.com/snacksnack/agent-evals?tag=v0.3.0#a2451ae150c017da8d1ad78b34a2246c89356760" }
+version = "0.3.2"
+source = { git = "https://github.com/snacksnack/agent-evals?tag=v0.3.2#72036b150a21c653db5a100b36456a285f4cbcbe" }
 dependencies = [
     { name = "anthropic" },
     { name = "pydantic" },
@@ -728,7 +728,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "agent-evals", extras = ["sql"], git = "https://github.com/snacksnack/agent-evals?tag=v0.3.0" },
+    { name = "agent-evals", extras = ["sql"], git = "https://github.com/snacksnack/agent-evals?tag=v0.3.2" },
     { name = "anthropic", specifier = ">=0.40" },
     { name = "launch-planner-api", editable = "apps/api" },
     { name = "launch-planner-mcp", editable = "apps/mcp" },
