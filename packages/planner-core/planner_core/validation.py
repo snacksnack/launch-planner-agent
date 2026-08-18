@@ -11,12 +11,19 @@ the `agents` layer, on purpose.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 from enum import StrEnum
 
 from planner_core.models import Plan
 from planner_core.provenance import Confidence
+
+# Canonical implementations moved to `spec_gate.text` when the spec gate became
+# their second caller (RC1-286); re-imported here so every existing import path
+# — including the package-root export — keeps working unchanged.
+from planner_core.spec_gate.text import (
+    normalize_for_quote_match,
+    normalize_whitespace,
+)
 
 
 class Severity(StrEnum):
@@ -30,36 +37,6 @@ class ValidationIssue:
     code: str
     message: str
     entity_id: str | None = None
-
-
-def normalize_whitespace(text: str) -> str:
-    """Collapse whitespace so quote/section matching ignores PRD line wrapping."""
-    return " ".join(text.split())
-
-
-#: Markdown emphasis and quote punctuation, removed before a quote is matched.
-#:
-#: RC1-257 found this by running the work-breakdown agent against the shipped
-#: PRDs: three faithful quotes were reported as unverifiable because the PRD
-#: wraps them in `**`, and the agent quotes what a reader *sees* rather than the
-#: markup — which is the right reading of "copied verbatim from the PRD".
-#:
-#: Double quotes are stripped for a related reason: the agent transliterates a
-#: closing `**` as `"`, so `...the public launch** and Apple's...` came back as
-#: `...the public launch" and Apple's...`. Apostrophes are deliberately *not*
-#: stripped — they are part of words, and removing them would let a quote match
-#: text it does not actually contain.
-_DECORATION = re.compile(r"[*`\"“”]")
-
-
-def normalize_for_quote_match(text: str) -> str:
-    """Whitespace- and markup-insensitive form used for provenance matching.
-
-    Deliberately *not* used for anything but quote comparison. It is a matcher,
-    not a canonical form — stripping decoration from text that is then displayed
-    would quietly rewrite the PRD.
-    """
-    return normalize_whitespace(_DECORATION.sub("", text))
 
 
 # Backwards-compatible internal alias.
@@ -156,12 +133,19 @@ def flag_unverifiable_quotes(plan: Plan, source_text: str) -> list[ValidationIss
 
 # --- coverage --------------------------------------------------------------
 
-_HEADING = re.compile(r"^#{1,6}\s+(.+?)\s*$", re.MULTILINE)
-
 
 def markdown_sections(source_text: str) -> list[str]:
-    """Extract markdown heading titles (any level) in document order."""
-    return [m.group(1).strip() for m in _HEADING.finditer(source_text)]
+    """Extract markdown heading titles (any level) in document order.
+
+    Delegates to the spec-gate section parser (RC1-286) — one parser for the
+    coverage report and the spec gate, so the two can never disagree about what
+    a section is. The parser is fence-aware where the old regex was not; the
+    shipped fixture PRDs contain no fenced headings, so output is unchanged on
+    every existing corpus (regression-tested against the old regex).
+    """
+    from planner_core.spec_gate.ingest import parse_sections
+
+    return [s.heading for s in parse_sections(source_text) if s.heading is not None]
 
 
 def coverage_gaps(plan: Plan, source_text: str) -> list[str]:
