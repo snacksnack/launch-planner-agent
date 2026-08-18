@@ -12,6 +12,50 @@ to).
 
 ---
 
+## ADR-0038 — The Spec Quality Gate lives inside this repo, split along the existing core/agents seam
+
+**Date:** 2026-08-18 · **Ticket:** RC1-284 · **Status:** Accepted
+
+**Context.** RC1-229 builds a gate that reviews a PRD before anyone plans
+against it: deterministic structural checks, an LLM rubric, verbatim-quote
+verification, a readiness score. It needed a home. The candidates were a new
+repo, a new workspace member, or new modules inside the two packages already
+here. Its only consumer is this repo's own pipeline — the epic's definition of
+done is a gated spec feeding straight into `plan breakdown` — and its central
+mechanic (quotes verified against the source, matched through
+`normalize_for_quote_match`) is machinery `planner_core.validation` already
+carries, tuned by RC1-257's false positives.
+
+**Decision.** No new repo and no new workspace member. The deterministic half
+is `planner_core.spec_gate` (a subpackage of the core); the rubric agent will
+be `agents.spec_review` beside the four existing agents. The CLI grows a `spec`
+verb group in `app.cli`. No new import-linter contract: `planner_core` is
+already a root package of the forbidden contract, so `planner_core.spec_gate`
+is covered by it as-is — verified by deliberately adding an `agents` import and
+watching `lint-imports` fail.
+
+**Explanation.** RC1-248 already litigated the standalone-repo option for the
+eval harness and rejected it: plumbing invented to work around a repo choice is
+the tell that the repo choice is wrong, and a spec gate in its own repo would
+need cross-repo dispatch to reach its one consumer. A new workspace member
+fails on duplication instead — the gate's quote matcher and section parser
+*are* `validation.py`'s, and a separate package would either import the core
+anyway (adding a layer for nothing) or copy the helpers (forking the one set of
+tuned matching rules). The gate is deterministic-checks-then-LLM-judgment,
+which is exactly the seam this repo's layers contract enforces; placing each
+half in the package that already owns that kind of work means the architecture
+needs no new rules, only new modules.
+
+**Consequences.** Spec-gate stories (RC1-285..293) land as ordinary changes to
+`planner-core`, `agents`, and `apps/api`, riding the existing CI, conftest
+isolation (ADR-0032), and eval split (ADR-0031 — structural checks join the
+free suite, the rubric joins the billed one). The shared helpers get a second
+caller, so RC1-286/290 must generalize them behavior-preservingly rather than
+copy them. If a second consumer with no planner ever appears, extraction is
+reconsidered then, on RC1-248's two-implementations rule — not before.
+
+---
+
 ## ADR-0037 — Run records go to a shared Postgres store, not git and not only the local file
 
 **Date:** 2026-08-16 · **Ticket:** RC1-263 · **Status:** Accepted
