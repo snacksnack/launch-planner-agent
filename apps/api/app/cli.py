@@ -878,14 +878,59 @@ def cmd_scenario_delete(args: argparse.Namespace) -> int:
     return 1
 
 
-def cmd_spec(args: argparse.Namespace) -> int:
-    """Stub for the Spec Quality Gate (RC1-229) — verbs land with RC1-288..293."""
-    print(
-        "plan spec: the Spec Quality Gate (RC1-229) is under construction.\n"
-        "Coming verbs: `spec review <path>` (RC1-291) and `spec gate <dir>` (RC1-293).",
-        file=sys.stderr,
+def cmd_spec_review(args: argparse.Namespace) -> int:
+    """Run the Spec Quality Gate over one markdown spec (RC1-291).
+
+    Advisory by default: exit 0 even with findings. Exit 1 only when a
+    `--fail-on` category survives quote verification; exit 2 on usage errors.
+    """
+    from planner_core.spec_gate import (
+        FindingCategory,
+        SpecVerdict,
+        finalize_review,
+        parse_sections,
+        render_review_markdown,
+        run_structural_checks,
     )
-    return 2
+    from planner_core.spec_gate.models import SpecReview as SpecReviewModel
+
+    path = Path(args.path)
+    if not path.is_file():
+        print(f"error: {path} not found", file=sys.stderr)
+        return 2
+    try:
+        block_on = frozenset(FindingCategory(value) for value in (args.fail_on or []))
+    except ValueError:
+        valid = ", ".join(c.value for c in FindingCategory)
+        print(f"error: unknown --fail-on category; valid: {valid}", file=sys.stderr)
+        return 2
+
+    text = path.read_text()
+    structural = run_structural_checks(parse_sections(text))
+
+    if args.structural_only:
+        draft = SpecReviewModel(source_document=str(path), structural_findings=structural)
+    else:
+        from agents import SpecReviewAgent
+
+        from app.config import get_settings
+
+        settings = get_settings()
+        model = args.model or settings.anthropic_model
+        client = None
+        if settings.anthropic_api_key:
+            import anthropic
+
+            client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        agent = SpecReviewAgent(model=model, client=client)
+        draft = agent.run(text, structural).model_copy(update={"source_document": str(path)})
+
+    review = finalize_review(draft, text, block_on)
+    if args.json:
+        print(review.model_dump_json(indent=2))
+    else:
+        print(render_review_markdown(review), end="")
+    return 1 if review.verdict is SpecVerdict.BLOCKED else 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1134,13 +1179,28 @@ def main(argv: list[str] | None = None) -> int:
 
     spec = sub.add_parser(
         "spec",
-        help="Spec Quality Gate — review a PRD before planning against it (RC1-229, stub).",
-        description=(
-            "Review a PRD before anyone plans against it. Under construction: "
-            "`spec review <path>` lands with RC1-291 and `spec gate <dir>` with RC1-293."
-        ),
+        help="Spec Quality Gate — review a PRD before planning against it (RC1-229).",
     )
-    spec.set_defaults(func=cmd_spec)
+    spec_sub = spec.add_subparsers(dest="spec_cmd", required=True)
+    sp_review = spec_sub.add_parser(
+        "review", help="Review one spec file; markdown to stdout, advisory by default."
+    )
+    sp_review.add_argument("path", help="Path to the spec markdown file.")
+    sp_review.add_argument("--json", action="store_true", help="Emit the SpecReview as JSON.")
+    sp_review.add_argument(
+        "--structural-only",
+        action="store_true",
+        help="Deterministic checks only — no LLM call, no credential needed.",
+    )
+    sp_review.add_argument(
+        "--fail-on",
+        action="append",
+        metavar="CATEGORY",
+        help="Exit 1 when a surviving finding has this category (repeatable). "
+        "Default: never fail — the gate is advisory.",
+    )
+    sp_review.add_argument("--model", help="Override the Anthropic model id.")
+    sp_review.set_defaults(func=cmd_spec_review)
 
     args = parser.parse_args(argv)
     return args.func(args)

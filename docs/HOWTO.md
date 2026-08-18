@@ -620,6 +620,31 @@ library, and [ADR-0031](decisions.md) for the billed-vs-free split.
 
 ---
 
+## 8b. The Spec Quality Gate — review a PRD before planning against it
+
+The upstream gate (RC1-229): structural checks plus an LLM rubric, every
+finding anchored to a verbatim quote, advisory by default.
+
+```bash
+# Free half — deterministic checks only, no credential:
+uv run plan spec review fixtures/spec-gate/vague-spec.md --structural-only
+
+# Full review — rubric included (needs LPA_ANTHROPIC_API_KEY):
+uv run plan spec review fixtures/spec-gate/vague-spec.md
+
+# Machine-readable, and an opt-in blocking category:
+uv run plan spec review my-spec.md --json --fail-on conflicting_requirement
+```
+
+Exit codes: 0 advisory (findings or not), 1 only when a `--fail-on` category
+survives quote verification, 2 on usage errors. Findings whose quote is not
+verbatim in the spec are dropped and counted in the output — see
+[spec-rubric.md](spec-rubric.md) for the categories, the score formula, and
+why the default never blocks. On PRs, `.github/workflows/spec-review.yml`
+reviews changed spec files and keeps one edited-in-place comment.
+
+---
+
 ## 9. Where to go deeper
 
 - **[architecture.md](architecture.md)** — the layering, the ports/adapters, why
