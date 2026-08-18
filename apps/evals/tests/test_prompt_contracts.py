@@ -31,6 +31,7 @@ _NO_CONTRACT = {
     "health": "deterministic walking skeleton — no model, no prompt",
     "groundedness": "scores a frozen corpus with a deterministic checker",
     "status-narrative-fallback": "rule-written narrative — no model, no prompt",
+    "spec-structural": "deterministic checks scored against a frozen golden — no prompt",
     "tool-selection": (
         "its prompt is the nine MCP tool *descriptions*, and RC1-249 already "
         "verified by trying it that degrading one flips its cases — the "
@@ -75,10 +76,11 @@ def test_the_prompt_still_contains_every_clause_its_checks_depend_on(name, modul
 
 def _prompt_for(module):
     """The system prompt behind a subject, via the agent it drives."""
-    from agents import dependency, raid, status, work_breakdown
+    from agents import dependency, raid, spec_review, status, work_breakdown
 
     return {
         "work-breakdown": work_breakdown.SYSTEM_PROMPT,
+        "spec-review": spec_review.SYSTEM_PROMPT,
         "dependency": dependency.SYSTEM_PROMPT,
         "raid": raid.SYSTEM_PROMPT,
         "status-narrative": status.SYSTEM_PROMPT,

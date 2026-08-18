@@ -79,6 +79,19 @@ CEILINGS: dict[str, Ceiling] = {
         max_latency_ms=10_000,
         note="deterministic walking skeleton",
     ),
+    # RC1-292.
+    "spec-structural": Ceiling(
+        subject="spec-structural",
+        max_cost_usd=Decimal("0"),
+        max_latency_ms=5_000,
+        note="deterministic — any cost at all means a model crept in",
+    ),
+    "spec-review": Ceiling(
+        subject="spec-review",
+        max_cost_usd=Decimal("0.60"),
+        max_latency_ms=240_000,
+        note="observed $0.278 / 172s over 2 cases on claude-sonnet-5",
+    ),
 }
 
 
