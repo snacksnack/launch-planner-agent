@@ -1,0 +1,104 @@
+# Spec Quality Gate on PRs (RC1-291).
+#
+# Advisory by construction: the job succeeds whether or not findings exist —
+# `plan spec review` only exits non-zero with an explicit --fail-on, and this
+# workflow passes none. Without the LPA_ANTHROPIC_API_KEY secret (forks,
+# Dependabot) it degrades to the free structural checks instead of failing.
+#
+# Watched paths are actual specs, not all of docs/ — running a PRD rubric over
+# decisions.md or forecasting.md would produce noise, and a noisy bot gets
+# muted, which is worse than no bot.
+name: spec-review
+
+on:
+  pull_request:
+    paths:
+      - "fixtures/**/prd.md"
+      - "fixtures/spec-gate/*.md"
+      - "docs/specs/**.md"
+      - ".github/workflows/spec-review.yml"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Find changed spec files
+        id: specs
+        run: |
+          git diff --name-only --diff-filter=d \
+              "${{ github.event.pull_request.base.sha }}" \
+              "${{ github.event.pull_request.head.sha }}" \
+              -- 'fixtures/*/prd.md' 'fixtures/spec-gate/*.md' 'docs/specs/*.md' 'docs/specs/**/*.md' \
+            | grep -v 'README' > changed-specs.txt || true
+          if [ -s changed-specs.txt ]; then
+            echo "any=true" >> "$GITHUB_OUTPUT"
+            echo "Changed specs:" && cat changed-specs.txt
+          else
+            echo "any=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No spec files changed — nothing to review."
+          fi
+
+      - name: Install workspace
+        if: steps.specs.outputs.any == 'true'
+        run: uv sync --all-packages
+
+      - name: Review changed specs
+        if: steps.specs.outputs.any == 'true'
+        env:
+          LPA_ANTHROPIC_API_KEY: ${{ secrets.LPA_ANTHROPIC_API_KEY }}
+        run: |
+          mode=""
+          if [ -z "$LPA_ANTHROPIC_API_KEY" ]; then
+            echo "::notice::LPA_ANTHROPIC_API_KEY unavailable — structural checks only."
+            mode="--structural-only"
+          fi
+          {
+            echo "<!-- spec-review-bot -->"
+            echo "## Spec Quality Gate"
+            if [ -n "$mode" ]; then
+              echo ""
+              echo "_No API key available in this context — structural checks only._"
+            fi
+          } > review-comment.md
+          while IFS= read -r spec; do
+            echo "Reviewing $spec"
+            {
+              echo ""
+              echo "---"
+              echo ""
+              echo "### \`$spec\`"
+              echo ""
+              uv run plan spec review "$spec" $mode
+            } >> review-comment.md
+          done < changed-specs.txt
+
+      - name: Post or update the PR comment
+        if: steps.specs.outputs.any == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          marker='<!-- spec-review-bot -->'
+          pr=${{ github.event.pull_request.number }}
+          existing=$(gh api "repos/$GITHUB_REPOSITORY/issues/$pr/comments" \
+            --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -1)
+          if [ -n "$existing" ]; then
+            echo "Updating comment $existing in place"
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$existing" \
+              -F "body=@review-comment.md"
+          else
+            gh api "repos/$GITHUB_REPOSITORY/issues/$pr/comments" \
+              -F "body=@review-comment.md"
+          fi
