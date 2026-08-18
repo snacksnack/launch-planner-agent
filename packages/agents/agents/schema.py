@@ -13,6 +13,7 @@ is friendly to strict structured-output decoding while still allowing nulls.
 from __future__ import annotations
 
 from planner_core import Confidence, DependencyType, Evidence, RaidType, ThreePointEstimate
+from planner_core.spec_gate import FindingCategory, SpecSeverity
 from pydantic import BaseModel, ConfigDict
 
 
@@ -105,3 +106,24 @@ class ProposedRaidLog(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     items: list[ProposedRaidItem]
+
+
+class ProposedSpecFinding(BaseModel):
+    """A proposed rubric finding (RC1-289). Permissive on purpose — a finding
+    whose quote turns out to be whitespace is dropped and counted by the agent
+    at stamping time rather than raising during decode, the same posture as
+    `ProposedDependency`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    category: FindingCategory
+    severity: SpecSeverity
+    suggested_rewrite: str | None
+    provenance: ProposedProvenance
+
+
+class ProposedSpecReview(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    findings: list[ProposedSpecFinding]
+    questions_for_author: list[str]
