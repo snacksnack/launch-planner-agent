@@ -39,6 +39,23 @@ contact (contradictions; a missing NFR the subject makes critical).
 fixing, not blocking. Same ladder as the PR agent; the verdict never gates on
 severity, only on category (RC1-290).
 
+## The readiness score and the verdict (RC1-290)
+
+Both are pure code over the *surviving* findings — quote verification runs
+first, so a dropped finding can neither block nor depress the score.
+
+The score is recomputable by hand: `1 − Σ penalty`, floored at 0, where the
+penalty is 0.25 per blocker, 0.05 per warning, and 0.01 per nit (structural
+findings included, same weights — `spec_gate.report.WEIGHTS`). Severity-only
+on purpose: category carries no score weight, because category is what the
+*verdict* gates on, and giving it both jobs would make neither explainable.
+
+The verdict gates on category, never severity — a blocker-severity ambiguous
+quantifier never blocks, a category in `block_on` always does. `block_on`
+defaults to **empty**: unlike the PR agent's `leaked_secret`, no spec-review
+category is unambiguous enough to justify blocking someone's document by
+default, so the gate is advisory unless a caller deliberately opts in.
+
 ## Assumptions and limits, stated
 
 - **Findings must quote verbatim.** The prompt says a finding that cannot be

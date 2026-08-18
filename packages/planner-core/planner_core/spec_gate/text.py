@@ -40,3 +40,14 @@ def normalize_for_quote_match(text: str) -> str:
     would quietly rewrite the PRD.
     """
     return normalize_whitespace(_DECORATION.sub("", text))
+
+
+def is_verbatim(quote: str, source_text: str) -> bool:
+    """Whether `quote` appears verbatim in `source_text`, up to wrapping/markup.
+
+    The one matching rule shared by plan validation (`flag_unverifiable_quotes`)
+    and the spec gate's quote verification (RC1-290). Callers checking many
+    quotes against one source should pre-normalize with
+    `normalize_for_quote_match(source_text)` and use `in` directly.
+    """
+    return normalize_for_quote_match(quote) in normalize_for_quote_match(source_text)

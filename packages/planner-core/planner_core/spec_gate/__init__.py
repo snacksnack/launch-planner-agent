@@ -33,14 +33,35 @@ from planner_core.spec_gate.models import (
     SpecVerdict,
     StructuralFinding,
 )
+from planner_core.spec_gate.report import (
+    DEFAULT_BLOCK_ON,
+    WEIGHTS,
+    decide_verdict,
+    finalize_review,
+    readiness_score,
+    render_review_markdown,
+    verify_quotes,
+)
 from planner_core.spec_gate.structural import (
     DEFAULT_REQUIRED_SECTIONS,
     run_structural_checks,
 )
-from planner_core.spec_gate.text import normalize_for_quote_match, normalize_whitespace
+from planner_core.spec_gate.text import (
+    is_verbatim,
+    normalize_for_quote_match,
+    normalize_whitespace,
+)
 
 __all__ = [
+    "DEFAULT_BLOCK_ON",
     "DEFAULT_REQUIRED_SECTIONS",
+    "WEIGHTS",
+    "decide_verdict",
+    "finalize_review",
+    "is_verbatim",
+    "readiness_score",
+    "render_review_markdown",
+    "verify_quotes",
     "SPEC_SEVERITY_ORDER",
     "FindingCategory",
     "LoadedSpec",

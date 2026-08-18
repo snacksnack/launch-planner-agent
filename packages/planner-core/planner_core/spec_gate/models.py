@@ -153,6 +153,13 @@ class SpecReview(BaseModel):
         "(agents.spec_review.RUBRIC_VERSION), so a score change can be attributed "
         "to a rubric change. None for reviews with no LLM pass (e.g. goldens).",
     )
+    dropped_unverifiable: int = Field(
+        0,
+        ge=0,
+        description="Findings dropped because their quote was not found verbatim in "
+        "the source (RC1-290). Counted, never silent — a climbing drop rate means "
+        "the rubric started paraphrasing.",
+    )
 
     @property
     def sorted_findings(self) -> list[SpecFinding]:
