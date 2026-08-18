@@ -878,6 +878,16 @@ def cmd_scenario_delete(args: argparse.Namespace) -> int:
     return 1
 
 
+def cmd_spec(args: argparse.Namespace) -> int:
+    """Stub for the Spec Quality Gate (RC1-229) — verbs land with RC1-288..293."""
+    print(
+        "plan spec: the Spec Quality Gate (RC1-229) is under construction.\n"
+        "Coming verbs: `spec review <path>` (RC1-291) and `spec gate <dir>` (RC1-293).",
+        file=sys.stderr,
+    )
+    return 2
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="plan", description="Launch planner agent CLI.")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -1121,6 +1131,16 @@ def main(argv: list[str] | None = None) -> int:
     sc_delete.add_argument("plan", help="Plan ref (version, hash, or file).")
     sc_delete.add_argument("--name", required=True, help="The saved scenario name.")
     sc_delete.set_defaults(func=cmd_scenario_delete)
+
+    spec = sub.add_parser(
+        "spec",
+        help="Spec Quality Gate — review a PRD before planning against it (RC1-229, stub).",
+        description=(
+            "Review a PRD before anyone plans against it. Under construction: "
+            "`spec review <path>` lands with RC1-291 and `spec gate <dir>` with RC1-293."
+        ),
+    )
+    spec.set_defaults(func=cmd_spec)
 
     args = parser.parse_args(argv)
     return args.func(args)
