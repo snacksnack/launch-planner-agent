@@ -1,9 +1,9 @@
 """agents — the LLM judgment layer of the launch planner.
 
-Work-breakdown, dependency, RAID, and status agents live here. They *propose*
-structured output (schema-forced against the planner_core models); planner_core
-*validates* deterministically; a human *approves*. This package may import
-planner_core; the reverse is forbidden (enforced in CI).
+Work-breakdown, dependency, RAID, status, and spec-review agents live here.
+They *propose* structured output (schema-forced against the planner_core
+models); planner_core *validates* deterministically; a human *approves*. This
+package may import planner_core; the reverse is forbidden (enforced in CI).
 """
 
 from planner_core import (
@@ -20,9 +20,12 @@ from agents.schema import (
     ProposedRaidItem,
     ProposedRaidLog,
     ProposedRaidProvenance,
+    ProposedSpecFinding,
+    ProposedSpecReview,
     ProposedTask,
     ProposedWorkBreakdown,
 )
+from agents.spec_review import RUBRIC_VERSION, SpecReviewAgent
 from agents.status import StatusAgent
 from agents.work_breakdown import WorkBreakdownAgent, build_user_prompt
 
@@ -45,4 +48,8 @@ __all__ = [
     "ProposedRaidItem",
     "ProposedRaidLog",
     "ProposedRaidProvenance",
+    "ProposedSpecFinding",
+    "ProposedSpecReview",
+    "RUBRIC_VERSION",
+    "SpecReviewAgent",
 ]

@@ -147,6 +147,12 @@ class SpecReview(BaseModel):
         SpecVerdict.ADVISORY,
         description="Set by code, gating on category. Advisory by default.",
     )
+    rubric_version: int | None = Field(
+        None,
+        description="Version of the rubric prompt that produced the LLM findings "
+        "(agents.spec_review.RUBRIC_VERSION), so a score change can be attributed "
+        "to a rubric change. None for reviews with no LLM pass (e.g. goldens).",
+    )
 
     @property
     def sorted_findings(self) -> list[SpecFinding]:
