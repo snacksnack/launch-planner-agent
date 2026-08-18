@@ -52,7 +52,7 @@ is [`agent-evals/docs/measuring.md`](https://github.com/snacksnack/agent-evals/b
 CLI — `uv run plan <verb>`, from the repo root, paths repo-relative. Deterministic verbs
 (`schedule`, `simulate`, `forecast`, `scenario`, `jira`, `propose`, `commit`, `baseline`,
 `variance`, `status`, `history`, `show`, `diff`) need no API key. Only `breakdown`,
-`dependencies`, `raid`, and `spec review` (without `--structural-only`) call the LLM
+`dependencies`, `raid`, and `spec review` / `spec gate` (without `--structural-only`) call the LLM
 (`LPA_ANTHROPIC_API_KEY`). `docs/HOWTO.md` has a worked example of every verb.
 
 CI (`.github/workflows/ci.yml`) runs exactly: sync → ruff → lint-imports → pytest.
