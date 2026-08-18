@@ -11,6 +11,11 @@ parse ──▶ structural checks ──▶ rubric ──▶ verify / score / ve
 (RC1-286)    (RC1-288, free)   (RC1-289)          (RC1-290)            (the planner)
 ```
 
+![Spec Quality Gate demo](spec-gate-demo.gif)
+
+*(Real commands, real outputs — replayed for pacing; provenance in
+[demo/spec-gate/README.md](demo/spec-gate/README.md).)*
+
 ## One command
 
 ```bash

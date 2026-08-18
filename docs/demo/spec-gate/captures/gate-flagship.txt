@@ -1,0 +1,99 @@
+# Spec review — ADVISORY
+
+Source: fixtures/jira-cloud-migration/prd.md
+Readiness score: 0.22
+Findings: 10 rubric, 4 structural
+
+## Structural findings
+- **nit** `missing-section`: no section matching 'non-goal' found
+- **warning** `missing-section`: no section matching 'goal' found
+- **warning** `missing-section`: no section matching 'requirement' found
+- **warning** `missing-section`: no section matching 'acceptance criteria' found
+
+## Findings
+- **blocker** `missing_nfr` (Sequencing and the freeze)
+  > "Cut over to Cloud in production, hypercare, then decommission on-prem."
+  This is a migration spec whose entire subject is a one-way cutover with a hard license deadline forcing on-prem decommission shortly after go-live. There is no stated rollback or abort plan if the production cutover fails or surfaces critical issues during hypercare — for a migration of this scale (450 users, 20 projects, client data), that absence is conspicuous and would leave the team with no defined fallback.
+  Suggested rewrite: Add a rollback/abort criteria section: define the conditions under which cutover is aborted or rolled back, how long on-prem is kept warm as a fallback, and who has authority to trigger rollback.
+- **warning** `missing_nfr` (Why now / what success looks like)
+  > "On-prem instance shut down and decommissioned before the license expires."
+  The doc sets 'no data loss' as a success criterion but the plan is to shut down and decommission on-prem shortly after go-live with no stated retention of a backup or archive to fall back on if reconciliation problems are discovered after decommission.
+  Suggested rewrite: Specify a retention window: keep a verified, restorable backup/export of the on-prem instance for N days/weeks after decommission, in case reconciliation issues surface post-cutover.
+- **warning** `untestable_criterion` (Why now / what success looks like)
+  > "All 450 users migrated with the right permissions and single sign-on working."
+  'The right permissions' has no observable pass/fail definition — two reviewers could disagree on whether a given user's Cloud permissions are 'right' without a defined mapping or acceptance check.
+  Suggested rewrite: Define 'right permissions' concretely, e.g. 'each user's Cloud role/group membership matches a signed-off permission mapping produced during discovery, verified via an automated diff.'
+- **warning** `untestable_criterion` (Why now / what success looks like)
+  > "No data loss: ticket counts, comments, and attachments reconcile against on-prem."
+  'Reconcile against on-prem' does not specify the method or acceptable tolerance for reconciliation, and the open questions section confirms this is still unresolved ('formal sign-off vs spot check'), meaning the stated success criterion cannot yet be judged pass/fail.
+  Suggested rewrite: Define the reconciliation method and tolerance explicitly, e.g. 'ticket counts, comment counts, and attachment counts must match on-prem exactly per project, verified via automated report, signed off by each project owner.'
+- **warning** `conflicting_requirement` (Scope & known problems)
+  > "Before we can plan waves we need to inventory all 20 projects, their workflows, and the custom fields"
+  The spec states wave planning cannot happen until the full inventory of all 20 projects/workflows/custom fields is complete ('Before we can plan waves we need to inventory...'), yet the 'Sequencing and the freeze' and 'Rough milestones' sections already lock in a four-wave plan and specific dates (pilot 2026-11-10, bulk end of Feb 2027) without that discovery having been done.
+  Suggested rewrite: Either mark the wave sequence and milestone dates as provisional pending discovery output, or clarify that discovery is scoped to run in parallel with a coarse wave plan that will be refined once inventory completes.
+- **warning** `unowned_scope` (Scope & known problems)
+  > "The QA lead owns that sign-off."
+  Unlike the Legal and Finance approvals, which are pinned to named individuals (Helen, Grace), the plugin audit sign-off — a hard prerequisite for migrating any real user — is owned only by a role ('the QA lead'), not a specific accountable person.
+  Suggested rewrite: Name the specific individual who owns the plugin compatibility audit sign-off (e.g., 'Jordan, QA Lead') the same way Legal (Helen) and Finance approval (Grace) are named.
+- **warning** `unowned_scope` (The parts Legal and Security care about)
+  > "Security and SRE need to review the Cloud configuration — SSO, IP allow-listing, audit logging — and there will be no production cutover without a security and SRE sign-off."
+  The security/SRE sign-off is described as a hard gate on production cutover, but is attributed to teams ('Security and SRE') rather than a named accountable person, unlike other gating approvals in the doc that are pinned to individuals.
+  Suggested rewrite: Name a specific individual accountable for the security/SRE cutover sign-off, e.g. 'Alex (SRE) and Sam (Security) jointly own this gate.'
+- **warning** `unstated_assumption` (Scope & known problems)
+  > "a plugin compatibility audit sign-off is a prerequisite for migrating users"
+  The plan schedules a pilot migration for ~2026-11-10 while also stating that no real user may be migrated until the plugin audit is signed off, but no target date is given for that audit — the schedule implicitly assumes it will finish in time without saying so.
+  Suggested rewrite: State a target completion date for the plugin compatibility audit and confirm it lands before the pilot milestone (~2026-11-10); if not, adjust the pilot date.
+- **nit** `missing_nfr` (Scope & known problems)
+  > "contractor spend has to be approved by Finance before anyone gets onboarded"
+  The spec flags that contractor spend needs Finance approval but never states a cost ceiling or budget envelope, which is relevant given the project explicitly frames people/budget as a constraint.
+  Suggested rewrite: State the approved budget ceiling for contractor spend (e.g., 'up to $X for two contractors through Q1 2027') rather than only 'requires Finance approval'.
+- **nit** `ambiguous_quantifier` (Background)
+  > "with as little disruption to the 15 teams as we can manage"
+  'As little disruption as we can manage' carries no measurable threshold — there's no way to later judge whether the migration met this bar.
+  Suggested rewrite: Replace with a measurable disruption budget, e.g. 'no more than N hours of read-only downtime per team during cutover, communicated 2 weeks in advance.'
+
+## Questions for the author
+- What's the rollback/abort plan if the production cutover fails or major issues surface during hypercare, and how long is on-prem data retained/backed up after decommission given the 'no data loss' goal?
+- Can you define 'the right permissions' and the exact reconciliation method/tolerance behind 'no data loss' in measurable, testable terms — the open question about formal sign-off vs. spot check suggests this isn't settled yet?
+- Is there an actual budget ceiling for the two contractors, not just a requirement that Finance approve the spend?
+- Can you quantify 'as little disruption to the 15 teams as we can manage' — e.g., a downtime budget or notice period?
+- The doc says wave planning can't start until the full project/workflow/field inventory is done, but the wave sequence and milestone dates already look locked — how were those set, and who is accountable for running the inventory?
+- Can you name specific individuals (not just 'the QA lead' or 'Security and SRE') accountable for the plugin audit sign-off and the security/SRE cutover sign-off, the way Helen and Grace are named for Legal and Finance?
+- What's the target completion date for the plugin compatibility audit, and does it land before the planned pilot date of ~2026-11-10?
+wrote /tmp/…/gated-plan.spec-review.json
+gate: passed — proceeding to work breakdown
+
+wrote /tmp/…/gated-plan.json
+Work breakdown: 9 epics, 22 tasks
+  errors:   0
+  warnings: 1
+  ! [low-confidence] task 'task-hypercare' was extracted with low confidence
+  coverage gaps (3 PRD section(s) uncited):
+    - PRD: On-Prem Jira → Jira Cloud Migration ("Project Skyline")
+    - Background
+    - Explicitly out of scope (for now)
+Comparison vs golden baseline:
+  epics:  produced 9  /  golden 6
+  tasks:  produced 22  /  golden 23  (name-matched 2/23)
+  golden tasks with no name match in output:
+    - audit all marketplace plugins for cloud compatibility
+    - author phased migration runbook / wave plan
+    - bulk-migrate the remaining 18 projects in waves
+    - cutover rehearsal / dry run
+    - decommission on-prem jira data center
+    - integrate sso/scim with corporate idp
+    - migrate 450 users and permissions with sso
+    - obtain legal sign-off for client data migration
+    - pilot-migrate two low-risk projects
+    - plugin compatibility audit sign-off
+    - post-cutover hypercare and support
+    - production cutover to jira cloud
+    - project closeout, retro, and documentation
+    - provision jira cloud org, sso, and base security config
+    - rebuild ci/cd and slack integrations against cloud rest api
+    - reconcile ticket counts, comments, and attachments (per-owner sign-off)
+    - replace or rebuild the three incompatible critical plugins
+    - secure finance approval for contractor budget
+    - security & sre review of cloud configuration
+    - set up migration tooling (cloud migration assistant + scripts)
+    - validate pilot data with project owners

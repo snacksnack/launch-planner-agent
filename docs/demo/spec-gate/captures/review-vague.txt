@@ -1,0 +1,71 @@
+# Spec review — ADVISORY
+
+Source: fixtures/spec-gate/vague-spec.md
+Readiness score: 0.0
+Findings: 12 rubric, 5 structural
+
+## Structural findings
+- **nit** `missing-section`: no section matching 'non-goal' found
+- **warning** `missing-section`: no section matching 'acceptance criteria' found
+- **warning** `missing-requirement-ids` (Requirements): requirements carry no stable IDs (e.g. REQ-1); a plan can only cite them by paraphrase
+- **warning** `no-named-owner` (Ownership and communications): the ownership section names no individual — there is no accountable person to ask
+- **warning** `unresolved-marker` (Timeline): unresolved marker left in a scope-bearing section
+  > "Departments will migrate one at a time through Q4. Success metrics: TBD."
+
+## Findings
+- **blocker** `missing_nfr` (Rollout)
+  > "All users will be cut over in a single weekend migration. The legacy auth stack will be decommissioned immediately after the cutover weekend."
+  A single-weekend, all-users cutover followed by immediate decommissioning of the legacy stack leaves no path back if the new IdP fails post-cutover — this is exactly the kind of missing NFR a migration spec makes conspicuous, and it can lock out all users with no recovery option.
+  Suggested rewrite: Add a rollback plan: define the trigger conditions for aborting cutover, the procedure to restore legacy auth availability, and a minimum bake period before legacy stack decommissioning (e.g., keep legacy stack in cold standby for 2 weeks post-cutover).
+- **blocker** `conflicting_requirement` (Requirements)
+  > "Legacy login remains available for 90 days after cutover so stragglers can migrate."
+  Requirements states legacy login remains available for 90 days after cutover, while Rollout states the legacy auth stack is decommissioned immediately after the cutover weekend — these cannot both be true, and a plan built on one will contradict the other.
+  Suggested rewrite: Reconcile the two clauses: either legacy login stays available for 90 days post-cutover, or the legacy stack is decommissioned immediately — pick one and update the other section to match.
+- **warning** `ambiguous_quantifier` (Goals)
+  > "The login flow must be fast and the experience should feel seamless to end users."
+  "Fast" carries no measurable threshold, so a plan built against it cannot verify completion; two engineers could reasonably disagree on whether the login flow qualifies.
+  Suggested rewrite: The login flow must complete in under X seconds at the 95th percentile, measured from credential submission to authenticated redirect, under expected peak load.
+- **warning** `ambiguous_quantifier` (Requirements)
+  > "Token refresh must complete in under a second."
+  This reads as a precise SLO but omits the percentile, the population it applies to, and the load/measurement conditions, so it cannot actually be verified as written.
+  Suggested rewrite: Token refresh must complete in under 1 second at p95 for [defined population], measured client-side under peak sign-in load.
+- **warning** `ambiguous_quantifier` (Requirements)
+  > "The system must support a large number of concurrent sessions during peak sign-in."
+  "A large number" has no defined floor, so capacity planning and load testing cannot be scoped against it.
+  Suggested rewrite: The system must support at least N concurrent sessions during peak sign-in (defined as the observed peak of the last 90 days plus a 20% buffer).
+- **warning** `untestable_criterion` (Goals)
+  > "the experience should feel seamless to end users"
+  There is no observable condition attached to 'seamless'; two reviewers could disagree on whether the shipped experience meets it, and no test can be written against it.
+  Suggested rewrite: Define seamless via a measurable proxy, e.g. 'users complete sign-in without contacting support and without a visible redirect delay greater than 2 seconds.'
+- **warning** `missing_nfr` (Requirements)
+  > "The new IdP will handle all authentication for internal and customer-facing apps."
+  Once one IdP handles all authentication for every internal and customer-facing app, its availability becomes the availability of the entire business — the claim raises an expectation of an uptime/failover NFR that the requirements never state.
+  Suggested rewrite: State an availability/uptime SLO for the new IdP (e.g., 99.95% monthly) and a failover or degraded-mode plan, since it becomes the single point of failure for all internal and customer-facing auth.
+- **warning** `unstated_assumption` (Rollout)
+  > "Once the Okta tenant is provisioned by IT, app teams can begin wiring their integrations."
+  The rollout plan depends on IT having provisioned the Okta tenant, but nothing in the document declares this as a tracked dependency, a deadline, or an owner — it is simply assumed to happen.
+  Suggested rewrite: State the Okta tenant provisioning owner, target completion date, and confirm/track the dependency explicitly (e.g., as a tracked prerequisite with a named IT contact and date).
+- **warning** `unstated_assumption` (Rollout)
+  > "Mobile clients will pick up the new flow automatically."
+  This assumes existing mobile clients already contain the logic to adopt the new auth flow without an app update or version gate, which is never stated or confirmed.
+  Suggested rewrite: Specify which mobile client versions support the new flow automatically, and what happens for users on older/unsupported app versions.
+- **warning** `unowned_scope` (Ownership and communications)
+  > "Training materials will be produced before launch."
+  Passive voice ('will be produced') attaches this deliverable to no accountable person; nobody can be asked for status or held to a date.
+  Suggested rewrite: Name the individual responsible for training materials and a delivery date, e.g. 'Jane Doe (L&D) will deliver training materials by [date].'
+- **warning** `unowned_scope` (Ownership and communications)
+  > "Someone from support will draft the customer comms."
+  'Someone from support' identifies a role/pool, not a person — there is no single accountable individual to follow up with if the comms slip.
+  Suggested rewrite: Name the specific person from support responsible for customer comms, e.g. 'Alex Kim (Support) will draft customer comms by [date].'
+- **nit** `untestable_criterion` (Requirements)
+  > "Documentation will be improved."
+  "Improved" has no pass/fail condition — any change, however small, could be claimed as satisfying it.
+  Suggested rewrite: List the specific documents to be updated (e.g., runbook, end-user FAQ, support macros) and a completion criterion for each.
+
+## Questions for the author
+- Several requirements read as precise but aren't measurable as written: what percentile/load/population does 'under a second' token refresh apply to, what number defines 'a large number of concurrent sessions,' and what observable behavior would let us confirm the login flow is 'fast' and the experience 'seamless'? Could you replace these with numeric targets and measurement conditions?
+- The Requirements section says legacy login stays available for 90 days after cutover, but Rollout says the legacy stack is decommissioned immediately after the cutover weekend. Which is correct, and can the other section be updated to match?
+- Given this is a single-weekend, all-at-once cutover with immediate decommissioning of the legacy stack, what is the rollback plan if the new IdP has problems post-cutover? Is there any bake period or fallback before legacy auth is torn down?
+- Since the new IdP will handle all authentication for every internal and customer-facing app, what availability/uptime SLO and failover plan exists for it, given it becomes a single point of failure for the whole business?
+- The plan depends on IT provisioning the Okta tenant and on mobile clients automatically picking up the new flow — are these confirmed commitments with dates/owners, or open dependencies we should track explicitly?
+- Can you name individual owners (not teams or roles) for the migration runbook, training materials, and customer comms, so there's someone specific to check in with on each?
