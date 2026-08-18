@@ -1,0 +1,16 @@
+#!/bin/sh
+# Demo replay shim — see ../README.md.
+#
+# The GIF types the real commands; this shim replays the UNEDITED output of
+# real prior runs so the viewer is not watching a minute of model latency per
+# command. Remove this directory from PATH and the same commands run live.
+here="$(cd "$(dirname "$0")/.." && pwd)"
+case "$*" in
+  *vague-spec.md*) cat "$here/captures/review-vague.txt" ;;
+  *good-spec.md*) cat "$here/captures/review-good.txt" ;;
+  *"spec gate"*) cat "$here/captures/gate-flagship.txt" ;;
+  *)
+    echo "demo shim: unscripted command: uv $*" >&2
+    exit 1
+    ;;
+esac

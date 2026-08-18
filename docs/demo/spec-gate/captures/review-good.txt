@@ -1,0 +1,24 @@
+# Spec review — ADVISORY
+
+Source: fixtures/spec-gate/good-spec.md
+Readiness score: 0.89
+Findings: 3 rubric, 0 structural
+
+## Findings
+- **warning** `unstated_assumption` (Scope and requirements)
+  > "The export contains, per event: timestamp (UTC, ISO 8601), actor id, actor email at event time, action code, target resource id, and source IP."
+  REQ-3 promises actor email at event time and source IP for every exported event, but the Non-goals section says this feature makes 'no changes to what is audited' and exports only 'the existing event stream.' That leaves an unstated assumption that the current audit pipeline already captures both fields for every event that could fall inside a 92-day export window. If any of that data isn't already being recorded, the export will silently produce incomplete rows rather than failing loudly.
+  Suggested rewrite: Add a note confirming whether the existing audit event schema already persists actor-email-at-time-of-event and source IP for all currently retained events, or document the fallback behavior (e.g., blank/null field) for events recorded before those fields existed.
+- **warning** `ambiguous_quantifier` (Acceptance criteria)
+  > "Requesting an export for the last 30 days on the staging dataset (about 400k events) delivers the email link within 10 minutes."
+  This is the only acceptance test that exercises export latency, but it's a single-run wall-clock bound with no stated percentile or repeat-run count, and it's roughly 50x looser than the p95-under-30-seconds-per-1M-events NFR would predict for 400k events (~12s). It's unclear whether this criterion is meant to validate that NFR or is a separate, much laxer end-to-end sanity check, and it doesn't reconcile staging's instance class with the 'production instance class' the NFR is measured on — two reviewers could disagree on whether passing this criterion actually demonstrates the NFR is met.
+  Suggested rewrite: Requesting a 30-day / ~400k-event export on staging meets the same p95 bound implied by the NFR (~12s of worker time) plus a defined, separately-measured email-delivery budget (e.g., under 2 minutes end-to-end), measured over N repeated runs, with staging's instance class noted as equivalent or scaled relative to the production class used in the NFR.
+- **nit** `ambiguous_quantifier` (Non-functional requirements)
+  > "Cost: worker plus storage for projected volume stays under $40/month at current event rates; alert at $30."
+  'Current event rates' is never quantified anywhere in the document (no events/day or events/month figure appears), so the $40/$30 cost ceiling can't be checked against anything concrete, and there's no trigger for re-evaluating it as volume grows. Two reviewers could disagree on whether the cost NFR is still satisfied six months from now.
+  Suggested rewrite: worker plus storage for projected volume (~X audit events/day, based on current production rate) stays under $40/month; alert at $30 and re-baseline the estimate if event volume grows beyond Y/day.
+
+## Questions for the author
+- REQ-3 requires actor email and source IP per exported event, and the Non-goals section says auditing itself won't change — can you confirm the existing audit event stream already captures both fields for every event that could fall inside a 92-day export window, or is there a gap for older events?
+- The cost NFR caps spend at $40/month 'at current event rates' — what is that baseline rate, and is there a plan to re-check the ceiling as volume grows?
+- Is the 10-minute acceptance criterion on staging meant to validate the p95-under-30s-per-1M-events NFR, or is it a separate, looser check? Could you clarify whether it's a single run or a percentile, and how staging's instance class relates to the production class the NFR is measured on?
