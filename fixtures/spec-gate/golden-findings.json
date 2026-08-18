@@ -1,0 +1,201 @@
+{
+  "vague-spec.md": {
+    "source_document": "fixtures/spec-gate/vague-spec.md",
+    "structural_findings": [],
+    "findings": [
+      {
+        "provenance": {
+          "reasoning": "'fast' has no number, percentile, or measurement point; two people can disagree about whether it was met.",
+          "source_quote": "The login flow must be fast",
+          "source_section": "Goals",
+          "confidence": "high",
+          "agent": "golden-baseline",
+          "model": "human",
+          "timestamp": "2026-08-18T00:00:00Z"
+        },
+        "category": "ambiguous_quantifier",
+        "severity": "warning",
+        "suggested_rewrite": "p95 login completes in under 2 seconds, measured from the IdP redirect to app landing."
+      },
+      {
+        "provenance": {
+          "reasoning": "Reads precise but is not: no percentile, no load condition, no measurement point. 'Under a second' at p50 idle and at p99 peak are different requirements.",
+          "source_quote": "Token refresh must complete in under a second",
+          "source_section": "Requirements",
+          "confidence": "high",
+          "agent": "golden-baseline",
+          "model": "human",
+          "timestamp": "2026-08-18T00:00:00Z"
+        },
+        "category": "ambiguous_quantifier",
+        "severity": "warning",
+        "suggested_rewrite": "Token refresh completes in under 1 second at p95 under peak sign-in load, measured at the gateway."
+      },
+      {
+        "provenance": {
+          "reasoning": "'a large number' is not a capacity target; it cannot size infrastructure or a load test.",
+          "source_quote": "The system must support a large number of concurrent sessions during peak sign-in",
+          "source_section": "Requirements",
+          "confidence": "high",
+          "agent": "golden-baseline",
+          "model": "human",
+          "timestamp": "2026-08-18T00:00:00Z"
+        },
+        "category": "ambiguous_quantifier",
+        "severity": "warning",
+        "suggested_rewrite": "Support 12,000 concurrent sessions at peak sign-in (Monday 09:00 UTC), with headroom to 2x."
+      },
+      {
+        "provenance": {
+          "reasoning": "No observable pass/fail condition — 'feel seamless' cannot be verified or refuted.",
+          "source_quote": "the experience should feel seamless to end users",
+          "source_section": "Goals",
+          "confidence": "high",
+          "agent": "golden-baseline",
+          "model": "human",
+          "timestamp": "2026-08-18T00:00:00Z"
+        },
+        "category": "untestable_criterion",
+        "severity": "warning",
+        "suggested_rewrite": "Fewer than 2% of migrated users file a login-related ticket in the first 30 days."
+      },
+      {
+        "provenance": {
+          "reasoning": "Names no artifact, no audience, and no condition under which it counts as done.",
+          "source_quote": "Documentation will be improved",
+          "source_section": "Requirements",
+          "confidence": "high",
+          "agent": "golden-baseline",
+          "model": "human",
+          "timestamp": "2026-08-18T00:00:00Z"
+        },
+        "category": "untestable_criterion",
+        "severity": "warning",
+        "suggested_rewrite": "Publish an SSO runbook and an end-user FAQ; both linked from the login error page."
+      },
+      {
+        "provenance": {
+          "reasoning": "A big-bang cutover with no rollback plan anywhere in the document. The spec's own subject makes the absence conspicuous: if Monday sign-in fails, there is no stated way back.",
+          "source_quote": "All users will be cut over in a single weekend migration",
+          "source_section": "Rollout",
+          "confidence": "high",
+          "agent": "golden-baseline",
+          "model": "human",
+          "timestamp": "2026-08-18T00:00:00Z"
+        },
+        "category": "missing_nfr",
+        "severity": "blocker",
+        "suggested_rewrite": "State the rollback: legacy stack stays warm for N days, re-pointing DNS/auth config restores it within M minutes, and name the rollback decision owner."
+      },
+      {
+        "provenance": {
+          "reasoning": "Centralizing all authentication with no stated security requirements: no session invalidation policy for the legacy stack, no penetration/security review gate, no availability target for the IdP that is now a single point of failure.",
+          "source_quote": "The new IdP will handle all authentication for internal and customer-facing apps",
+          "source_section": "Requirements",
+          "confidence": "high",
+          "agent": "golden-baseline",
+          "model": "human",
+          "timestamp": "2026-08-18T00:00:00Z"
+        },
+        "category": "missing_nfr",
+        "severity": "warning",
+        "suggested_rewrite": "Add an NFR block: IdP availability target, legacy session invalidation at cutover, and a security review sign-off before customer-facing apps move."
+      },
+      {
+        "provenance": {
+          "reasoning": "The plan depends on IT provisioning a tenant, but no requirement, date, or agreement with IT is stated anywhere — the dependency is assumed, not declared.",
+          "source_quote": "Once the Okta tenant is provisioned by IT",
+          "source_section": "Rollout",
+          "confidence": "high",
+          "agent": "golden-baseline",
+          "model": "human",
+          "timestamp": "2026-08-18T00:00:00Z"
+        },
+        "category": "unstated_assumption",
+        "severity": "warning",
+        "suggested_rewrite": "Add a dependency line: Okta tenant provisioned by IT by <date>, owner named, tracked as a predecessor to integration work."
+      },
+      {
+        "provenance": {
+          "reasoning": "Assumes every user is on an app version that supports the new flow; nothing in the document requires a minimum version, a forced upgrade, or a fallback for old clients.",
+          "source_quote": "Mobile clients will pick up the new flow automatically",
+          "source_section": "Rollout",
+          "confidence": "high",
+          "agent": "golden-baseline",
+          "model": "human",
+          "timestamp": "2026-08-18T00:00:00Z"
+        },
+        "category": "unstated_assumption",
+        "severity": "warning",
+        "suggested_rewrite": "State the minimum supported app version and the behavior for older clients, or add a forced-upgrade requirement before cutover."
+      },
+      {
+        "provenance": {
+          "reasoning": "Cannot hold together with Requirements: 'Legacy login remains available for 90 days after cutover so stragglers can migrate.' The stack cannot be both decommissioned immediately and available for 90 days.",
+          "source_quote": "The legacy auth stack will be decommissioned immediately after the cutover weekend",
+          "source_section": "Rollout",
+          "confidence": "high",
+          "agent": "golden-baseline",
+          "model": "human",
+          "timestamp": "2026-08-18T00:00:00Z"
+        },
+        "category": "conflicting_requirement",
+        "severity": "blocker",
+        "suggested_rewrite": "Pick one: keep legacy read-only for 90 days then decommission, or decommission immediately and delete the 90-day promise."
+      },
+      {
+        "provenance": {
+          "reasoning": "Cannot hold together with Rollout: 'All users will be cut over in a single weekend migration.' A single-weekend cutover and a department-by-department Q4 rollout are different plans with different risk profiles.",
+          "source_quote": "Departments will migrate one at a time through Q4",
+          "source_section": "Timeline",
+          "confidence": "high",
+          "agent": "golden-baseline",
+          "model": "human",
+          "timestamp": "2026-08-18T00:00:00Z"
+        },
+        "category": "conflicting_requirement",
+        "severity": "blocker",
+        "suggested_rewrite": "Choose the rollout shape and make the other section agree; the risk, comms, and rollback story all differ between the two."
+      },
+      {
+        "provenance": {
+          "reasoning": "A team is not an accountable owner; when the runbook is late there is no named person to ask. This is the realistic version of unowned scope — it looks owned.",
+          "source_quote": "The platform team will own the migration runbook",
+          "source_section": "Ownership and communications",
+          "confidence": "high",
+          "agent": "golden-baseline",
+          "model": "human",
+          "timestamp": "2026-08-18T00:00:00Z"
+        },
+        "category": "unowned_scope",
+        "severity": "warning",
+        "suggested_rewrite": "Name the individual: '<name> (platform) owns the migration runbook, reviewed by <name> before cutover.'"
+      },
+      {
+        "provenance": {
+          "reasoning": "Passive voice with no producer: nobody is accountable for the materials existing.",
+          "source_quote": "Training materials will be produced before launch",
+          "source_section": "Ownership and communications",
+          "confidence": "high",
+          "agent": "golden-baseline",
+          "model": "human",
+          "timestamp": "2026-08-18T00:00:00Z"
+        },
+        "category": "unowned_scope",
+        "severity": "warning",
+        "suggested_rewrite": "'<name> delivers training materials by <date>; sign-off by department leads.'"
+      }
+    ],
+    "questions_for_author": [],
+    "readiness_score": null,
+    "verdict": "advisory"
+  },
+  "good-spec.md": {
+    "source_document": "fixtures/spec-gate/good-spec.md",
+    "structural_findings": [],
+    "findings": [],
+    "questions_for_author": [],
+    "readiness_score": null,
+    "verdict": "advisory"
+  }
+}
