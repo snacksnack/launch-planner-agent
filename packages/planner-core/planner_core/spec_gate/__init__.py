@@ -33,9 +33,14 @@ from planner_core.spec_gate.models import (
     SpecVerdict,
     StructuralFinding,
 )
+from planner_core.spec_gate.structural import (
+    DEFAULT_REQUIRED_SECTIONS,
+    run_structural_checks,
+)
 from planner_core.spec_gate.text import normalize_for_quote_match, normalize_whitespace
 
 __all__ = [
+    "DEFAULT_REQUIRED_SECTIONS",
     "SPEC_SEVERITY_ORDER",
     "FindingCategory",
     "LoadedSpec",
@@ -50,4 +55,5 @@ __all__ = [
     "normalize_for_quote_match",
     "normalize_whitespace",
     "parse_sections",
+    "run_structural_checks",
 ]

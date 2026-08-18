@@ -1,7 +1,43 @@
 {
   "vague-spec.md": {
     "source_document": "fixtures/spec-gate/vague-spec.md",
-    "structural_findings": [],
+    "structural_findings": [
+      {
+        "code": "missing-section",
+        "severity": "nit",
+        "message": "no section matching 'non-goal' found",
+        "quote": null,
+        "section": null
+      },
+      {
+        "code": "missing-section",
+        "severity": "warning",
+        "message": "no section matching 'acceptance criteria' found",
+        "quote": null,
+        "section": null
+      },
+      {
+        "code": "missing-requirement-ids",
+        "severity": "warning",
+        "message": "requirements carry no stable IDs (e.g. REQ-1); a plan can only cite them by paraphrase",
+        "quote": null,
+        "section": "Requirements"
+      },
+      {
+        "code": "no-named-owner",
+        "severity": "warning",
+        "message": "the ownership section names no individual — there is no accountable person to ask",
+        "quote": null,
+        "section": "Ownership and communications"
+      },
+      {
+        "code": "unresolved-marker",
+        "severity": "warning",
+        "message": "unresolved marker left in a scope-bearing section",
+        "quote": "Departments will migrate one at a time through Q4. Success metrics: TBD.",
+        "section": "Timeline"
+      }
+    ],
     "findings": [
       {
         "provenance": {

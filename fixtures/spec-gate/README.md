@@ -32,12 +32,14 @@ At least two per rubric category, thirteen total. The hard ones are marked ★.
   (role, not a person — the realistic version); "Training materials will be
   produced before launch" (passive, no producer)
 
-Also planted for the structural checks (RC1-288): `Success metrics: TBD.`
-(Timeline), requirements as prose paragraphs with no REQ-IDs, and no
-acceptance-criteria or non-goals sections. Their golden entries
-(`structural_findings`) are added in RC1-288, once the check codes exist —
-guessing codes before the checks are written would just be a second place to
-get them wrong.
+Also planted for the structural checks (RC1-288), with golden entries under
+`structural_findings`: no acceptance-criteria section (`missing-section`,
+warning) and no non-goals section (`missing-section`, nit); requirements as
+prose with no REQ-IDs (`missing-requirement-ids`); an ownership section naming
+no individual (`no-named-owner`); and `Success metrics: TBD.` in Timeline
+(`unresolved-marker`, quoting the full source line). The structural golden is
+exact: `run_structural_checks` over the vague spec must equal it, and over the
+good spec must be empty — both asserted by tests.
 
 ## Maintenance rules
 
