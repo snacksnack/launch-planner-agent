@@ -40,6 +40,23 @@ provenance trail from the PRD all the way into the Jira tickets it generates."*
 
 ---
 
+## Gate the spec, then plan it (RC1-229)
+
+The 30-second upstream demo — *"the most expensive defect is an ambiguous
+requirement, so I gate specs the way I gate code"*:
+
+```bash
+# Feed it a deliberately vague spec; watch it come back with the questions
+# a good TPM would have asked (13 planted defects, quotes verbatim):
+uv run plan spec review fixtures/spec-gate/vague-spec.md
+
+# The pair back to back — gate, then plan, one command:
+uv run plan spec gate fixtures/jira-cloud-migration/
+```
+
+The review lands beside the plan as `plan.spec-review.json`; the breakdown that
+follows is the exact `plan breakdown` code path. Details: [spec-gate.md](spec-gate.md).
+
 ## The full pipeline (with an API key, off the demo)
 
 To show the agents actually building a plan from a PRD (needs `LPA_ANTHROPIC_API_KEY`):

@@ -634,6 +634,10 @@ uv run plan spec review fixtures/spec-gate/vague-spec.md
 
 # Machine-readable, and an opt-in blocking category:
 uv run plan spec review my-spec.md --json --fail-on conflicting_requirement
+
+# Gate, then plan — review the fixture's PRD, write the review sidecar
+# (plan.spec-review.json), and hand straight to the work breakdown:
+uv run plan spec gate fixtures/jira-cloud-migration/
 ```
 
 Exit codes: 0 advisory (findings or not), 1 only when a `--fail-on` category
