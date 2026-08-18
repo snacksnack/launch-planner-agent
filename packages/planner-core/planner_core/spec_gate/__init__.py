@@ -16,3 +16,23 @@ forbids it from importing ``agents`` or ``anthropic`` — see ADR-0038.
 """
 
 from __future__ import annotations
+
+from planner_core.spec_gate.models import (
+    SPEC_SEVERITY_ORDER,
+    FindingCategory,
+    SpecFinding,
+    SpecReview,
+    SpecSeverity,
+    SpecVerdict,
+    StructuralFinding,
+)
+
+__all__ = [
+    "SPEC_SEVERITY_ORDER",
+    "FindingCategory",
+    "SpecFinding",
+    "SpecReview",
+    "SpecSeverity",
+    "SpecVerdict",
+    "StructuralFinding",
+]
