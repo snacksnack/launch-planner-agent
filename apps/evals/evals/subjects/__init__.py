@@ -19,6 +19,8 @@ from evals.subjects import (
     groundedness,
     health,
     raid,
+    spec_review,
+    spec_structural,
     status_fallback,
     status_narrative,
     tool_selection,
@@ -34,6 +36,8 @@ SUBJECTS = {
     work_breakdown.NAME: work_breakdown,
     dependency.NAME: dependency,
     raid.NAME: raid,
+    spec_structural.NAME: spec_structural,
+    spec_review.NAME: spec_review,
 }
 
 #: Subjects that reach a real model. They cost tokens, need
@@ -46,6 +50,7 @@ BILLED = frozenset(
         work_breakdown.NAME,
         dependency.NAME,
         raid.NAME,
+        spec_review.NAME,
     }
 )
 
@@ -56,6 +61,8 @@ __all__ = [
     "groundedness",
     "health",
     "raid",
+    "spec_review",
+    "spec_structural",
     "status_fallback",
     "status_narrative",
     "tool_selection",
