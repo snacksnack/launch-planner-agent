@@ -71,6 +71,7 @@ _MAX_TOKENS = 2000
 _NO_BASELINE_FORBIDDEN = (
     "no changes",
     "nothing changed",
+    "no material changes",
     "unchanged from last week",
     "no movement since",
     "holds steady against the baseline",

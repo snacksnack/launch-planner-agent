@@ -149,6 +149,22 @@ def test_fallback_narrative_speaks_only_from_facts():
     assert any("slipped 3 working day" in p for p in narrative.points)
 
 
+def test_fallback_narrative_names_the_absent_baseline():
+    """"Nothing to compare" and "nothing changed" mean opposite things (RC1-317):
+    a quiet week against a committed baseline reports no material changes, but a
+    period with no baseline must say so instead of claiming a comparison it
+    never made."""
+    no_baseline = fallback_narrative(_facts(_base(), _base()))  # baseline_version=None
+    text = " ".join([no_baseline.exec_summary, *no_baseline.points]).lower()
+    assert "no baseline" in text and "nothing to compare" in text
+    assert "material changes" not in text
+    assert "holds" not in no_baseline.exec_summary, "no baseline to hold against"
+
+    committed = fallback_narrative(_facts(_base(), _base(), baseline_version=3))
+    assert any("No material changes" in p for p in committed.points)
+    assert "holds" in committed.exec_summary
+
+
 def test_renderers_include_health_and_summary():
     facts = _facts(_base(), _base())
     md = render_markdown(facts, fallback_narrative(facts))

@@ -68,17 +68,17 @@ def test_the_quiet_week_case_is_covered():
     assert "does-not-manufacture-activity" in _case(quiet[0]).expect
 
 
-def test_the_deterministic_narrative_fails_the_no_baseline_case(tmp_path):
-    """A recorded finding, not an accident. `fallback_narrative` writes "No
-    material changes since the baseline" when there is no baseline — asserting a
-    comparison that never happened. Both shipped callers guard against reaching
-    it, so this is latent rather than live; the test pins it so a fix flips it
-    deliberately rather than silently."""
+def test_the_deterministic_narrative_handles_the_no_baseline_case(tmp_path):
+    """This test used to pin the opposite: `fallback_narrative` wrote "No
+    material changes since the baseline" when there was no baseline — a
+    recorded finding, latent because both shipped callers guarded against
+    reaching it. RC1-317 fixed the producer, flipping the pin deliberately:
+    the no-baseline case now passes every characteristic."""
     index = next(i for i, f in enumerate(FACT_SETS) if f.baseline_version is None)
     result = status_fallback.run(_case(index), tmp_path)
 
     failed = [c for c in result.characteristics if not c.passed]
-    assert [c.name for c in failed] == ["says-there-is-nothing-to-compare"]
+    assert failed == [], [c.name for c in failed]
 
 
 # --- the two subjects are separately versioned ------------------------------
