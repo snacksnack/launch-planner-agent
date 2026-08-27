@@ -218,7 +218,10 @@ def _signed(n: int) -> str:
 def fallback_narrative(facts: StatusFacts) -> StatusNarrative:
     """A serviceable rule-written narrative so the report works without an LLM."""
     verb = {"green": "on track", "yellow": "at some risk", "red": "off track"}[facts.health.value]
-    if facts.launch_shift_days == 0:
+    if facts.baseline_version is None:
+        # "Holds" would claim a comparison no baseline exists to support (RC1-317).
+        launch = f"the projected launch is {facts.launch_after}"
+    elif facts.launch_shift_days == 0:
         launch = f"the projected launch holds at {facts.launch_after}"
     elif facts.launch_shift_days > 0:
         launch = (
@@ -245,7 +248,14 @@ def fallback_narrative(facts: StatusFacts) -> StatusNarrative:
     for r in facts.raid_added:
         sev = f" (severity {r.severity})" if r.severity is not None else ""
         points.append(f"New {r.type}: {r.title}{sev}.")
-    if not points:
+    if facts.baseline_version is None:
+        # "Nothing to compare" and "nothing changed" mean opposite things, and
+        # only one of them is true when no baseline exists (RC1-317).
+        points.append(
+            "No baseline has been committed yet — this is the first status, "
+            "with nothing to compare against."
+        )
+    elif not points:
         points.append("No material changes since the baseline.")
     return StatusNarrative(exec_summary=summary, points=points)
 

@@ -17,7 +17,7 @@ importable package is `mcp_server` because `mcp` belongs to the official SDK.
 
 # Declared before the submodule imports below: `tools.health` reads it at import
 # time, and this module is partially initialised while that import runs.
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 from mcp_server.allowlist import TOOL_ALLOWLIST  # noqa: E402
 from mcp_server.config import McpSettings, get_mcp_settings  # noqa: E402
