@@ -30,6 +30,14 @@ class EvalSettings(BaseSettings):
     # credential-free default for local iteration, and stays gitignored.
     evals_runs_path: str = "./eval-runs/runs.jsonl"
 
+    # The tool-selection probe model (RC1-328). This subject measures the tool
+    # *definitions* — any capable model is a probe, unlike the agent subjects
+    # where the model under test is the production model. The KPI agent's
+    # cost-per-run-by-model monitor flagged sonnet-5 here at 4x haiku with no
+    # pass-rate edge (haiku 85.7% vs sonnet's 78.6-92.9% band), so the probe is
+    # pinned cheap. Override: LPA_TOOL_SELECTION_MODEL.
+    tool_selection_model: str = "claude-haiku-4-5"
+
     @property
     def runs_path(self) -> Path:
         return Path(self.evals_runs_path)
