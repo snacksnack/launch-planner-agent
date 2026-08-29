@@ -12,7 +12,31 @@ to).
 
 ---
 
-## ADR-0038 — The Spec Quality Gate lives inside this repo, split along the existing core/agents seam
+## ADR-0039 — The tool-selection probe model is pinned cheap, separately from the production model
+
+**Date:** 2026-08-29 · **Ticket:** RC1-328 · **Status:** Accepted
+
+**Context.** The KPI agent's `cost-per-run-by-model` monitor (tpm-automation-platform,
+RC1-305) tripped on tool-selection: claude-sonnet-5 at 4.0× the cheapest model that has
+run the same subject, drifting up from 3.8× a week earlier. The store's history says the
+premium bought nothing here — haiku-4-5's run passed 85.7% at $0.063 while sonnet-5's
+recent runs sat at 78.6% at $0.24–0.31. The subject's own docstring explains why this is
+credible: tool-selection measures *the tool definitions*, with the model as probe — unlike
+raid/spec-review/status, where the model under test is the production model behind
+`LPA_ANTHROPIC_MODEL` and must not silently diverge from what users get.
+
+**Decision.** `EvalSettings.tool_selection_model` (default `claude-haiku-4-5`, override
+`LPA_TOOL_SELECTION_MODEL`) feeds the subject's three model sites through one `_model()`
+helper; `Settings.anthropic_model` stays the production model for everything else. The
+budget ceiling drops to $0.15 (~2× haiku observed) so moving the probe back to a
+sonnet-class model trips the advisory breach.
+
+**Consequences.** Tool-selection runs cost ~4× less, and the confusion-matrix signal now
+comes from a *stricter* reader — descriptions that route correctly for a small model
+route correctly for a large one, not necessarily the reverse. The trend page shows a
+model change at the switch (`model` rides on every run record), so score movement is
+attributable. If a future case set needs a sonnet-class probe, the override exists and
+the ceiling will say so out loud.
 
 **Date:** 2026-08-18 · **Ticket:** RC1-284 · **Status:** Accepted
 

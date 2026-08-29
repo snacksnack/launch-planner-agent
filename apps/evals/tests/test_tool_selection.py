@@ -16,7 +16,7 @@ from decimal import Decimal
 
 import pytest
 from agent_evals.case import Case
-from app.config import get_settings
+from evals.config import get_eval_settings
 from evals.mcp_bridge import Surface, to_api_name, to_mcp_name
 from evals.subjects import tool_selection
 
@@ -343,9 +343,11 @@ def test_the_request_carries_no_system_prompt_and_no_sampling_overrides(surface,
 
 
 def test_usage_carries_a_real_cost(surface, tmp_path, monkeypatch):
-    """Tokens are the measurement; cost is the thing RC1-254 budgets against."""
-    monkeypatch.setenv("LPA_ANTHROPIC_MODEL", "claude-sonnet-5")
-    get_settings.cache_clear()
+    """Tokens are the measurement; cost is the thing RC1-254 budgets against.
+    Pinning the probe through LPA_TOOL_SELECTION_MODEL (RC1-328) also proves
+    the override is what the cost math actually reads."""
+    monkeypatch.setenv("LPA_TOOL_SELECTION_MODEL", "claude-sonnet-5")
+    get_eval_settings.cache_clear()
     try:
         case = Case(
             id="c", input={"question": "q", "tool": "plan.list"}, expect=("calls-exactly-one-tool",)
@@ -356,7 +358,7 @@ def test_usage_carries_a_real_cost(surface, tmp_path, monkeypatch):
         assert result.usage.cost_usd == Decimal("4.50")
         assert result.usage.input_tokens == 1_000_000
     finally:
-        get_settings.cache_clear()
+        get_eval_settings.cache_clear()
 
 
 def test_a_transport_failure_is_recorded_not_raised(surface, tmp_path):

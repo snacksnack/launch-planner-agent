@@ -26,9 +26,12 @@ __all__ = ["CEILINGS", "Ceiling", "breaches_for", "for_subject"]
 CEILINGS: dict[str, Ceiling] = {
     "tool-selection": Ceiling(
         subject="tool-selection",
-        max_cost_usd=Decimal("0.50"),
+        max_cost_usd=Decimal("0.15"),
         max_latency_ms=90_000,
-        note="observed $0.235 / 35s over 14 cases on claude-sonnet-5",
+        note=(
+            "observed $0.063 over 14 cases on claude-haiku-4-5 (RC1-328); a breach "
+            "at ~2x means someone moved the probe back to a sonnet-class model"
+        ),
     ),
     "status-narrative": Ceiling(
         subject="status-narrative",

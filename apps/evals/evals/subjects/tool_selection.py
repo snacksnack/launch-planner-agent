@@ -58,9 +58,18 @@ from agent_evals.pricing import cost_usd
 from agent_evals.record import CaseResult, CharacteristicResult, SubjectVersion, Usage
 from app.config import get_settings
 
+from evals.config import get_eval_settings
 from evals.mcp_bridge import Surface, ToolCall, call, discover, to_api_name, to_mcp_name
 
 NAME = "tool-selection"
+
+
+def _model() -> str:
+    """The probe model (RC1-328): this subject measures the tool definitions,
+    so the model is an instrument, not the thing under test — and the KPI
+    agent's cost monitor showed the expensive one buying no extra signal.
+    Pinned in `EvalSettings.tool_selection_model`, recorded on every run."""
+    return get_eval_settings().tool_selection_model
 
 #: Enough for a tool call plus a short follow-up answer. Not a quality lever —
 #: the eval measures routing, not prose length.
@@ -344,7 +353,7 @@ def version(surface: Surface | None = None) -> SubjectVersion:
     return SubjectVersion(
         subject=NAME,
         code_version=mcp_version,
-        model=get_settings().anthropic_model,
+        model=_model(),
         prompt_version=prompt_version(surface),
     )
 
@@ -403,7 +412,7 @@ def _default_client():
 def _ask(client, surface: Surface, messages: list[dict[str, Any]]) -> _Turn:
     """One turn. No system prompt, no sampling overrides — see the module docstring."""
     response = client.messages.create(
-        model=get_settings().anthropic_model,
+        model=_model(),
         max_tokens=_MAX_TOKENS,
         tools=surface.tools,
         tool_choice={"type": "auto"},
@@ -676,7 +685,7 @@ def run(case: Case, tmp_root: Path, client=None, surface: Surface | None = None)
 
     input_tokens = first.input_tokens + (follow_up.input_tokens if follow_up else 0)
     output_tokens = first.output_tokens + (follow_up.output_tokens if follow_up else 0)
-    model = get_settings().anthropic_model
+    model = _model()
     return CaseResult(
         case_id=case.id,
         characteristics=results,
