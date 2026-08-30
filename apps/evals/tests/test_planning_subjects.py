@@ -50,6 +50,8 @@ def test_provenance_tracing_ignores_markdown_but_not_invention():
     invented = planning.traces_to_the_prd([], [_task("t-2", "rewrite the frontend")], PRD)
     assert not invented.passed
     assert "t-2" in invented.detail
+    # RC1-326: the record must carry the offending quote, not just the item id.
+    assert "rewrite the frontend" in invented.detail
 
 
 def test_orphan_and_roster_checks_fail_on_bad_references():
