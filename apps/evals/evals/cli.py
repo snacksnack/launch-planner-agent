@@ -30,7 +30,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from agent_evals import agreement, construct, judge, labelling
+from agent_evals import agreement, construct, judge, labelling, llmobs
 from agent_evals.record import RunRecord, RunStore, new_run_id
 from agent_evals.rubric import JUDGED, JUDGED_KEYS, RUBRIC_VERSION
 from agent_evals.runner import store_from_env
@@ -88,6 +88,9 @@ def cmd_run(args: argparse.Namespace) -> int:
             f"{args.subject} drives a real model — {len(subject.CASES)} cases will spend tokens.",
             file=sys.stderr,
         )
+        # RC1-322: billed spend is traced spend. Free subjects stay untraced —
+        # enable only here, and llmobs.case() no-ops when tracing is off.
+        llmobs.enable("launch-planner", service="evals")
 
     started_at = datetime.now(UTC)
     results = []
@@ -98,7 +101,10 @@ def cmd_run(args: argparse.Namespace) -> int:
         for index, case in enumerate(subject.CASES):
             case_root = Path(tmp) / f"{index:03d}-{case.id}"
             case_root.mkdir(parents=True)
-            results.append(subject.run(case, case_root))
+            with llmobs.case(case.id) as traced:
+                result = subject.run(case, case_root)
+                traced.record(result)
+            results.append(result)
 
     record = RunRecord(
         run_id=new_run_id(subject.NAME, started_at),
@@ -353,6 +359,7 @@ def cmd_judge(args: argparse.Namespace) -> int:
         print(f"cannot run the judge: {exc} (set LPA_ANTHROPIC_API_KEY)", file=sys.stderr)
         return 2
     model = settings.anthropic_model or DEFAULT_MODEL
+    llmobs.enable("launch-planner", service="judge")  # RC1-322: the judge bills too
 
     store = LabelStore(Path(args.labels_path or LABELS_PATH))
     done = store.by_scorer(judge.JUDGE_VERSION)
