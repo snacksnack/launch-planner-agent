@@ -175,3 +175,24 @@ def test_bold_transliterated_as_a_double_quote_is_tolerated():
     )
     quote = 'App Store approval is required before launch" and timing slips.'
     assert not flag_unverifiable_quotes(_quoting(quote), prd)
+
+
+def test_bold_transliterated_as_an_em_dash_is_tolerated():
+    """RC1-326: the same closing `**` also comes back as ` — `.
+
+    Found the same way as RC1-257 — by rerunning the flapping `product-launch`
+    case and reading the quotes, not from a theory.
+    """
+    prd = (
+        "## Goals\n\nIt is a mobile app, so **App Store approval is required\n"
+        "before launch** and timing slips.\n"
+    )
+    quote = "App Store approval is required before launch — and timing slips."
+    assert not flag_unverifiable_quotes(_quoting(quote), prd)
+
+
+def test_a_lowercased_leading_capital_is_tolerated():
+    """RC1-326: the agent lowercases a capital when quoting mid-sentence."""
+    prd = "## Scope\n\nThe v1.0 feature set still has a couple of screens to finish.\n"
+    quote = "the v1.0 feature set still has a couple of screens to finish."
+    assert not flag_unverifiable_quotes(_quoting(quote), prd)

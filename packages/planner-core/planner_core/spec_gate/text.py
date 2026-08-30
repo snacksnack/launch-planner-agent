@@ -26,20 +26,27 @@ def normalize_whitespace(text: str) -> str:
 #:
 #: Double quotes are stripped for a related reason: the agent transliterates a
 #: closing `**` as `"`, so `...the public launch** and Apple's...` came back as
-#: `...the public launch" and Apple's...`. Apostrophes are deliberately *not*
-#: stripped — they are part of words, and removing them would let a quote match
-#: text it does not actually contain.
-_DECORATION = re.compile(r"[*`\"“”]")
+#: `...the public launch" and Apple's...`. RC1-326 added em/en dashes: the same
+#: closing `**` also comes back as ` — `. Apostrophes and hyphens are
+#: deliberately *not* stripped — they are part of words, and removing them
+#: would let a quote match text it does not actually contain.
+_DECORATION = re.compile(r"[*`\"“”—–]")
 
 
 def normalize_for_quote_match(text: str) -> str:
-    """Whitespace- and markup-insensitive form used for provenance matching.
+    """Whitespace-, markup- and case-insensitive form used for provenance matching.
 
     Deliberately *not* used for anything but quote comparison. It is a matcher,
     not a canonical form — stripping decoration from text that is then displayed
     would quietly rewrite the PRD.
+
+    Case-folded since RC1-326: the agent lowercases a leading capital when it
+    quotes mid-sentence (`"the v1.0 feature set…"` for the PRD's `"The v1.0
+    feature set…"`). The check exists to catch work proposed from nothing; a
+    letter's case carries no such signal, and every word must still appear in
+    order for a quote to match.
     """
-    return normalize_whitespace(_DECORATION.sub("", text))
+    return normalize_whitespace(_DECORATION.sub("", text)).casefold()
 
 
 def is_verbatim(quote: str, source_text: str) -> bool:

@@ -92,9 +92,13 @@ def traces_to_the_prd(
     unverifiable = []
     for kind, items in (("epic", epics), ("task", tasks)):
         for item in items:
-            quote = normalize_for_quote_match(item.provenance.source_quote or "")
+            raw = item.provenance.source_quote or ""
+            quote = normalize_for_quote_match(raw)
             if not quote or quote not in haystack:
-                unverifiable.append(f"{kind} {item.id!r}")
+                # The offending quote goes into the record: RC1-326 stalled on
+                # runs that named the items but not what they actually cited.
+                snippet = raw if len(raw) <= 80 else raw[:77] + "..."
+                unverifiable.append(f"{kind} {item.id!r} cited {snippet!r}")
     total = len(epics) + len(tasks)
     return CharacteristicResult(
         name="traces-to-the-prd",
