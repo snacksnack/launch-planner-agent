@@ -12,6 +12,40 @@ to).
 
 ---
 
+## ADR-0040 — Quote matching case-folds and tolerates em-dash transliteration; the prompt stays put
+
+**Date:** 2026-08-30 · **Ticket:** RC1-326 · **Status:** Accepted
+
+**Context.** The KPI agent's tripped monitor held `gated-pass-rate` at 66.7% for the
+eval-run-store program, floored by the work-breakdown subject: the `product-launch` case
+flapped on `traces-to-the-prd` across four runs of the *same* prompt hash and model — so
+neither "fix the prompt" nor "pin the model" from the tree's so-what rule matched the
+evidence. Rerunning the case six times with the offending quotes captured (the run
+records named the failing items but not what they cited — fixed in the same change)
+showed every failure was a faithful quote punished for typography: the model lowercases
+a leading capital when quoting mid-sentence (`"the v1.0 feature set…"` for the PRD's
+`"The v1.0…"`), and transliterates a closing `**` as ` — ` — the exact mechanism
+RC1-257 already tolerates for the `"` transliteration.
+
+**Decision.** Fix the matcher, not the prompt. `normalize_for_quote_match` now
+case-folds both sides and `_DECORATION` strips em/en dashes (hyphens and apostrophes
+stay — they are parts of words). `traces-to-the-prd` records the offending quote in
+its detail so the next flap is diagnosable from the run record alone.
+
+**Explanation.** The check exists to catch work proposed from nothing; letter case and
+dash typography carry no invention signal, and every word must still appear in order
+for a quote to match. Prompt-tightening was rejected: the VERBATIM instruction is
+already emphatic, sampling would still occasionally integrate quotes grammatically,
+and RC1-257 set the precedent that a checker crying wolf on faithful quotes is a
+matcher bug. The shipped validator (`flag_unverifiable_quotes`) and the spec gate
+share the fix through the single implementation.
+
+**Consequences.** The freeze the KPI tree imposed lifts once a green run lands. A
+quote differing *only* in case from PRD text now passes — acceptable, since matching
+still demands the full word sequence. Both callers of the matcher loosen together;
+if the spec gate ever needs stricter matching than provenance tracing, that is the
+moment to split the implementations, deliberately.
+
 ## ADR-0039 — The tool-selection probe model is pinned cheap, separately from the production model
 
 **Date:** 2026-08-29 · **Ticket:** RC1-328 · **Status:** Accepted
