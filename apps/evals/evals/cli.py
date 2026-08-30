@@ -25,7 +25,6 @@ into one non-zero code loses that.
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -91,15 +90,9 @@ def cmd_run(args: argparse.Namespace) -> int:
         )
         # RC1-322: billed spend is traced spend. Free subjects stay untraced —
         # enable only here, and llmobs.case() no-ops when tracing is off.
-        #
-        # RC1-326: two ddtrace integrations crash enable() against this repo's
-        # imports — openai_agents patches any module named `agents` (here, our
-        # own agents layer, not the OpenAI Agents SDK), and mcp expects the MCP
-        # SDK 1.x layout (`mcp.shared.session`) where we pin `mcp>=2`. Opt both
-        # out (setdefault, so an explicit environment still wins). Anthropic
-        # tracing — the integration we actually use — is unaffected.
-        os.environ.setdefault("DD_TRACE_OPENAI_AGENTS_ENABLED", "false")
-        os.environ.setdefault("DD_TRACE_MCP_ENABLED", "false")
+        # Since agent-evals v0.4.1 (RC1-331), enable() itself restricts ddtrace
+        # patching to the anthropic integration — the RC1-326 local DD_TRACE_*
+        # opt-outs that used to sit here moved into the harness.
         llmobs.enable("launch-planner", service="evals")
 
     started_at = datetime.now(UTC)
