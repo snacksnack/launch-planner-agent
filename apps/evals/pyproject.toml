@@ -11,7 +11,7 @@ dependencies = [
     # and the calibration machinery. Pinned to a tag rather than a branch: an
     # eval harness that changes under a run cannot tell you whether the subject
     # moved or the ruler did.
-    "agent-evals[sql]",
+    "agent-evals[sql,llmobs]",
     # RC1-249: the tool-selection subject hands the shipped MCP surface to a real
     # model. `mcp` is here for the stdio client, not the server — the harness is
     # a client of `apps/mcp`, the same way any other MCP client is.
