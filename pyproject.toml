@@ -27,7 +27,7 @@ planner-core = { workspace = true }
 agents = { workspace = true }
 # RC1-261. A tag, not a branch: if the harness can move under a run, a changed
 # score no longer tells you whether the subject drifted or the ruler did.
-agent-evals = { git = "https://github.com/snacksnack/agent-evals", tag = "v0.4.1" }
+agent-evals = { git = "https://github.com/snacksnack/agent-evals", tag = "v0.5.0" }
 
 [dependency-groups]
 dev = [
