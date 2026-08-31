@@ -104,7 +104,9 @@ def cmd_run(args: argparse.Namespace) -> int:
         for index, case in enumerate(subject.CASES):
             case_root = Path(tmp) / f"{index:03d}-{case.id}"
             case_root.mkdir(parents=True)
-            with llmobs.case(case.id) as traced:
+            # input_data: the fixture, so the LLM Obs trace list shows what
+            # the case ran against (RC1-339); the harness clips it.
+            with llmobs.case(case.id, input_data=case.input) as traced:
                 result = subject.run(case, case_root)
                 traced.record(result)
             results.append(result)
