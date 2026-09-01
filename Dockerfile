@@ -17,20 +17,34 @@ RUN pip install --no-cache-dir uv
 WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 
-# Install the Python workspace (cached unless deps change).
+# Install just the API package and the workspace deps it pulls in (RC1-357).
+# --all-packages requires every member of [tool.uv.workspace] to exist in the
+# build context; apps/mcp and apps/evals are not copied here and have no place
+# in a production image. --package keeps this correct as the workspace grows.
 COPY pyproject.toml uv.lock ./
 COPY packages/ ./packages/
 COPY apps/api/ ./apps/api/
-RUN uv sync --all-packages --frozen --no-dev
+RUN uv sync --package launch-planner-api --frozen --no-dev
 
 # Runtime assets: the flagship fixtures the API serves, and the built web app.
 COPY fixtures/ ./fixtures/
 COPY --from=web /web/dist ./web-dist
 
+# Git metadata for Datadog source-code integration (RC1-356). Declared after
+# the expensive build steps so a new commit sha busts only this layer. The
+# image has no git at runtime, so the sha must arrive as a build arg.
+ARG GIT_SHA=""
+
 ENV LPA_WEB_DIST=/app/web-dist \
     LPA_DATABASE_URL=sqlite:////data/launch_planner.db \
     LPA_PUBLIC_DEMO=true \
-    LPA_ENVIRONMENT=production
+    LPA_ENVIRONMENT=production \
+    DD_GIT_COMMIT_SHA=$GIT_SHA \
+    DD_GIT_REPOSITORY_URL=https://github.com/snacksnack/launch-planner-agent \
+    DD_VERSION=$GIT_SHA
 
 EXPOSE 8080
-CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+# --no-sync is load-bearing: `uv run` re-syncs the workspace by default, which
+# fails in this image for the same reason --all-packages did. Without it the
+# image builds green and crash-loops on boot (RC1-357).
+CMD ["uv", "run", "--no-sync", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
