@@ -354,8 +354,10 @@ def test_usage_carries_a_real_cost(surface, tmp_path, monkeypatch):
         )
         client = FakeClient(_Response([tool_use("plan.list")], usage=_Usage(1_000_000, 100_000)))
         result = _run(case, client, surface, tmp_path)
-        # 1M input at $3.00/M + 100k output at $15.00/M = $3.00 + $1.50
-        assert result.usage.cost_usd == Decimal("4.50")
+        # 1M input at $2.00/M + 100k output at $10.00/M = $2.00 + $1.00 — the
+        # billed list price, not the $3/$15 the harness assumed before v0.6.1
+        # (RC1-401).
+        assert result.usage.cost_usd == Decimal("3.00")
         assert result.usage.input_tokens == 1_000_000
     finally:
         get_eval_settings.cache_clear()
