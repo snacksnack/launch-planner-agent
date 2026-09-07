@@ -23,6 +23,12 @@ __all__ = ["CEILINGS", "Ceiling", "breaches_for", "for_subject"]
 #: above it never fires at all. Roughly 2x observed is the compromise — enough
 #: that ordinary variance passes, tight enough that a doubled prompt or a model
 #: change shows up.
+#:
+#: The claude-sonnet-5 "observed $" notes below were priced by a harness that
+#: had Sonnet 5 at $3/$15; the billed rate is $2/$10 (RC1-401, agent-evals
+#: v0.6.1), so the true figures are two thirds of what the notes say and the
+#: ceilings now sit at roughly 3x observed rather than 2x. Left as they are:
+#: a ceiling is re-measured when a subject changes, not when a price does.
 CEILINGS: dict[str, Ceiling] = {
     "tool-selection": Ceiling(
         subject="tool-selection",
