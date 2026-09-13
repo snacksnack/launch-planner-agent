@@ -339,11 +339,12 @@ def test_api_jira_surfaces_browse_url_for_pushed_issues(tmp_path, monkeypatch):
     path.write_text(plan.model_dump_json())
 
     monkeypatch.setenv("LPA_JIRA_BASE_URL", "https://acme.atlassian.net")
+    # A temp plan is outside fixtures/, so it cannot come in via `?plan=`
+    # (RC1-369); the operator default is the path for a plan that lives elsewhere.
+    monkeypatch.setenv("LPA_PLAN_PATH", str(path))
     get_settings.cache_clear()
     try:
-        body = TestClient(create_app()).get(
-            "/api/jira", params={"plan": str(path), "start": "2026-08-03"}
-        ).json()
+        body = TestClient(create_app()).get("/api/jira", params={"start": "2026-08-03"}).json()
         op = next(o for o in body["generation"]["issues"] if o["local_id"] == "task-x")
         assert op["action"] == "update" and op["existing_key"] == "PMA-42"
         assert op["jira_url"] == "https://acme.atlassian.net/browse/PMA-42"
@@ -435,6 +436,42 @@ def test_api_baseline_returns_variance_against_a_seeded_baseline(tmp_path, monke
         assert body["comparison"]["plan_diff"] == []
     finally:
         get_settings.cache_clear()
+
+
+def test_request_plan_under_fixtures_renders():
+    resp = TestClient(create_app()).get(
+        "/api/plan", params={"plan": "fixtures/product-launch/golden/expected-plan.json"}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["tasks"]
+
+
+@pytest.mark.parametrize(
+    "plan",
+    [
+        "../../../etc/passwd",
+        "fixtures/../apps/api/app/main.py",
+        "/etc/passwd",
+        "apps/api/app/main.py",  # in the repo, outside fixtures/
+        "fixtures",  # a directory
+        "fixtures/nope.json",
+    ],
+)
+def test_request_plan_outside_fixtures_is_404(plan):
+    # RC1-369: `?plan=` is request input, so it may only name a file under
+    # fixtures/; the operator's configured default is not subject to this.
+    resp = TestClient(create_app()).get("/api/plan", params={"plan": plan})
+    assert resp.status_code == 404
+    assert resp.json()["detail"].startswith("plan not found")
+
+
+def test_request_plan_dotdot_that_stays_under_fixtures_resolves():
+    from app.main import _PLANS_ROOT, _resolve_request_plan
+
+    resolved = _resolve_request_plan(
+        "fixtures/product-launch/../product-launch/golden/expected-plan.json"
+    )
+    assert resolved == _PLANS_ROOT / "product-launch" / "golden" / "expected-plan.json"
 
 
 def test_default_plan_resolves_regardless_of_cwd(tmp_path, monkeypatch):

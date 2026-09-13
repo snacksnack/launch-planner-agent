@@ -437,7 +437,7 @@ Deploy-only settings: `LPA_PUBLIC_DEMO` (read-only demo: seeds a history on firs
 boot, enables rate limiting), `LPA_WEB_DIST` (serve the built web same-origin),
 `LPA_RATE_LIMIT_PER_MINUTE` (per-IP cap on `/api/*`, demo only).
 
-`GET /api/plan?plan=…&start=YYYY-MM-DD` renders any plan file; `?snapshot=<version>`
+`GET /api/plan?plan=…&start=YYYY-MM-DD` renders any plan file under `fixtures/` (repo-relative; anything else is 404); `?snapshot=<version>`
 renders a committed snapshot.
 
 ---

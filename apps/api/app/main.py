@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import time
 from collections import defaultdict, deque
 from datetime import UTC, date, datetime
@@ -41,9 +42,15 @@ from app.store import SQLiteEventStore
 # from (repo root, apps/api, ...). apps/api/app/main.py -> parents[3] == repo root.
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
+# The only directory a *request* may name a plan file in. Every plan that ships
+# (the goldens, and what the Docker image copies) lives here; the operator's
+# configured default path is not subject to this and resolves as before.
+_PLANS_ROOT = _REPO_ROOT / "fixtures"
+
 
 def _resolve_plan(path_str: str) -> Path | None:
-    """Find a plan file: absolute, or relative to the CWD, or relative to the repo root."""
+    """Find an operator-supplied plan file (settings.plan_path or a plan's own
+    source_document): absolute, or relative to the CWD, or relative to the repo root."""
     candidate = Path(path_str)
     if candidate.is_absolute():
         return candidate if candidate.is_file() else None
@@ -52,6 +59,19 @@ def _resolve_plan(path_str: str) -> Path | None:
         if resolved.is_file():
             return resolved
     return None
+
+
+def _resolve_request_plan(path_str: str) -> Path | None:
+    """Find a plan file named by a request (`?plan=`): repo-relative, and it must
+    stay under fixtures/. Anything else — traversal, an absolute path, a file
+    elsewhere in the repo, a miss — is None, which the caller reports as 404.
+    Request input never reaches the filesystem unchecked (CodeQL
+    py/path-injection, RC1-369)."""
+    root = os.path.normpath(str(_PLANS_ROOT))
+    candidate = os.path.normpath(os.path.join(str(_REPO_ROOT), path_str))
+    if not candidate.startswith(root + os.sep) or not os.path.isfile(candidate):
+        return None
+    return Path(candidate)
 
 
 def _resolve_prd_text(plan: Plan, plan_path: Path | None) -> str | None:
@@ -180,8 +200,10 @@ def create_app() -> FastAPI:
         if snapshot is not None:
             snap = _load_snapshot(settings.sqlite_path, snapshot)
             return snap.plan, None, snap.decision_record
-        requested = plan or settings.plan_path
-        plan_path = _resolve_plan(requested)
+        if plan is not None:
+            requested, plan_path = plan, _resolve_request_plan(plan)
+        else:
+            requested, plan_path = settings.plan_path, _resolve_plan(settings.plan_path)
         if plan_path is None:
             raise HTTPException(status_code=404, detail=f"plan not found: {requested}")
         return Plan.model_validate_json(plan_path.read_text()), plan_path, None
@@ -195,7 +217,9 @@ def create_app() -> FastAPI:
     @app.get("/api/plan", tags=["plan"])
     def api_plan(
         start: str | None = Query(default=None, description="Project start date (YYYY-MM-DD)."),
-        plan: str | None = Query(default=None, description="Path to a plan.json to render."),
+        plan: str | None = Query(
+            default=None, description="Repo-relative path to a plan.json under fixtures/."
+        ),
         snapshot: str | None = Query(
             default=None, description="Render a committed snapshot (version or content hash)."
         ),

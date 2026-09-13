@@ -294,7 +294,12 @@ function showDetail(id) {
   const item = byId.get(id);
   const el = document.querySelector("#detail");
   if (!item) {
-    el.innerHTML = `<p class="hint">No detail for ${id}.</p>`;
+    // `id` came back out of the DOM (a data-jump attribute), so it goes in as
+    // text, never as markup (CodeQL js/xss-through-dom, RC1-369).
+    const hint = document.createElement("p");
+    hint.className = "hint";
+    hint.textContent = `No detail for ${id}.`;
+    el.replaceChildren(hint);
     return;
   }
   setPanelCollapsed(false); // reveal the panel if it was collapsed
