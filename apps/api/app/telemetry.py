@@ -27,6 +27,7 @@ cannot turn into a series per visitor.
 from __future__ import annotations
 
 import os
+import sys
 import time
 from typing import Any
 
@@ -40,6 +41,13 @@ EXCLUDED_PATHS = frozenset({"/healthz"})
 
 #: Short: this runs inside a request, and telemetry must never hold one up.
 TIMEOUT_S = 2.0
+
+#: `/api/v2/series` takes the metric type as an integer enum, NOT a string:
+#: 0 unspecified, 1 count, 2 rate, 3 gauge. Sending "count" is rejected with
+#: `unknown value "count" for enum datadoghq.api.series.v2.MetricType`, and the
+#: first cut of this module did exactly that — every point 400'd for half an
+#: hour while the swallowed error made it look like no traffic.
+COUNT = 1
 
 #: This app calls its own environment "production"; the rest of the estate tags
 #: `env:prod` — the DORA deploy events, and DD_ENV on the other services. One
@@ -113,7 +121,7 @@ def build_payload(endpoint: str, outcome: str, env: str, now: float | None = Non
         "series": [
             {
                 "metric": METRIC,
-                "type": "count",
+                "type": COUNT,
                 "points": [{"timestamp": int(now or time.time()), "value": 1}],
                 "tags": [
                     # The service name is the Software Catalog entity and the
@@ -131,8 +139,12 @@ def build_payload(endpoint: str, outcome: str, env: str, now: float | None = Non
 def post(payload: dict, api_key: str, site: str = "datadoghq.com") -> bool:
     """Send one series document. Returns whether Datadog accepted it.
 
-    Every failure is swallowed. A telemetry outage must never become an outage
-    of the thing it is watching, and this runs in the request path.
+    Every failure is swallowed — a telemetry outage must never become an outage
+    of the thing it is watching, and this runs in the request path — but it is
+    swallowed *loudly*. A rejected point and an unvisited service look identical
+    in Datadog, and that silence is exactly what this metric exists to
+    distinguish. The first cut logged nothing and spent half an hour looking
+    like no traffic while every send 400'd on the type enum.
     """
     try:
         resp = httpx.post(
@@ -141,8 +153,16 @@ def post(payload: dict, api_key: str, site: str = "datadoghq.com") -> bool:
             headers={"DD-API-KEY": api_key, "Content-Type": "application/json"},
             timeout=TIMEOUT_S,
         )
-        return resp.status_code < 300
-    except Exception:  # noqa: BLE001 - see docstring; never raise into a request
+        if resp.status_code >= 300:
+            print(
+                f"telemetry: Datadog rejected a point, HTTP {resp.status_code}: "
+                f"{resp.text[:200]}",
+                file=sys.stderr,
+            )
+            return False
+        return True
+    except Exception as exc:  # noqa: BLE001 - see docstring; never raise into a request
+        print(f"telemetry: could not send a point: {exc!r}", file=sys.stderr)
         return False
 
 
