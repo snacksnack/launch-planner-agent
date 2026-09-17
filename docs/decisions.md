@@ -12,6 +12,50 @@ to).
 
 ---
 
+## ADR-0041 — The demo counts its own requests, because it cannot be traced
+
+**Date:** 2026-09-17 · **Ticket:** RC1-455 · **Status:** Accepted
+
+**Context.** This service is the only deployed thing in the estate that emits no
+telemetry, so nobody can say whether it serves anyone — while it deploys about twice a
+week. The Software Catalog entry built in RC1-447 lists it with every column blank, and
+its entity claims `lifecycle: production` on judgement rather than evidence.
+
+Two obvious fixes both fail here. `LLMObs.enable()` is how every other service in the
+estate acquires telemetry, but it traces *model calls*, and this API deliberately makes
+none: `main.py` builds its narrative from `fallback_narrative`, and the LLM path lives in
+the gated `plan status` CLI. Ordinary APM tracing would work, but it needs a Datadog
+Agent, and this estate runs none — every "APM service" in the account is really a name
+passed to `LLMObs.enable(service=...)`, the summarizer excepted, whose spans come from the
+Lambda extension. A FastAPI app that calls no model therefore has no agentless path to a
+span.
+
+**Decision.** Count requests in middleware and POST them to Datadog's metrics API as
+`launch_planner.request`, tagged `service` / `env` / `endpoint` / `outcome`. `/healthz` is
+excluded. The send is fire-and-forget on a worker thread, gated on `DD_API_KEY`, and
+swallows every failure.
+
+**Explanation.** The question worth answering is narrow — *is anyone calling this, and
+does it work when they do* — and a counter answers it for nothing. Running an Agent would
+answer more (latency, traces) but is the only recurring cost in the observability epic and
+should be a deliberate choice, not a side effect of wanting one row to fill in. Excluding
+the health check is the substance rather than an optimisation: Fly probes every 30
+seconds, so counting it would report 2,880 "requests" a day and drown the signal it exists
+to find. A health check is not a user.
+
+Cardinality is bounded by construction: the `endpoint` tag is the route *template*, never
+the resolved path, so `/api/scenarios/{name}` stays one series no matter how many
+scenarios visitors name. Twelve non-health routes times three outcomes is the ceiling.
+
+**Consequences.** After a week of data the entity's lifecycle becomes a finding rather
+than an assumption: requests arriving means production and now measurable; a week of
+deploys with no non-health request means `experimental`, and the thin catalog row becomes
+correct. The metric is not a substitute for tracing — there is no latency and no
+dependency map — and if this service ever earns an Agent, the counter should give way to
+real spans rather than sit beside them. It also forces a definition on the scorecard's
+future `is traced` rule (RC1-454): it has to mean "emits telemetry we can find", because
+three services in this estate will never have APM spans.
+
 ## ADR-0040 — Quote matching case-folds and tolerates em-dash transliteration; the prompt stays put
 
 **Date:** 2026-08-30 · **Ticket:** RC1-326 · **Status:** Accepted
