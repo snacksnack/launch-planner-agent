@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
+import sys
 import time
 from collections import defaultdict, deque
 from datetime import UTC, date, datetime
@@ -33,7 +35,7 @@ from planner_core import (
 )
 from pydantic import BaseModel
 
-from app import __version__
+from app import __version__, telemetry
 from app.config import get_settings
 from app.gantt import _jira_url, build_gantt_payload
 from app.store import SQLiteEventStore
@@ -166,6 +168,36 @@ def create_app() -> FastAPI:
                 )
             window.append(now)
         return await call_next(request)
+
+    # Count requests to Datadog (RC1-455). This service emits nothing else:
+    # `LLMObs.enable()` is how the rest of the estate gets telemetry, but it
+    # traces model calls and this API makes none, and ordinary APM needs an
+    # Agent nobody runs here. See app/telemetry.py.
+    #
+    # Fire-and-forget on a worker thread: the POST must not add its latency to
+    # the response, and a telemetry failure must not become an outage of the
+    # thing it watches. The task set keeps a reference so the loop cannot
+    # garbage-collect a send mid-flight.
+    if (_warning := telemetry.unconfigured_warning(settings.environment)) is not None:
+        print(_warning, file=sys.stderr)
+
+    _sends: set[asyncio.Task] = set()
+
+    @app.middleware("http")
+    async def _count_request(request: Request, call_next):
+        response = await call_next(request)
+        if not telemetry.should_count(request):
+            return response
+        # Read the route after routing: request.scope["route"] is what makes
+        # the endpoint tag a template rather than a resolved path.
+        task = asyncio.create_task(
+            asyncio.to_thread(
+                telemetry.record, request, response.status_code, settings.environment
+            )
+        )
+        _sends.add(task)
+        task.add_done_callback(_sends.discard)
+        return response
 
     @app.get("/healthz", tags=["ops"])
     def healthz() -> dict[str, object]:
