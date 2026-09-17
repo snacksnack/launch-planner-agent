@@ -52,7 +52,10 @@ def test_payload_carries_the_catalog_service_name_and_bounded_tags():
     payload = telemetry.build_payload("/api/status", "ok", "prod", now=1_700_000_000)
     series = payload["series"][0]
     assert series["metric"] == "launch_planner.request"
-    assert series["type"] == "count"
+    # An INTEGER enum, not the string "count". `/api/v2/series` rejects the
+    # string with `unknown value "count" for enum ...MetricType`, and the first
+    # cut of this module shipped exactly that: every point 400'd, silently.
+    assert series["type"] == 1
     assert series["points"] == [{"timestamp": 1_700_000_000, "value": 1}]
     assert set(series["tags"]) == {
         "service:launch-planner-agent",
@@ -131,3 +134,24 @@ def test_a_deployed_app_without_a_key_says_so(monkeypatch):
 def test_local_development_is_not_nagged(monkeypatch):
     monkeypatch.delenv("DD_API_KEY", raising=False)
     assert telemetry.unconfigured_warning("development") is None
+
+
+def test_a_rejected_point_is_reported_not_swallowed_silently(monkeypatch, capsys):
+    """A 400 and an unvisited service look identical in Datadog. Only one of
+    them should be invisible, and it is not this one."""
+    class Rejected:
+        status_code = 400
+        text = 'unknown value "count" for enum MetricType'
+
+    monkeypatch.setattr(telemetry.httpx, "post", lambda *a, **k: Rejected())
+    assert telemetry.post({}, "key") is False
+    assert "Datadog rejected a point, HTTP 400" in capsys.readouterr().err
+
+
+def test_a_transport_failure_is_also_reported(monkeypatch, capsys):
+    def boom(*_a, **_k):
+        raise RuntimeError("datadog is down")
+
+    monkeypatch.setattr(telemetry.httpx, "post", boom)
+    assert telemetry.post({}, "key") is False
+    assert "could not send a point" in capsys.readouterr().err
