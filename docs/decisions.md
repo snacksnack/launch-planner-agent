@@ -56,6 +56,16 @@ real spans rather than sit beside them. It also forces a definition on the score
 future `is traced` rule (RC1-454): it has to mean "emits telemetry we can find", because
 three services in this estate will never have APM spans.
 
+**Addendum (2026-09-25).** The week ran and the call is made: `lifecycle: production`
+stands, and the entity file is untouched. Excluding the three build-day verification
+points and the stray `_shape_probe` series, 38 non-health requests arrived across three
+days — `/api/plan` once each on 09-18 and 09-21, and a 36-request burst across all nine
+`/api/*` routes on 09-24. `unmatched` (404s on routes that don't exist) logged 166 in the
+same window, nearly all scanner noise against the public app. All attributable traffic is
+self-generated rather than organic, but the service is under active development
+(RC1-460/462/463), so the entity keeps the production claim it can now back with a
+number. Full query and evidence on RC1-455.
+
 ## ADR-0040 — Quote matching case-folds and tolerates em-dash transliteration; the prompt stays put
 
 **Date:** 2026-08-30 · **Ticket:** RC1-326 · **Status:** Accepted
