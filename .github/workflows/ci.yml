@@ -28,5 +28,16 @@ jobs:
       - name: Enforce import direction (planner-core has no LLM deps)
         run: uv run lint-imports
 
+      # RC1-452: --ddtrace reports test-level results to Test Optimization,
+      # agentless. `--with` overlays ddtrace at test time only, so it never
+      # joins the workspace dependencies and the planner-core import contract
+      # is untouched. Not a test credential: the suite passes identically
+      # with no key.
       - name: Tests
-        run: uv run pytest
+        env:
+          DD_API_KEY: ${{ secrets.DD_API_KEY }}
+          DD_CIVISIBILITY_AGENTLESS_ENABLED: "true"
+          DD_SITE: datadoghq.com
+          DD_SERVICE: launch-planner-agent
+          DD_ENV: ci
+        run: uv run --with "ddtrace>=4.14,<5" pytest --ddtrace
