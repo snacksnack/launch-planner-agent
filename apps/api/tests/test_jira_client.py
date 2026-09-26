@@ -73,6 +73,31 @@ def test_create_link_posts_blocks_with_outward_and_inward():
     }
 
 
+def test_list_links_normalizes_both_directions():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["fields"] == "issuelinks"
+        assert request.url.path.endswith("/rest/api/3/issue/SKY-1")
+        return httpx.Response(200, json={"fields": {"issuelinks": [
+            {"id": "1", "type": {"name": "Blocks"}, "outwardIssue": {"key": "SKY-2"}},
+            {"id": "2", "type": {"name": "Blocks"}, "inwardIssue": {"key": "SKY-3"}},
+            {"id": "3", "type": {"name": "Relates"}, "outwardIssue": {"key": "SKY-4"}},
+        ]}})
+
+    target = _target(handler)
+    assert target.list_links("SKY-1") == [
+        ("Blocks", "SKY-1", "SKY-2"),  # SKY-1 blocks SKY-2
+        ("Blocks", "SKY-3", "SKY-1"),  # SKY-3 blocks SKY-1
+        ("Relates", "SKY-1", "SKY-4"),
+    ]
+
+
+def test_list_links_tolerates_missing_issuelinks_field():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"fields": {}})
+
+    assert _target(handler).list_links("SKY-1") == []
+
+
 def test_http_error_propagates():
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(400, json={"errors": {"summary": "required"}})

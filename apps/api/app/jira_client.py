@@ -99,3 +99,17 @@ class RealJiraTarget:
             },
         )
         resp.raise_for_status()
+
+    def list_links(self, key: str) -> list[tuple[str, str, str]]:
+        resp = self._client.get(f"/rest/api/3/issue/{key}", params={"fields": "issuelinks"})
+        resp.raise_for_status()
+        links: list[tuple[str, str, str]] = []
+        for link in resp.json()["fields"].get("issuelinks") or []:
+            # Jira renders each link from the fetched issue's side: an entry
+            # holding `outwardIssue` means `key` is the outward end.
+            name = link["type"]["name"]
+            if "outwardIssue" in link:
+                links.append((name, key, link["outwardIssue"]["key"]))
+            elif "inwardIssue" in link:
+                links.append((name, link["inwardIssue"]["key"], key))
+        return links

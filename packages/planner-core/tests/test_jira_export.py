@@ -79,6 +79,9 @@ class _SpyTarget:
     def create_link(self, **kw):
         self.calls.append(("link", kw))
 
+    def list_links(self, key):
+        return []
+
 
 # --- mapping ---------------------------------------------------------------
 
@@ -161,19 +164,68 @@ def test_partial_approval_only_runs_selected_ops():
 def test_rerun_after_writing_keys_produces_zero_duplicates():
     plan = _small()
     sched = schedule_plan(plan, start_date=MONDAY)
-    first = execute_generation(
-        build_generation_plan(plan, sched, project_key="PMA"), MockJiraTarget("PMA")
-    )
+    # The same target across both runs, like the real Jira project: run 2 sees
+    # the issues and links run 1 created.
+    target = MockJiraTarget("PMA")
+    first = execute_generation(build_generation_plan(plan, sched, project_key="PMA"), target)
     # Write the created keys back, re-generate, re-run.
     mapped = apply_keys_to_plan(plan, first.key_by_local_id)
     assert mapped.tasks[0].jira_key is not None and mapped.epics[0].jira_key is not None
 
     gen2 = build_generation_plan(mapped, sched, project_key="PMA")
     assert gen2.creates == 0 and gen2.updates == 3
-    target2 = MockJiraTarget("PMA")
-    result2 = execute_generation(gen2, target2)
+    result2 = execute_generation(gen2, target)
     assert result2.created == []  # nothing duplicated
     assert len(result2.updated) == 3
+    # Links are idempotent too (RC1-462): zero create_link calls on the re-run.
+    a_key, b_key = first.key_by_local_id["A"], first.key_by_local_id["B"]
+    assert result2.links_created == []
+    assert result2.links_existing == [(a_key, b_key)]
+    assert len(target.links) == 1  # still exactly the run-1 link
+    assert result2.links_stale == []
+
+
+def test_only_never_relinks_issues_outside_the_approved_set():
+    plan = _small()
+    sched = schedule_plan(plan, start_date=MONDAY)
+    target = MockJiraTarget("PMA")
+    first = execute_generation(build_generation_plan(plan, sched, project_key="PMA"), target)
+    mapped = apply_keys_to_plan(plan, first.key_by_local_id)
+    gen2 = build_generation_plan(mapped, sched, project_key="PMA")
+    a_key, b_key = first.key_by_local_id["A"], first.key_by_local_id["B"]
+
+    # Neither endpoint approved: no POST even against a target that reports no
+    # existing links (the pre-RC1-462 bug re-posted here).
+    fresh = MockJiraTarget("PMA")
+    result = execute_generation(gen2, fresh, only={"epic-1"})
+    assert fresh.links == []
+    assert result.links_skipped == [(a_key, b_key)]
+
+    # One endpoint approved is enough for the link to be in scope again.
+    fresh2 = MockJiraTarget("PMA")
+    result2 = execute_generation(gen2, fresh2, only={"A"})
+    assert result2.links_created == [(a_key, b_key)]
+
+
+def test_removed_dependency_is_reported_stale_never_deleted():
+    plan = _small()
+    sched = schedule_plan(plan, start_date=MONDAY)
+    target = MockJiraTarget("PMA")
+    first = execute_generation(build_generation_plan(plan, sched, project_key="PMA"), target)
+    a_key, b_key = first.key_by_local_id["A"], first.key_by_local_id["B"]
+    # A manual link to an issue outside the plan must never be flagged.
+    target.links.append({"link_type": "Blocks", "outward_key": "OTHER-1", "inward_key": a_key})
+
+    mapped = apply_keys_to_plan(plan, first.key_by_local_id)
+    without_dep = mapped.model_copy(deep=True)
+    without_dep.dependencies = []
+    gen2 = build_generation_plan(
+        without_dep, schedule_plan(without_dep, start_date=MONDAY), project_key="PMA"
+    )
+    result = execute_generation(gen2, target)
+
+    assert result.links_stale == [(a_key, b_key)]  # reported…
+    assert len(target.links) == 2  # …but nothing was deleted (ADR-0042)
 
 
 def test_apply_keys_only_maps_known_ids():
