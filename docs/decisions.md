@@ -12,6 +12,37 @@ to).
 
 ---
 
+## ADR-0042 — Stale Jira links are reported, never deleted
+
+**Date:** 2026-09-26 · **Ticket:** RC1-462 · **Status:** Accepted
+
+**Context.** Issues were idempotent on re-run (via `jira_key` write-back) but links were
+not: `execute_generation` re-posted every "Blocks" link on every run, relying on
+undocumented server behavior to avoid duplicates. Fixing that raised the follow-on
+question: when a dependency is *removed* from the plan, should the push delete the
+now-orphaned link in Jira? Jira issue links carry no marker of who created them, so
+"only delete links the tool created" is not implementable — a Blocks link between two
+tool-managed issues added by a human in the Jira UI is indistinguishable from one the
+tool posted from a since-removed dependency.
+
+**Decision.** The link phase diffs against the target's actual links (`list_links`, one
+GET per pre-existing issue). Links already present are reported as existing and not
+re-posted; links between two plan-managed issues, of a link type the tool writes, with no
+matching dependency are reported as **stale** — and left in place. The tool never calls a
+link-delete endpoint; there isn't one on the `JiraTarget` port at all.
+
+**Explanation.** Same posture as the rest of the estate: drift jobs detect and go red, a
+human commits the correction. Auto-deleting would put destructive writes behind a
+re-run of a command whose contract is "idempotent", and would silently destroy human
+input in the ambiguous case above. Reporting costs one line of output; a wrong delete
+costs a dependency the plan never knew about.
+
+**Consequences.** The Jira graph can lag the plan until a human removes a stale link
+(the push prints each one). `--only` now also gates links — a link needs at least one
+endpoint in the approved set — so partial approvals no longer re-post links between
+excluded issues. Because presence is checked client-side, correctness no longer depends
+on whether Jira Cloud dedupes an identical `POST /issueLink`.
+
 ## ADR-0041 — The demo counts its own requests, because it cannot be traced
 
 **Date:** 2026-09-17 · **Ticket:** RC1-455 · **Status:** Accepted

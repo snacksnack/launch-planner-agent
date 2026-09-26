@@ -13,6 +13,9 @@ but does **no** network I/O. The `RealJiraTarget` (an httpx adapter) lives in th
 
 Safety: mock is the default everywhere. Idempotency comes from `jira_key` written
 back onto each entity — a re-run turns creates into updates, never duplicates.
+Links are idempotent too: the target is asked for each pre-existing issue's
+links, so a re-run reports "already present" instead of re-posting, and a link
+left behind by a removed dependency is reported stale — never deleted (ADR-0042).
 """
 
 from __future__ import annotations
@@ -124,6 +127,10 @@ class JiraTarget(Protocol):
 
     def create_link(self, *, link_type: str, outward_key: str, inward_key: str) -> None: ...
 
+    def list_links(self, key: str) -> list[tuple[str, str, str]]:
+        """Existing links touching `key`, as (link_type, outward_key, inward_key)."""
+        ...
+
 
 class MockJiraTarget:
     """Records what would be done and hands back fake keys — no side effects.
@@ -180,6 +187,13 @@ class MockJiraTarget:
         self.links.append(
             {"link_type": link_type, "outward_key": outward_key, "inward_key": inward_key}
         )
+
+    def list_links(self, key: str) -> list[tuple[str, str, str]]:
+        return [
+            (link["link_type"], link["outward_key"], link["inward_key"])
+            for link in self.links
+            if key in (link["outward_key"], link["inward_key"])
+        ]
 
 
 # --- building the generation plan (deterministic mapping) -------------------
@@ -283,13 +297,28 @@ def build_generation_plan(
 
 @dataclass
 class ExecutionResult:
-    """What happened (or would happen) when a generation plan runs."""
+    """What happened (or would happen) when a generation plan runs.
+
+    Link outcomes are split rather than counted: `links_created` were posted this
+    run, `links_existing` were already in Jira and skipped, `links_skipped` fell
+    outside the `only` set, and `links_stale` are links in Jira between two
+    plan-managed issues that no longer match any dependency — reported for a
+    human to act on, never deleted (ADR-0042). Pairs are (outward, inward) keys.
+    """
 
     key_by_local_id: dict[str, str] = field(default_factory=dict)
     created: list[str] = field(default_factory=list)
     updated: list[str] = field(default_factory=list)
-    linked: int = 0
     skipped: list[str] = field(default_factory=list)
+    links_created: list[tuple[str, str]] = field(default_factory=list)
+    links_existing: list[tuple[str, str]] = field(default_factory=list)
+    links_skipped: list[tuple[str, str]] = field(default_factory=list)
+    links_stale: list[tuple[str, str]] = field(default_factory=list)
+
+    @property
+    def linked(self) -> int:
+        """Links actually created this run."""
+        return len(self.links_created)
 
 
 def execute_generation(
@@ -300,10 +329,12 @@ def execute_generation(
 ) -> ExecutionResult:
     """Drive `target` through the generation plan. `only` (local ids) enables
     partial approval — operations outside the set are skipped. Idempotent: an
-    op with an `existing_key` updates rather than creates.
+    op with an `existing_key` updates rather than creates, and a link the target
+    already holds is reported as existing rather than re-posted.
 
     Epics are processed before stories so a story's parent key exists; links are
-    created only when both endpoints resolved to a key.
+    created only when both endpoints resolved to a key, and under `only` a link
+    needs at least one endpoint in the approved set.
     """
     result = ExecutionResult()
     key_of: dict[str, str] = {op.local_id: op.existing_key for op in gen.issues if op.existing_key}
@@ -339,12 +370,46 @@ def execute_generation(
 
     result.key_by_local_id = dict(key_of)
 
+    # One list_links per pre-existing issue: the diff base for "already present"
+    # and "stale". Issues created this run cannot have prior links.
+    remote_links: set[tuple[str, str, str]] = set()
+    for key in sorted({op.existing_key for op in gen.issues if op.existing_key}):
+        remote_links.update(target.list_links(key))
+
+    plan_links: set[tuple[str, str, str]] = set()
     for link in gen.links:
         out_key = key_of.get(link.outward_local_id)
         in_key = key_of.get(link.inward_local_id)
         if out_key and in_key:
+            plan_links.add((link.link_type, out_key, in_key))
+
+    for link in gen.links:
+        out_key = key_of.get(link.outward_local_id)
+        in_key = key_of.get(link.inward_local_id)
+        if not (out_key and in_key):
+            continue
+        if only is not None and not {link.outward_local_id, link.inward_local_id} & only:
+            result.links_skipped.append((out_key, in_key))
+            continue
+        if (link.link_type, out_key, in_key) in remote_links:
+            result.links_existing.append((out_key, in_key))
+        else:
             target.create_link(link_type=link.link_type, outward_key=out_key, inward_key=in_key)
-            result.linked += 1
+            result.links_created.append((out_key, in_key))
+
+    # A link in Jira between two plan-managed issues, of a type the tool writes,
+    # with no matching dependency: the plan moved on. Reported, never deleted —
+    # it may be human-made, and drift is a human's call (ADR-0042).
+    managed = set(key_of.values())
+    tool_types = {link.link_type for link in gen.links} or {"Blocks"}
+    result.links_stale = sorted(
+        (out_key, in_key)
+        for (link_type, out_key, in_key) in remote_links
+        if link_type in tool_types
+        and out_key in managed
+        and in_key in managed
+        and (link_type, out_key, in_key) not in plan_links
+    )
 
     return result
 

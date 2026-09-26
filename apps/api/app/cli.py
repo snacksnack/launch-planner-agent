@@ -743,7 +743,8 @@ def cmd_jira(args: argparse.Namespace) -> int:
         print(gen.render())
         print(
             f"\n[mock] would create {len(result.created)}, update {len(result.updated)}, "
-            f"link {result.linked} — no writes. Re-run with --real --confirm to apply."
+            f"link {len(result.links_created)} — no writes. "
+            "Re-run with --real --confirm to apply."
         )
         return 0
 
@@ -778,8 +779,12 @@ def cmd_jira(args: argparse.Namespace) -> int:
     out_path.write_text(updated.model_dump_json(indent=2) + "\n")
     print(
         f"[real] created {len(result.created)}, updated {len(result.updated)}, "
-        f"link {result.linked}"
+        f"links: {len(result.links_created)} created, "
+        f"{len(result.links_existing)} already present, "
+        f"{len(result.links_skipped)} outside --only, {len(result.links_stale)} stale"
     )
+    for out_key, in_key in result.links_stale:
+        print(f"  stale: {out_key} blocks {in_key} in Jira but not in the plan — left in place")
     print(f"wrote {out_path} with jira_key mappings (idempotent on re-run)")
     return 0
 
