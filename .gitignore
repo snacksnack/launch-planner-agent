@@ -27,3 +27,8 @@ dist/
 .DS_Store
 .idea/
 .vscode/
+
+# Test coverage (RC1-468)
+.coverage
+.coverage.*
+htmlcov/
