@@ -43,6 +43,16 @@ endpoint in the approved set — so partial approvals no longer re-post links be
 excluded issues. Because presence is checked client-side, correctness no longer depends
 on whether Jira Cloud dedupes an identical `POST /issueLink`.
 
+The RC1-462 live probe (recorded on the ticket) settled two server facts. Jira Cloud
+*does* dedupe an identical `POST /issueLink`: both POSTs return 201, one link is stored.
+And the create payload is mirrored relative to reads: a link POSTed with
+`outwardIssue=X, inwardIssue=Y` reads back (and renders) as "Y blocks X".
+`RealJiraTarget.create_link` therefore swaps the two keys to honor the port's
+"outward blocks inward" contract — which also resolves RC1-460's open "link direction
+unverified" note. Every Blocks link pushed before this fix is reversed in Jira; the
+next real push will create the correct-direction links and report the reversed ones
+stale, for manual deletion.
+
 ## ADR-0041 — The demo counts its own requests, because it cannot be traced
 
 **Date:** 2026-09-17 · **Ticket:** RC1-455 · **Status:** Accepted

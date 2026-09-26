@@ -55,7 +55,7 @@ def test_create_issue_posts_fields_adf_duedate_and_parent():
     assert fields["description"]["type"] == "doc"  # ADF, not raw string
 
 
-def test_create_link_posts_blocks_with_outward_and_inward():
+def test_create_link_posts_blocks_with_mirrored_direction():
     captured = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -64,12 +64,14 @@ def test_create_link_posts_blocks_with_outward_and_inward():
         return httpx.Response(201)
 
     target = _target(handler)
+    # Port contract: PMA-1 blocks PMA-2. Jira's create payload is mirrored
+    # (RC1-462 probe), so the blocked issue goes in `outwardIssue`.
     target.create_link(link_type="Blocks", outward_key="PMA-1", inward_key="PMA-2")
     assert captured["url"].endswith("/rest/api/3/issueLink")
     assert captured["json"] == {
         "type": {"name": "Blocks"},
-        "outwardIssue": {"key": "PMA-1"},
-        "inwardIssue": {"key": "PMA-2"},
+        "outwardIssue": {"key": "PMA-2"},
+        "inwardIssue": {"key": "PMA-1"},
     }
 
 

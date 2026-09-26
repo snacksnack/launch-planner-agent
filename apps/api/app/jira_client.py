@@ -90,12 +90,16 @@ class RealJiraTarget:
         resp.raise_for_status()
 
     def create_link(self, *, link_type: str, outward_key: str, inward_key: str) -> None:
+        # Jira's create payload is mirrored relative to its read payload.
+        # Verified live (RC1-462 probe): POSTing outwardIssue=X, inwardIssue=Y
+        # stores a link that reads back as "Y blocks X". The port's contract is
+        # "outward_key blocks inward_key", so the two keys swap places here.
         resp = self._client.post(
             "/rest/api/3/issueLink",
             json={
                 "type": {"name": link_type},
-                "outwardIssue": {"key": outward_key},
-                "inwardIssue": {"key": inward_key},
+                "outwardIssue": {"key": inward_key},
+                "inwardIssue": {"key": outward_key},
             },
         )
         resp.raise_for_status()
